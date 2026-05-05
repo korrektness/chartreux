@@ -29,6 +29,15 @@ structure DFASemantics (A : DFA) where
       σ'.E = σ.E.updated x v →
       Corr g ℓ σ →
       Corr g (A.transfer g n ℓ) σ'
+  preserve_branch :
+    ∀ {g : CFG} {n : NodeID} {ℓ : A.L} {σ σ' : CEK}
+      {c : Expr} {k : EdgeKind} {v : Val},
+      NodeBranches g n c →
+      EvalExpr σ.E c v →
+      BranchTaken k v →
+      σ'.E = σ.E →
+      Corr g ℓ σ →
+      Corr g (A.transfer g n ℓ) σ'
 
 def PostFixpoint (A : DFA) (absorbs : A.L → A.L → Prop)
     (g : CFG) (rd : NodeID → A.L) : Prop :=
@@ -57,6 +66,10 @@ theorem step_preserves_corr
     have hadv := S.preserve_assign (x := x) (e := e) (v := v)
                    hassign heval hE hcorr
     exact mono_absorb (hpf n n' h h' hedge) hadv
+  | branch _ _ c k v _ hbr hedge heval hbt hE =>
+    have hadv := S.preserve_branch (c := c) (k := k) (v := v)
+                   hbr heval hbt hE hcorr
+    exact mono_absorb (hpf n n' h h' ⟨k, hedge⟩) hadv
 
 theorem steps_preserves_corr
     {A : DFA} (S : DFASemantics A)

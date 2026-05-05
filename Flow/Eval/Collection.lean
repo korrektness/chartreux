@@ -42,6 +42,11 @@ def CollectingSem : DFASemantics Collecting where
       exact ⟨σ.E, v, hR, heval, hE⟩
     · simp only [transfer, h]
       exact ⟨σ.E, v, hR, heval, hE⟩
+  preserve_branch := by
+    intro g n R σ σ' c _k _v hbr _heval _hbt hE hR
+    show (transfer g n R) σ'.E
+    simp only [transfer, hbr, hE]
+    exact hR
 
 -- set inclusion
 def absorbs (R R' : SetState) : Prop := ∀ σ, R σ → R' σ

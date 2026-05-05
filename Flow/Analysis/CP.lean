@@ -481,5 +481,18 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) :
             exact if_neg (fun hxj => hgetj_ne hxj.symm)
           rw [this]
         rw [htr_j, hβ]; exact cpβ_corr_pw hcorr j
+  preserve_branch := by
+    intros g' n ℓ σ σ' c _k _v hbr _heval _hbt heq hcorr
+    simp only [cpβ_corr]
+    -- Cond is identity for `cpTransfer`, and the env doesn't change.
+    have htr : (cpDFA vars).transfer g' n ℓ = ℓ := by
+      funext j
+      change cpTransfer vars g' n ℓ j = ℓ j
+      unfold cpTransfer
+      rw [hbr]
+    have hβeq : (cpβ σ' : CPFact vars) = cpβ σ := by
+      funext i; unfold cpβ; rw [heq]
+    rw [htr, hβeq]
+    exact hcorr
 end Corr
 end Flow.Analysis.CP

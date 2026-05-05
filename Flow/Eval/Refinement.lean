@@ -13,6 +13,19 @@ def NodeNonMutating (g : CFG) (n : NodeID) : Prop :=
   (∀ x e, g.nodeKind n ≠ some (.Assign x e)) ∧
   (∀ x e, g.nodeKind n ≠ some (.Decl x e))
 
+/-- A `Cond` node guarded by `c` whose guard evaluates to `v`. -/
+def NodeBranches (g : CFG) (n : NodeID) (c : Expr) : Prop :=
+  g.nodeKind n = some (.Cond c)
+
+/-- Predicate selecting which CFG edge kind is consistent with a guard
+    value `v`. The T-edge is taken on any non-zero integer; the F-edge on
+    `0`. Other edge kinds out of a `Cond` node are not taken (the CFG
+    builder never generates them anyway). -/
+def BranchTaken : EdgeKind → Val → Prop
+  | .TBranch, .Int n => n ≠ 0
+  | .FBranch, .Int 0 => True
+  | _,        _       => False
+
 /-! ## `StepN` — the indexed companion of `Step`
 
 `StepN g n h σ n' h' σ'` packages a single CEK step `σ ⟶ σ'` together with
@@ -53,6 +66,21 @@ inductive StepN (g : CFG) :
       (∃ k, g.hasEdge n n' k) →
       σ'.E = σ.E.updated x v →
       StepN g h σ h' σ'
+  /-- Branching: the underlying `Step` originates from a `Cond` node whose
+      guard evaluates to `v`, the CFG advances to `n'` along the
+      `TBranch`/`FBranch` edge selected by `v`, and the environment is
+      preserved. This decoration retains the guard / value / edge-kind
+      witnesses so that flow-sensitive analyses (sign, interval, etc.) can
+      refine their abstract state along each branch. -/
+  | branch {n n' : Nat} (h : n < g.nodes.length) (h' : n' < g.nodes.length)
+      {σ σ' : CEK} (c : Expr) (k : EdgeKind) (v : Val) :
+      Step σ σ' →
+      NodeBranches g n c →
+      g.hasEdge n n' k →
+      EvalExpr σ.E c v →
+      BranchTaken k v →
+      σ'.E = σ.E →
+      StepN g h σ h' σ'
 
 /-- Forgetful projection: a decorated step is, in particular, a step. -/
 theorem StepN.toStep {g : CFG}
@@ -61,6 +89,7 @@ theorem StepN.toStep {g : CFG}
   cases hsim with
   | stutter _ hstep _ _ => exact hstep
   | mutate _ _ _ _ _ hstep _ _ _ => exact hstep
+  | branch _ _ _ _ _ hstep _ _ _ _ _ => exact hstep
 
 /-! ## Reflexive-transitive closure of `StepN` -/
 
