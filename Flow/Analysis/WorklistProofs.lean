@@ -27,7 +27,7 @@ private lemma ite_decEq_irrel {α : Type} {p : Prop}
 
 private lemma newIn_eq_expectedIn
     [Bot A] [Max A]
-    (g : CFG Node Edge) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A) (n : NodeOf g)
     (newIn : A)
     (hdef : Eq newIn (if _ : n.val = g.entry then entryInit
@@ -37,7 +37,7 @@ private lemma newIn_eq_expectedIn
 
 private lemma foldl_join_eT_update
     [Bot A] [Max A]
-    (g : CFG Node Edge)
+    (g : AnalysisCFG Node Edge)
     (edgeTransfer : Edge -> A -> A) (outF : StateN g A)
     (n : NodeOf g) (v : A) (m : NodeOf g) (edges : List {e // e ∈ g.inEdges m.val})
     (hnoedge : ∀ e ∈ edges, g.srcOf e.val ≠ n.val) (init : A) :
@@ -59,7 +59,7 @@ private lemma foldl_join_eT_update
 
 private lemma joinPredEdges_update_non_pred
     [Bot A] [Max A]
-    (g : CFG Node Edge) (edgeTransfer : Edge -> A -> A) (outF : StateN g A)
+    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A) (outF : StateN g A)
     (n : NodeOf g) (v : A) (m : NodeOf g)
     (hnoedge : ∀ e ∈ g.inEdges m.val, g.srcOf e ≠ n.val) :
     Eq (joinPredEdges g edgeTransfer (outF.update n v) m)
@@ -69,11 +69,11 @@ private lemma joinPredEdges_update_non_pred
     (fun e _ => hnoedge e.val e.property) ⊥
 
 private lemma not_succ_no_in_edge
-    (g : CFG Node Edge) (n m : NodeOf g) (h : m ∉ g.succOf n) :
+    (g : AnalysisCFG Node Edge) (n m : NodeOf g) (h : m ∉ g.succOf n) :
     ∀ e ∈ g.inEdges m.val, g.srcOf e ≠ n.val := by
   intro e he hsrc
   apply h
-  unfold CFG.succOf
+  unfold AnalysisCFG.succOf
   rw [List.mem_filter]
   refine ⟨List.mem_attach _ _, ?_⟩
   simp only [List.any_eq_true, decide_eq_true_eq]
@@ -81,7 +81,7 @@ private lemma not_succ_no_in_edge
 
 private lemma expectedIn_update_non_pred
     [Bot A] [Max A]
-    (g : CFG Node Edge) (edgeTransfer : Edge -> A -> A) (outF : StateN g A)
+    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A) (outF : StateN g A)
     (entryInit : A) (n : NodeOf g) (v : A) (m : NodeOf g) (h : m ∉ g.succOf n) :
     Eq (expectedIn g edgeTransfer entryInit (outF.update n v) m)
        (expectedIn g edgeTransfer entryInit outF m) := by
@@ -96,7 +96,7 @@ private lemma expectedIn_update_non_pred
 /-- a mapping is a forward fixpoint if, at every node, applying the
     transfer function to the incoming facts yields outF itself. -/
 def IsForwardFixpoint [Bot A] [Max A]
-    (g : CFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A) : Prop :=
   ∀ n : NodeOf g,
     outF n = nodeTransfer n.val (expectedIn g edgeTransfer entryInit outF n)
@@ -104,7 +104,7 @@ def IsForwardFixpoint [Bot A] [Max A]
 /-- a mapping is a forward post-fixpoint if, at every node, joining the
     transfer function result with outF yields no change. -/
 def IsForwardPostFixpoint [Bot A] [Max A]
-    (g : CFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A) : Prop :=
   ∀ n : NodeOf g,
     (nodeTransfer n.val (expectedIn g edgeTransfer entryInit outF n)) ⊔ (outF n) = (outF n)
@@ -113,7 +113,7 @@ def IsForwardPostFixpoint [Bot A] [Max A]
 
 private lemma foldl_join_eT_mono
     [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
-    (g : CFG Node Edge) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
     (edge_mono : ∀ e, mono_f (edgeTransfer e))
     (outF1 outF2 : StateN g A) (hle : StateN.le outF1 outF2)
     (m : NodeOf g) (edges : List {e // e ∈ g.inEdges m.val})
@@ -153,7 +153,7 @@ private lemma foldl_join_eT_mono
 
 private lemma joinPredEdges_mono
     [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
-    (g : CFG Node Edge) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
     (edge_mono : ∀ e, mono_f (edgeTransfer e))
     (outF1 outF2 : StateN g A) (hle : StateN.le outF1 outF2) (n : NodeOf g) :
     Eq ((joinPredEdges g edgeTransfer outF1 n) ⊔ (joinPredEdges g edgeTransfer outF2 n))
@@ -164,7 +164,7 @@ private lemma joinPredEdges_mono
 
 private lemma expectedIn_mono
     [Bot A] [Max A] [FiniteHeight A]
-    (g : CFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A)
     [ll : LatticeLike A] [tm : TransferMono nodeTransfer edgeTransfer]
     (outF1 outF2 : StateN g A)
@@ -180,7 +180,7 @@ private lemma expectedIn_mono
 
 private lemma T_postfix_of_postfix
     [Bot A] [Max A] [FiniteHeight A]
-    (g : CFG Node Edge) (nodeTransfer : Node → A → A) (edgeTransfer : Edge → A → A)
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node → A → A) (edgeTransfer : Edge → A → A)
     (entryInit : A) (f : StateN g A)
     [ll : LatticeLike A] [tm : TransferMono nodeTransfer edgeTransfer]
     (hpost : IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit f) :
@@ -202,13 +202,13 @@ private lemma join_ge_trans [Max A] [Bot A] [FiniteHeight A] [ll : LatticeLike A
     _ = a ⊔ b := by rw [hbc]
     _ = a := hab
 
-private lemma StateN.le_trans {g : CFG Node Edge} [Max A] [Bot A] [FiniteHeight A]
+private lemma StateN.le_trans {g : AnalysisCFG Node Edge} [Max A] [Bot A] [FiniteHeight A]
     [LatticeLike A]
     (f1 f2 f3 : StateN g A) (h12 : StateN.le f1 f2) (h23 : StateN.le f2 f3) :
     StateN.le f1 f3 :=
   fun n => join_ge_trans _ _ _ (h12 n) (h23 n)
 
-private lemma StateN.le_update_join {g : CFG Node Edge} [Max A] [Bot A] [FiniteHeight A]
+private lemma StateN.le_update_join {g : AnalysisCFG Node Edge} [Max A] [Bot A] [FiniteHeight A]
     [ll : LatticeLike A]
     (outF : StateN g A) (n : NodeOf g) (v : A) :
     StateN.le (outF.update n (outF n ⊔ v)) outF := by
@@ -223,7 +223,7 @@ private lemma StateN.le_update_join {g : CFG Node Edge} [Max A] [Bot A] [FiniteH
 /-- the result of the worklist algorithm is always ≥ the initial facts. -/
 theorem worklistForward_mono
     [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
-    (g : CFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A) (wl : List (NodeOf g))
     [ll : LatticeLike A] :
     let res := worklistForward g nodeTransfer edgeTransfer entryInit outF wl
@@ -245,7 +245,7 @@ theorem worklistForward_mono
     both the "unchanged" and "changed" branches, then `P (result, [])` holds. -/
 theorem worklistForward_invariant
     [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
-    (g : CFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A) (wl : List (NodeOf g))
     (P : StateN g A → List (NodeOf g) → Prop)
     (hinit : P outF wl)
@@ -275,7 +275,7 @@ theorem worklistForward_invariant
 /-- the result of the worklist algorithm is always a post-fixpoint -/
 theorem worklistForward_sound_postfixpoint
     [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
-    (g : CFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (out0 : StateN g A) (wl0 : List (NodeOf g))
     [ll : LatticeLike A] [TransferMono nodeTransfer edgeTransfer]
     (hinv0 : ∀ m : NodeOf g, m ∉ wl0 →
@@ -316,7 +316,7 @@ theorem worklistForward_sound_postfixpoint
 /-- Least post-fixpoint completeness, derived via the invariant combinator. -/
 theorem worklistForward_complete_least_postfixpoint
     [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
-    (g : CFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A) (wl : List (NodeOf g))
     [ll : LatticeLike A] [tm : TransferMono nodeTransfer edgeTransfer]
     (post : StateN g A) (hpost : IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit post)
@@ -341,7 +341,7 @@ theorem worklistForward_complete_least_postfixpoint
 /-- Fixpoint soundness, derived via the invariant combinator. -/
 theorem worklistForward_sound_fixpoint
     [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
-    (g : CFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (out0 : StateN g A) (wl0 : List (NodeOf g))
     [ll : LatticeLike A] [tm : TransferMono nodeTransfer edgeTransfer]
     (hinv0 : ∀ m : NodeOf g, m ∉ wl0 →

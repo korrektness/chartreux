@@ -1,5 +1,5 @@
 inductive BinOp where
-| add | sub | mul | div | gt | eq
+| add | sub | mul | gt | eq
 deriving DecidableEq, Repr
 
 inductive Expr where
@@ -8,8 +8,13 @@ inductive Expr where
 | BinOp (o : BinOp) (e₁ e₂ : Expr)
 deriving DecidableEq, Repr
 
+inductive Val where
+| Int (n : Int)
+deriving DecidableEq, Repr
+
 inductive Stmt where
 | Skip
+| Decl (x : String) (e : Expr)
 | Assign (x : String) (e : Expr)
 | If (c : Expr) (t e : Stmt)
 | While (c : Expr) (b : Stmt)

@@ -137,7 +137,7 @@ end Basics
 
 section Dataflow
 
-class CFG (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
+class AnalysisCFG (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
   nodes : List Node
   edges : List Edge
   entry : Node
@@ -153,26 +153,26 @@ class CFG (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
 
 variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
 
-abbrev NodeOf (g : CFG Node Edge) := {n // n ∈ g.nodes}
+abbrev NodeOf (g : AnalysisCFG Node Edge) := {n // n ∈ g.nodes}
 
 /-- the list of all nodes in `g`, packaged as `NodeOf g`. Mirrors the
     reference's `g.nodes_mem`. -/
-def CFG.nodes_mem (g : CFG Node Edge) : List (NodeOf g) :=
+def AnalysisCFG.nodes_mem (g : AnalysisCFG Node Edge) : List (NodeOf g) :=
   g.nodes.attach
 
 /-- successors of a node, packaged as `NodeOf g`. Successors are derived
     from the predecessor edges of each candidate node so that we get the
     `NodeOf g` membership proof for free via `inEdges_src_mem`. -/
-def CFG.succOf (g : CFG Node Edge) (n : NodeOf g) : List (NodeOf g) :=
+def AnalysisCFG.succOf (g : AnalysisCFG Node Edge) (n : NodeOf g) : List (NodeOf g) :=
   g.nodes.attach.filter (fun m => (g.inEdges m.val).any (fun e => g.srcOf e = n.val))
 
-abbrev StateN (g : CFG Node Edge) (A : Type) := NodeOf g -> A
-def StateN.empty {g : CFG Node Edge} : StateN g A := fun _ => ⊥
-def StateN.update {g : CFG Node Edge} (f : StateN g A)
+abbrev StateN (g : AnalysisCFG Node Edge) (A : Type) := NodeOf g -> A
+def StateN.empty {g : AnalysisCFG Node Edge} : StateN g A := fun _ => ⊥
+def StateN.update {g : AnalysisCFG Node Edge} (f : StateN g A)
     (n : NodeOf g) (v : A) : StateN g A :=
   fun m => if m = n then v else f m
 
-instance {g : CFG Node Edge} : Max (StateN g A) where
+instance {g : AnalysisCFG Node Edge} : Max (StateN g A) where
   max f g := fun n => f n ⊔ g n
 
 end Dataflow

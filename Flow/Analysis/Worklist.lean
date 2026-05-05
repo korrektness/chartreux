@@ -33,11 +33,11 @@ class TransferMono
 /-! ## `Bot` and `≤` for `StateN` -/
 
 /-- pointwise bottom of `StateN`. -/
-instance {g : CFG Node Edge} [Bot A] : Bot (StateN g A) where
+instance {g : AnalysisCFG Node Edge} [Bot A] : Bot (StateN g A) where
   bot := fun _ => ⊥
 
 /-- definition of `f₁ ≤ f₂` for `StateN`. Mirrors the reference's `gfactLe`. -/
-def StateN.le {g : CFG Node Edge} [Max A] (f₁ f₂ : StateN g A) : Prop :=
+def StateN.le {g : AnalysisCFG Node Edge} [Max A] (f₁ f₂ : StateN g A) : Prop :=
   ∀ n, (f₁ n) ⊔ (f₂ n) = (f₁ n)
 
 /-! ## Utility lemmas on list-sums under update -/
@@ -76,12 +76,12 @@ end Utils
 /-- height of a `StateN`. Used as a termination measure for the worklist
     algorithm. Matches the reference's `gfactHeight`. -/
 def StateN.height [Max A] [fh : FiniteHeight A]
-    (g : CFG Node Edge) (f : StateN g A) : Nat :=
+    (g : AnalysisCFG Node Edge) (f : StateN g A) : Nat :=
   fh.maxHeight * g.nodes.length
     - (g.nodes.attach.map (fun x => fh.height (f x))).sum
 
 lemma StateN.sum_height_le_max [Max A] [fh : FiniteHeight A]
-    {g : CFG Node Edge} (l : List (NodeOf g)) (f : StateN g A) :
+    {g : AnalysisCFG Node Edge} (l : List (NodeOf g)) (f : StateN g A) :
     (l.map (fun x => fh.height (f x))).sum ≤ fh.maxHeight * l.length := by
   induction l with
   | nil => simp
@@ -96,7 +96,7 @@ lemma StateN.sum_height_le_max [Max A] [fh : FiniteHeight A]
         grind
 
 private lemma gmap_height_update_eq [Max A] [FiniteHeight A]
-    {g : CFG Node Edge}
+    {g : AnalysisCFG Node Edge}
     (nodes : List (NodeOf g)) (outF : StateN g A) (node : NodeOf g) (newOut : A) :
     Eq (nodes.map (fun x => FiniteHeight.height (StateN.update outF node newOut x)))
        (nodes.map (fun x => if x = node then FiniteHeight.height newOut
@@ -104,7 +104,7 @@ private lemma gmap_height_update_eq [Max A] [FiniteHeight A]
   congr 1; ext x; simp [StateN.update]; split <;> rfl
 
 private lemma gmap_update_sum_lt [Max A] [FiniteHeight A]
-    {g : CFG Node Edge}
+    {g : AnalysisCFG Node Edge}
     (nodes : List (NodeOf g)) (outF : StateN g A) (node : NodeOf g) (newOut : A)
     (hn : node ∈ nodes)
     (hlt : FiniteHeight.height (outF node) < FiniteHeight.height newOut) :
@@ -117,7 +117,7 @@ private lemma gmap_update_sum_lt [Max A] [FiniteHeight A]
 /-- if you replace a node's fact with one of larger height, the resulting
     `StateN.height` strictly decreases. Mirrors `gfactHeight_decreases`. -/
 private theorem StateN.height_update_decreases [Max A] [FiniteHeight A]
-    (g : CFG Node Edge) (outF : StateN g A) (node : NodeOf g) (newOut : A)
+    (g : AnalysisCFG Node Edge) (outF : StateN g A) (node : NodeOf g) (newOut : A)
     (hlt : FiniteHeight.height (outF node) < FiniteHeight.height newOut) :
     StateN.height g (StateN.update outF node newOut) < StateN.height g outF := by
   have hn : node ∈ g.nodes.attach := List.mem_attach _ _
@@ -133,7 +133,7 @@ private theorem StateN.height_update_decreases [Max A] [FiniteHeight A]
 /-- computes the join of the results of applying an edge transfer function
     to all incoming edges of a given node `n` in `g`. -/
 def joinPredEdges [Bot A] [Max A]
-    (g : CFG Node Edge) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
     (outF : StateN g A) (n : NodeOf g) : A :=
   ((g.inEdges n.val).attach).foldl (fun acc ⟨e, he⟩ =>
     let srcNode : NodeOf g := ⟨g.srcOf e, g.inEdges_src_mem n.val e he⟩
@@ -143,7 +143,7 @@ def joinPredEdges [Bot A] [Max A]
 /-- main forward worklist algorithm. -/
 def worklistForward
     [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
-    (g : CFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A := fun _ => ⊥)
     (wl : List (NodeOf g) := g.nodes_mem) : StateN g A :=
   match wl with
@@ -169,7 +169,7 @@ decreasing_by
 /-- the input fact `Analysis∘` for a node `n`: the `entryInit` if `n` is the
     entry of the graph, otherwise the join of all incoming edge facts. -/
 def expectedIn [Bot A] [Max A]
-    (g : CFG Node Edge) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A) (n : NodeOf g) : A :=
   if n.val = g.entry then entryInit else joinPredEdges g edgeTransfer outF n
 
@@ -177,7 +177,7 @@ def expectedIn [Bot A] [Max A]
     entry and exit facts. -/
 def runDataflow
     [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
-    (g : CFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) : StateN g A × StateN g A :=
   let finalOut : StateN g A :=
     worklistForward g nodeTransfer edgeTransfer entryInit
