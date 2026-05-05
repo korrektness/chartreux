@@ -1,52 +1,64 @@
-import Flow.Lang.CFG
-import Flow.Eval.LangEval
+import Flow.Lang.BigCFG
+import Flow.Lang.Eval
 
-def CFG.hasEdge (g : CFG) (src dst : Nat) (lbl : EdgeKind) : Prop :=
-  ⟨src, dst, lbl⟩ ∈ g.edges
+structure CE where
+  id : Nat
+  E  : State
+  S  : List Val
 
-inductive CFGStep (g : CFG) : Nat -> State -> Nat -> State -> Prop where
-| assign :
-    g.nodeKind n = some (.assign x e) -> EvalExpr σ e v σ' ->
-    g.hasEdge n n' .normal ->
-    CFGStep g n σ n' (σ'.updated x v)
-| decl :
-    g.nodeKind n = some (.varDecl _) ->
-    g.hasEdge n n' .normal ->
-    CFGStep g n σ n' σ
-| entry :
-    g.nodeKind n = some .entry →
-    g.hasEdge n n' .normal →
-    CFGStep g n σ n' σ
-| exit :
-    g.nodeKind n = some .exit →
-    g.hasEdge n n' .normal →
-    CFGStep g n σ n' σ
-| cond_true :
-    g.nodeKind n = some (.cond c) ->
-    EvalExpr σ e (.Int k) σ' -> k ≠ 0 ->
-    g.hasEdge n n' .trueBranch ->
-    CFGStep g n σ n' σ'
-| cond_false :
-    g.nodeKind n = some (.cond c) ->
-    EvalExpr σ e (.Int 0) σ' ->
-    g.hasEdge n n' .falseBranch ->
-    CFGStep g n σ n' σ'
+inductive Silent : NodeKind -> Prop where
+| entry        : Silent .entry
+| stmtEntry s  : Silent (.stmtEntry s)
+| stmtExitSkip : Silent (.stmtExit .Skip)
+| stmtExitSeq  : Silent (.stmtExit (.Seq s₁ s₂))
+| stmtExitIf   : Silent (.stmtExit (.If c t e))
+| stmtExitWhile: Silent (.stmtExit (.While c b))
+| exprEntry e  : Silent (.exprEntry e)
 
-inductive CFGSteps (g : CFG) : NodeId → State → NodeId → State → Prop where
-  | refl :
-      CFGSteps g n σ n σ
-  | step :
-      CFGStep g n σ n' σ' → CFGSteps g n' σ' n'' σ'' →
-      CFGSteps g n σ n'' σ''
+inductive CFGStep (g : BigCFG) : CE -> CE -> Prop where
+| pass :
+    g.nodeKind src = some kind ->
+    Silent kind ->
+    g.hasEdge src dst .normal ->
+    CFGStep g ⟨src, E, S⟩ ⟨dst, E, S⟩
+| literal :
+    g.nodeKind src = some (.literal v) ->
+    g.hasEdge src dst .normal ->
+    CFGStep g ⟨src, E, S⟩ ⟨dst, E, v :: S⟩
+| varExit :
+    g.nodeKind src = some (.exprExit (.Var x)) ->
+    E x = some v ->
+    g.hasEdge src dst .normal ->
+    CFGStep g ⟨src, E, S⟩ ⟨dst, E, v :: S⟩
+| binopExit :
+    g.nodeKind src = some (.exprExit (.BinOp o e₁ e₂)) ->
+    g.hasEdge src dst .normal ->
+    CFGStep g ⟨src, E, .Int n₂ :: .Int n₁ :: S⟩
+              ⟨dst, E, .Int (applyOp o n₁ n₂) :: S⟩
+-- | condT :
+--     g.nodeKind src = some (.cond c) ->
+--     n ≠ 0 ->
+--     g.hasEdge src dst .trueBranch ->
+--     CFGStep g ⟨src, E, .Int n :: S⟩ ⟨dst, E, S⟩
+-- | condF :
+--     g.nodeKind src = some (.cond c) ->
+--     g.hasEdge src dst .falseBranch ->
+--     CFGStep g ⟨src, E, .Int 0 :: S⟩ ⟨dst, E, S⟩
+| declExit :
+    g.nodeKind src = some (.stmtExit (.Decl x e)) ->
+    g.hasEdge src dst .normal ->
+    CFGStep g ⟨src, E, v :: S⟩ ⟨dst, E.updated x v, S⟩
+| assignExit :
+    g.nodeKind src = some (.stmtExit (.Assign x e)) ->
+    g.hasEdge src dst .normal ->
+    CFGStep g ⟨src, E, v :: S⟩ ⟨dst, E.updated x v, S⟩
 
-def Reachable (g : CFG) (σ : State) (n : Nat) (σ' : State) : Prop :=
-    CFGSteps g g.entry σ n σ'
+inductive CFGSteps (g : BigCFG) : CE -> CE -> Prop where
+| refl : CFGSteps g σ σ
+| step : CFGStep g σ σ' -> CFGSteps g σ' σ'' -> CFGSteps g σ σ''
 
-theorem CFGSteps.trans (h₁ : CFGSteps g n₁ σ₁ n₂ σ₂) (h₂ : CFGSteps g n₂ σ₂ n₃ σ₃) :
-    CFGSteps g n₁ σ₁ n₃ σ₃ := by
-  induction h₁ with
-  | refl => exact h₂
-  | step hs _ ih => exact .step hs (ih h₂)
-
-theorem CFGSteps.single (h : CFGStep g n σ n' σ') : CFGSteps g n σ n' σ' :=
-  .step h .refl
+def CFGSteps.trans {g} (hl : CFGSteps g σ σ') (hr : CFGSteps g σ' σ'') :
+    CFGSteps g σ σ'' := by
+  induction hl with
+  | refl => assumption
+  | step hstep _ ih => exact .step hstep (ih hr)
