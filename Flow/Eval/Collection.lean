@@ -30,7 +30,7 @@ def Corr (_ : CFG) (R : SetState) (σ : CEK) : Prop := R σ.E
 def CollectingSem : DFASemantics Collecting where
   Corr := Corr
   preserve_id := by
-    intro g n R σ σ' _ hE hR
+    intro g R σ σ' hE hR
     show R σ'.E
     simp [hE]
     exact hR
@@ -45,7 +45,13 @@ def CollectingSem : DFASemantics Collecting where
   preserve_branch := by
     intro g n R σ σ' c _k _v hbr _heval _hbt hE hR
     show (transfer g n R) σ'.E
+    simp [NodeBranches] at hbr
     simp only [transfer, hbr, hE]
+    exact hR
+  preserve_advance := by
+    intro g n R σ σ' hskip hE hR
+    show (transfer g n R) σ'.E
+    simp only [transfer, hskip, hE]
     exact hR
 
 -- set inclusion

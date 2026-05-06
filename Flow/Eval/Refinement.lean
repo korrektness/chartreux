@@ -48,11 +48,16 @@ recovered from the CFG post-fixpoint hypothesis. -/
 inductive StepN (g : CFG) :
     {n : Nat} → n < g.nodes.length → CEK →
     {n' : Nat} → n' < g.nodes.length → CEK → Prop where
-  /-- Stutter: the underlying `Step` leaves the environment unchanged,
-      the CFG node `n` is non-mutating, and we stay at `n`. -/
+  /-- Stutter: the underlying `Step` leaves the environment unchanged
+      and we stay at `n`. The earlier `NodeNonMutating g n` premise was
+      dropped because it is overly restrictive: many CEK steps that
+      *originate at* a mutating node (e.g. `Step.Decl`/`Step.Assign`,
+      which only enter rhs evaluation without writing back) are
+      env-preserving and need to lift to `StepN`. The semantics
+      framework's `preserve_id` obligation never used the
+      non-mutating premise — see `Flow.Analysis.Generic.DFASemantics`. -/
   | stutter {n : Nat} (h : n < g.nodes.length) {σ σ' : CEK} :
       Step σ σ' →
-      NodeNonMutating g n →
       σ'.E = σ.E →
       StepN g h σ h σ'
   /-- Mutating writeback: the underlying `Step` performs the writeback for
@@ -81,15 +86,27 @@ inductive StepN (g : CFG) :
       BranchTaken k v →
       σ'.E = σ.E →
       StepN g h σ h' σ'
+  /-- Node-advancing without writeback: the underlying `Step` originates
+      from a `.Skip` node, preserves the environment, and follows a
+      `.Normal` CFG edge to `n'`. Used by `Step.SeqMid` and `Step.WhileD`,
+      which neither mutate nor branch. -/
+  | advance {n n' : Nat} (h : n < g.nodes.length) (h' : n' < g.nodes.length)
+      {σ σ' : CEK} :
+      Step σ σ' →
+      g.nodeKind n = some .Skip →
+      g.hasEdge n n' .Normal →
+      σ'.E = σ.E →
+      StepN g h σ h' σ'
 
 /-- Forgetful projection: a decorated step is, in particular, a step. -/
 theorem StepN.toStep {g : CFG}
     {n n' : Nat} {h : n < g.nodes.length} {h' : n' < g.nodes.length}
     {σ σ' : CEK} (hsim : StepN g h σ h' σ') : Step σ σ' := by
   cases hsim with
-  | stutter _ hstep _ _ => exact hstep
+  | stutter _ hstep _ => exact hstep
   | mutate _ _ _ _ _ hstep _ _ _ => exact hstep
   | branch _ _ _ _ _ hstep _ _ _ _ _ => exact hstep
+  | advance _ _ hstep _ _ _ => exact hstep
 
 /-! ## Reflexive-transitive closure of `StepN` -/
 
@@ -103,5 +120,40 @@ inductive StepsN (g : CFG) :
       (h' : n' < g.nodes.length) {σ σ₁ σ' : CEK} :
       StepN g h σ h₁ σ₁ → StepsN g h₁ σ₁ h' σ' →
       StepsN g h σ h' σ'
+  /-- Skip-bridge: the CFG advances along a `.Normal` edge between two
+      `.Skip` nodes without consuming a CEK step. Used when the kont
+      structure (`KontMatches.skipBridge`) records bridging through the
+      merge `Skip` inserted by `BuildSpec.if_`/`while_`. -/
+  | skipBridge {n n₁ n' : Nat}
+      (h : n < g.nodes.length) (h₁ : n₁ < g.nodes.length)
+      (h' : n' < g.nodes.length) {σ σ' : CEK} :
+      g.nodeKind n = some .Skip →
+      g.hasEdge n n₁ .Normal →
+      StepsN g h₁ σ h' σ' →
+      StepsN g h σ h' σ'
+
+/-- Lift a single `StepN` to a `StepsN`. -/
+def StepsN.single {g : CFG} {n n' : Nat}
+    (h : n < g.nodes.length) (h' : n' < g.nodes.length)
+    {σ σ' : CEK} (hsn : StepN g h σ h' σ') : StepsN g h σ h' σ' :=
+  .step h h' h' hsn (.refl h' σ')
+
+/-- Transitivity of `StepsN`: append two derivations. -/
+theorem StepsN.trans {g : CFG}
+    {n n₁ n' : Nat}
+    {h : n < g.nodes.length} {h₁ : n₁ < g.nodes.length}
+    {h' : n' < g.nodes.length} {σ σ₁ σ' : CEK}
+    (hl : StepsN g h σ h₁ σ₁) (hr : StepsN g h₁ σ₁ h' σ') :
+    StepsN g h σ h' σ' := by
+  induction hl with
+  | refl _ _ => exact hr
+  | step h h_mid h_end hsn _ ih =>
+    exact .step h h_mid h' hsn (ih hr)
+  | skipBridge h h_mid h_end hk hedge _ ih =>
+    exact .skipBridge h h_mid h' hk hedge (ih hr)
+
+/-! ## `step_decorate` — every `Step` lifts from a `LocatedAt` to a `StepN`
+
+See `Flow/Eval/Located.lean` for `LocatedAt` / `KontMatches`. -/
 
 end Flow.Eval.Refinement

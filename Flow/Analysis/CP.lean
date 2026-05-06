@@ -415,7 +415,7 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) :
     DFASemantics (cpDFA vars) where
   Corr := cpβ_corr
   preserve_id := by
-    intros _g _n ℓ σ σ' _hnm heq hcorr
+    intros _g ℓ σ σ' heq hcorr
     simp [cpβ_corr]
     have : (cpβ σ' : CPFact vars) = cpβ σ := by
       funext i; unfold cpβ; rw [heq]
@@ -490,6 +490,19 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) :
       change cpTransfer vars g' n ℓ j = ℓ j
       unfold cpTransfer
       rw [hbr]
+    have hβeq : (cpβ σ' : CPFact vars) = cpβ σ := by
+      funext i; unfold cpβ; rw [heq]
+    rw [htr, hβeq]
+    exact hcorr
+  preserve_advance := by
+    intros g' n ℓ σ σ' hskip heq hcorr
+    simp only [cpβ_corr]
+    -- Skip is identity for `cpTransfer`, and the env doesn't change.
+    have htr : (cpDFA vars).transfer g' n ℓ = ℓ := by
+      funext j
+      change cpTransfer vars g' n ℓ j = ℓ j
+      unfold cpTransfer
+      rw [hskip]
     have hβeq : (cpβ σ' : CPFact vars) = cpβ σ := by
       funext i; unfold cpβ; rw [heq]
     rw [htr, hβeq]

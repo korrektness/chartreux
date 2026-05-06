@@ -82,7 +82,7 @@ def buildGraph (b : CFGBuilder) (s : Stmt) : (CFGBuilder × (Nat × Nat)) :=
     let b := b.addEdge nenc nenb .TBranch
     let b := b.addEdge nexb nenc .Normal
     let b := b.addEdge nenc nex .FBranch
-    (b, (nenc, nexb))
+    (b, (nenc, nex))
   | .If c t f =>
     let (b, nenc) := b.addNode (.Cond c)
     let (b, (nent, next)) := b.buildGraph t
