@@ -18,3 +18,12 @@ Remains:
 - [ ] Lots Lots Lots of cleanup
 - [ ] Galois connections between collection semantics and further analyses for 
       more composable proofs.
+
+## Structure of this project
+
+- `Flow/Lang/`: syntax, CEK semantics, CFGs, and CFG construction.
+- `Flow/Eval/`: decorated semantics and collection-style semantics.
+- `Flow/Analysis/`: the abstract interpretation framework, worklist solver, and constant propagation.
+- `Flow.lean`: umbrella import for the `Flow/` library.
+
+
