@@ -16,8 +16,10 @@ Implemented so far :
 
 Remains:
 - [ ] Lots Lots Lots of cleanup
-- [ ] Galois connections between collection semantics and further analyses for 
-      more composable proofs.
+  - [ ] Unify fixpoint definitions
+  - [ ] Simplify instantiation
+  - [ ] Generalize approach for more languages.
+- [ ] Galois connections between collection semantics and further analyses for more composable proofs.
 
 ## Structure of this project
 

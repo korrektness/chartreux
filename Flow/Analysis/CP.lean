@@ -4,25 +4,6 @@ import Flow.Lang.Eval
 import Flow.Lang.CFG
 import Mathlib.Data.List.Nodup
 
-/-!
-# Constant Propagation analysis instance
-
-Instantiates the abstract worklist framework (`Flow.Analysis.Worklist`) for
-the classical Constant-Propagation analysis over the small CFG defined in
-`Flow.Lang.CFG`.
-
-The per-variable abstract value `CPVal` is the standard three-point lattice
-
-* `bot`     — "this variable is unreachable / not yet seen" (⊥);
-* `const c` — "this variable definitely holds the integer constant `c`";
-* `top`     — "this variable might hold any value" (⊤).
-
-A whole-program *constant-propagation fact* `CPFact vars` is a function
-`Fin vars.length → CPVal`, i.e.\ a `Domain vars.length CPVal`.  This re-uses
-the generic `Domain` `FiniteHeight` instance from
-`Flow.Analysis.Lattice`, giving a precise bound of `2 * vars.length`.
--/
-
 namespace Flow.Analysis.CP
 
 open Analysis
@@ -37,13 +18,24 @@ inductive CPVal where
   | top
   deriving DecidableEq, Repr
 
+instance : ToString CPVal where
+  toString
+    | .bot     => "⊥"
+    | .top     => "⊤"
+    | .const n => toString n
+
+instance {v : List String} : ToString (Domain v.length CPVal) where
+  toString ρ :=
+    let parts : List String :=
+      (List.finRange v.length).map fun i =>
+        v.get i ++ "=" ++ toString (ρ i)
+    "[" ++ String.intercalate ", " parts ++ "]"
+
 namespace CPVal
 
 instance : Bot CPVal where
   bot := CPVal.bot
 
-/-- Pointwise join on `CPVal`: `⊥` is the unit, `⊤` absorbs, two equal
-    constants join to themselves, two distinct constants jump to `⊤`. -/
 def join : CPVal → CPVal → CPVal
   | .bot,        v        => v
   | v,           .bot     => v
@@ -54,7 +46,6 @@ def join : CPVal → CPVal → CPVal
 instance : Max CPVal where
   max := join
 
-/-- Height of `CPVal`: `bot ↦ 0`, `const _ ↦ 1`, `top ↦ 2`. -/
 def height : CPVal → Nat
   | .bot     => 0
   | .const _ => 1
@@ -122,8 +113,6 @@ instance : FiniteHeight CPVal where
     | .const a', .const b' =>
         by_cases hab : a' = b'
         · subst hab
-          -- `h : ¬ (const a' ⊔ const a' = const a')` — but joins of equal
-          -- constants reduce to `const a'`, so `h` is contradictory.
           exfalso; apply h
           show CPVal.const a' ⊔ CPVal.const a' = CPVal.const a'
           exact CPVal.join_idem _
@@ -193,23 +182,19 @@ abbrev CPFact (vars : List String) : Type := Domain vars.length CPVal
 
 /-! ## Transfer functions -/
 
-/-- Abstract evaluator for expressions under a CP fact.  This is a deliberately
-    simple version that only propagates information through integer literals
-    and variable lookups; arithmetic/relational expressions are conservatively
-    sent to `⊤`.  The simplification keeps the monotonicity proof short while
-    still exhibiting non-trivial constant-propagation behaviour at literal
-    assignments such as `x := 1`. -/
 def evalExpr (vars : List String) (ρ : CPFact vars) : Expr → CPVal
   | .Int n     => .const n
   | .Var x     =>
       match varIdx vars x with
       | none   => .top
       | some i => ρ i
-  | .BinOp _ _ _ => .top
+  | .BinOp op e₁ e₂ =>
+      match evalExpr vars ρ e₁, evalExpr vars ρ e₂ with
+      | .const n₁, .const n₂ => .const (applyOp op n₁ n₂)
+      | .bot,      _         => .bot
+      | _,         .bot      => .bot
+      | _,         _         => .top
 
-/-- Node transfer for Constant Propagation: on `Assign x e` / `Decl x e`,
-    update the abstract value of `x` (joined with the existing one to keep
-    the function monotone).  All other node kinds act as the identity. -/
 def cpTransfer (vars : List String) (g : CFG) (n : NodeID) :
     CPFact vars → CPFact vars := fun ρ =>
   match g.nodeKind n with
@@ -228,6 +213,13 @@ def cpEdgeTransfer (vars : List String) : Edge → CPFact vars → CPFact vars :
 /-- The default initial fact: every tracked variable is `⊥`. -/
 def cpEntryInit (vars : List String) : CPFact vars := fun _ => CPVal.bot
 
+private lemma const_absorbs_inv {n : Int} {a : CPVal}
+    (h : CPVal.const n ⊔ a = CPVal.const n) : a = .bot ∨ a = .const n := by
+  cases a with
+  | bot => exact Or.inl rfl
+  | const m => simp [Max.max, CPVal.join] at h; exact Or.inr (congrArg _ h.symm)
+  | top => simp at h
+
 private lemma evalExpr_mono (vars : List String) (ρ₁ ρ₂ : CPFact vars)
     (hρ : ρ₁ ⊔ ρ₂ = ρ₁) (e : Expr) :
     evalExpr vars ρ₁ e ⊔ evalExpr vars ρ₂ e = evalExpr vars ρ₁ e := by
@@ -241,8 +233,17 @@ private lemma evalExpr_mono (vars : List String) (ρ₁ ρ₂ : CPFact vars)
     split
     · exact CPVal.join_idem _
     · exact hpt _
-  | BinOp op e₁ e₂ _ _ =>
-    simp [evalExpr]
+  | BinOp op e₁ e₂ ih₁ ih₂ =>
+    simp only [evalExpr]
+    cases ha₁ : evalExpr vars ρ₁ e₁ <;>
+      cases hb₁ : evalExpr vars ρ₁ e₂ <;>
+      cases ha₂ : evalExpr vars ρ₂ e₁ <;>
+      cases hb₂ : evalExpr vars ρ₂ e₂ <;>
+      rw [ha₁, ha₂] at ih₁ <;>
+      rw [hb₁, hb₂] at ih₂ <;>
+      simp_all [Max.max, CPVal.join]
+    grind
+
 
 /-- Helper: combine four points by interleaved join. -/
 private lemma four_join_eq (a b c d : CPVal)
@@ -403,8 +404,14 @@ lemma evalExpr_sound {ρ : CPFact vars} {σ : CEK} {e : Expr} {v : Val}
           unfold cpβ
           rw [hget, h]
         rw [this] at hi; exact hi
-  | binop _ _ _ _ =>
-    simp [evalExpr]
+  | @binop e₁ n₁ e₂ n₂ o _ _ ih₁ ih₂ =>
+    simp only [evalExpr, cpβVal] at *
+    cases ha : evalExpr vars ρ e₁ <;>
+      cases hb : evalExpr vars ρ e₂ <;>
+      rw [ha] at ih₁ <;>
+      rw [hb] at ih₂ <;>
+      simp_all [Max.max, CPVal.join]
+    grind
 
 def cpDFA (vars : List String) : DFA where
   L        := CPFact vars
@@ -507,5 +514,37 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) :
       funext i; unfold cpβ; rw [heq]
     rw [htr, hβeq]
     exact hcorr
+
+def cpAbsorbs (ℓ ℓ' : CPFact vars) : Prop := ℓ' ⊑ ℓ
+
+theorem mono_absorb_cp
+    {g : CFG} {ℓ ℓ' : CPFact vars} {σ : CEK}
+    (h : cpAbsorbs ℓ ℓ') (hcorr : cpβ_corr g ℓ σ) : cpβ_corr g ℓ' σ := by
+  simp only [cpβ_corr] at *
+  simp only [cpAbsorbs] at h
+  funext i
+  simp only [Domain.max_app]
+  have hi : ℓ' i ⊔ ℓ i = ℓ' i := by
+    have := congrFun h i; simpa [Domain.max_app] using this
+  have hci : ℓ i ⊔ cpβ σ i = ℓ i := by
+    have := congrFun hcorr i; simpa [Domain.max_app] using this
+  calc ℓ' i ⊔ cpβ σ i
+      = (ℓ' i ⊔ ℓ i) ⊔ cpβ σ i := by rw [hi]
+    _ = ℓ' i ⊔ (ℓ i ⊔ cpβ σ i) := CPVal.join_assoc ..
+    _ = ℓ' i ⊔ ℓ i := by rw [hci]
+    _ = ℓ' i := hi
+
+theorem soundness
+    {g : CFG} {rd : NodeID → CPFact vars}
+    (hnd : vars.Nodup)
+    (hpf : PostFixpoint (cpDFA vars) cpAbsorbs g rd)
+    {n n' : Nat}
+    {h : n < g.nodes.length} {h' : n' < g.nodes.length}
+    {σ σ' : CEK}
+    (hsteps : Flow.Eval.Refinement.StepsN g h σ h' σ')
+    (hcorr : cpβ_corr g (rd n) σ) :
+    cpβ_corr g (rd n') σ' :=
+  steps_preserves_corr (cpSemantics vars hnd) (@mono_absorb_cp vars) hpf hsteps hcorr
+
 end Corr
 end Flow.Analysis.CP
