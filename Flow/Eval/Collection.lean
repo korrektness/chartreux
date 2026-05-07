@@ -21,9 +21,13 @@ def transfer (g : CFG) (n : NodeID) (R : SetState) : SetState :=
   | none             => R
 
 def Collecting : DFA where
-  L        := SetState
-  entry    := fun _ _ => True
-  transfer := transfer
+  L            := SetState
+  nodeTransfer := transfer
+  edgeTransfer := fun _ _ R => R
+  entry        := fun _ _ => True
+
+@[simp] theorem Collecting_transferAlong (g : CFG) (e : Edge) (R : SetState) :
+    Collecting.transferAlong g e R = transfer g e.src R := rfl
 
 def Corr (_ : CFG) (R : SetState) (σ : CEK) : Prop := R σ.E
 
@@ -35,7 +39,8 @@ def CollectingSem : DFASemantics Collecting where
     simp [hE]
     exact hR
   preserve_assign := by
-    intro g n R σ σ' x e v hassign heval hE hR
+    intro g n R σ σ' x e v edge _hmem hsrc hassign heval hE hR
+    rw [Collecting_transferAlong, hsrc]
     show (transfer g n R) σ'.E
     rcases hassign with h | h
     · simp only [transfer, h]
@@ -43,13 +48,15 @@ def CollectingSem : DFASemantics Collecting where
     · simp only [transfer, h]
       exact ⟨σ.E, v, hR, heval, hE⟩
   preserve_branch := by
-    intro g n R σ σ' c _k _v hbr _heval _hbt hE hR
+    intro g n R σ σ' c _k _v edge _hmem hsrc _hkind hbr _heval _hbt hE hR
+    rw [Collecting_transferAlong, hsrc]
     show (transfer g n R) σ'.E
     simp [NodeBranches] at hbr
     simp only [transfer, hbr, hE]
     exact hR
   preserve_advance := by
-    intro g n R σ σ' hskip hE hR
+    intro g n R σ σ' edge _hmem hsrc _hkind hskip hE hR
+    rw [Collecting_transferAlong, hsrc]
     show (transfer g n R) σ'.E
     simp only [transfer, hskip, hE]
     exact hR

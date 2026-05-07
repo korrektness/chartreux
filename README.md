@@ -18,7 +18,7 @@ Remains:
 - [ ] Lots Lots Lots of cleanup
   - [ ] Unify fixpoint definitions
   - [ ] Simplify instantiation
-  - [ ] Generalize approach for more languages.
+  - [ ] Generalize approach for more languages
 - [ ] Galois connections between collection semantics and further analyses for more composable proofs.
 
 ## Structure of this project

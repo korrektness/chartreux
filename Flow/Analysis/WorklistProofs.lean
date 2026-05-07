@@ -1,4 +1,5 @@
 import Flow.Analysis.Worklist
+import Flow.Analysis.Generic
 
 /-!
 # Correctness proofs for the forward worklist dataflow algorithm
@@ -363,5 +364,125 @@ theorem worklistForward_sound_fixpoint
     worklistForward_complete_least_postfixpoint g nodeTransfer edgeTransfer entryInit out0
       wl0 _ hpostT hbase
   grind [hleast n, hpostres n]
+
+private lemma foldl_join_absorb
+    [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
+    {α : Type} (f : α → A) (x : A) :
+    ∀ (l : List α) (acc : A), acc ⊔ x = acc →
+      (l.foldl (fun a y => a ⊔ f y) acc) ⊔ x =
+        l.foldl (fun a y => a ⊔ f y) acc
+  | [], acc, h => by simpa using h
+  | hd :: tl, acc, h => by
+    simp only [List.foldl_cons]
+    apply foldl_join_absorb f x tl
+    rw [ll.join_assoc, ll.join_comm (f hd) x, ← ll.join_assoc, h]
+
+private lemma foldl_ge_of_mem
+    [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
+    {α : Type} (f : α → A)
+    (l : List α) (a : α) (ha : a ∈ l) (init : A) :
+    (l.foldl (fun acc x => acc ⊔ f x) init) ⊔ f a
+      = l.foldl (fun acc x => acc ⊔ f x) init := by
+  induction l generalizing init with
+  | nil => cases ha
+  | cons hd tl ih =>
+    simp only [List.foldl_cons]
+    cases List.mem_cons.mp ha with
+    | inl heq =>
+      subst heq
+      apply foldl_join_absorb f (f a) tl
+      rw [ll.join_assoc, ll.join_idem]
+    | inr htl => exact ih htl _
+
+private lemma joinPredEdges_ge_edge
+    [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
+    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge → A → A)
+    (outF : StateN g A) (n : NodeOf g)
+    (e : Edge) (he : e ∈ g.inEdges n.val) :
+    (joinPredEdges g edgeTransfer outF n) ⊔
+        edgeTransfer e (outF ⟨g.srcOf e, g.inEdges_src_mem n.val e he⟩)
+      = joinPredEdges g edgeTransfer outF n := by
+  unfold joinPredEdges
+  let f : {x // x ∈ g.inEdges n.val} → A := fun ⟨x, hx⟩ =>
+    edgeTransfer x (outF ⟨g.srcOf x, g.inEdges_src_mem n.val x hx⟩)
+  have ha : (⟨e, he⟩ : {x // x ∈ g.inEdges n.val}) ∈ (g.inEdges n.val).attach :=
+    List.mem_attach _ _
+  exact foldl_ge_of_mem f (g.inEdges n.val).attach ⟨e, he⟩ ha ⊥
+
+end Flow.Analysis
+
+namespace Flow.Analysis
+
+theorem postFixpoint_of_isForwardPostFixpoint
+    {A : Type} [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
+    (g : CFG) (G : AnalysisCFG NodeID Edge)
+    (hnodes : ∀ n, n ∈ G.nodes ↔ n < g.nodes.length)
+    (hedges : G.edges = g.edges)
+    (hentry : G.entry = g.entry)
+    (hsrcOf : ∀ e : Edge, G.srcOf e = e.src)
+    (hinEdges : ∀ n (e : Edge), e ∈ G.inEdges n ↔ e ∈ g.edges ∧ e.dst = n)
+    (nodeTransfer : NodeID → A → A) (edgeTransfer : Edge → A → A)
+    [tm : TransferMono nodeTransfer edgeTransfer]
+    (entryInit : A) (outF : StateN G A)
+    (hpost : IsForwardPostFixpoint G nodeTransfer edgeTransfer entryInit outF)
+    (hno_entry_edge : ∀ e ∈ g.edges, e.dst ≠ g.entry) :
+    Generic.PostFixpoint
+      ({ L := A
+       , nodeTransfer := fun _ n a => nodeTransfer n a
+       , edgeTransfer := fun _ e a => edgeTransfer e a
+       , entry := fun _ => entryInit } : Generic.DFA)
+      (fun a b => b ⊑ a) g
+      (fun n =>
+        if h : n ∈ G.nodes then
+          expectedIn G edgeTransfer entryInit outF ⟨n, h⟩
+        else ⊥) := by
+  intro e he hsrc hdst
+  have hsrc_mem : e.src ∈ G.nodes := (hnodes e.src).mpr hsrc
+  have hdst_mem : e.dst ∈ G.nodes := (hnodes e.dst).mpr hdst
+  let m_src : NodeOf G := ⟨e.src, hsrc_mem⟩
+  let m_dst : NodeOf G := ⟨e.dst, hdst_mem⟩
+  -- The goal is `b ⊑ a` for `b := rd e.dst` and
+  -- `a := transferAlong (rd e.src) = edge e (node e.src (rd e.src))`.
+  change (if h : e.dst ∈ G.nodes then expectedIn G edgeTransfer entryInit outF ⟨e.dst, h⟩
+          else ⊥)
+         ⊑ edgeTransfer e (nodeTransfer e.src
+              (if h : e.src ∈ G.nodes then expectedIn G edgeTransfer entryInit outF ⟨e.src, h⟩
+               else ⊥))
+  rw [dif_pos hsrc_mem, dif_pos hdst_mem]
+  -- m_dst.val ≠ entry, so expectedIn = joinPredEdges at m_dst.
+  have h_dst_ne : m_dst.val ≠ G.entry := by
+    rw [hentry]; exact hno_entry_edge e he
+  have h_expIn_dst : expectedIn G edgeTransfer entryInit outF m_dst
+                  = joinPredEdges G edgeTransfer outF m_dst := by
+    simp [expectedIn, h_dst_ne]
+  rw [show
+        (expectedIn G edgeTransfer entryInit outF ⟨e.dst, hdst_mem⟩)
+          = joinPredEdges G edgeTransfer outF m_dst from h_expIn_dst]
+  -- IsForwardPostFixpoint at m_src — gives `outF m_src ⊑ nT e.src (expIn m_src)`
+  -- (via comm of ⊔).
+  have h_node : outF m_src ⊑
+                  nodeTransfer e.src (expectedIn G edgeTransfer entryInit outF m_src) := by
+    have h := hpost m_src
+    change outF m_src ⊔ _ = outF m_src
+    rw [ll.join_comm]; exact h
+  -- edge_mono pushes that ⊑ through edgeTransfer e.
+  have h_edge : edgeTransfer e (outF m_src) ⊑
+                edgeTransfer e
+                  (nodeTransfer e.src (expectedIn G edgeTransfer entryInit outF m_src)) :=
+    tm.edge_mono e _ _ h_node
+  -- The destination's joinPredEdges absorbs the edge contribution from m_src.
+  have he_in : e ∈ G.inEdges m_dst.val :=
+    (hinEdges m_dst.val e).mpr ⟨hedges ▸ he, rfl⟩
+  have h_outF_eq : outF ⟨G.srcOf e, G.inEdges_src_mem m_dst.val e he_in⟩ = outF m_src := by
+    apply congrArg outF
+    apply Subtype.ext
+    change G.srcOf e = e.src
+    exact hsrcOf e
+  have h_join_ge :
+      joinPredEdges G edgeTransfer outF m_dst ⊑ edgeTransfer e (outF m_src) := by
+    have h := joinPredEdges_ge_edge G edgeTransfer outF m_dst e he_in
+    rw [h_outF_eq] at h
+    exact h
+  exact join_ge_trans _ _ _ h_join_ge h_edge
 
 end Flow.Analysis

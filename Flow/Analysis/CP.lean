@@ -414,9 +414,14 @@ lemma evalExpr_sound {ρ : CPFact vars} {σ : CEK} {e : Expr} {v : Val}
     grind
 
 def cpDFA (vars : List String) : DFA where
-  L        := CPFact vars
-  transfer := cpTransfer vars
-  entry    := fun _ => cpEntryInit vars
+  L            := CPFact vars
+  nodeTransfer := cpTransfer vars
+  edgeTransfer := fun _ e a => cpEdgeTransfer vars e a
+  entry        := fun _ => cpEntryInit vars
+
+@[simp] private lemma cpDFA_transferAlong (vars : List String) (g : CFG) (e : Edge)
+    (ℓ : CPFact vars) :
+    (cpDFA vars).transferAlong g e ℓ = cpTransfer vars g e.src ℓ := rfl
 
 def cpSemantics (vars : List String) (hnd : vars.Nodup) :
     DFASemantics (cpDFA vars) where
@@ -428,9 +433,10 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) :
       funext i; unfold cpβ; rw [heq]
     simpa [this] using hcorr
   preserve_assign := by
-    intros g' n ℓ σ σ' x e v hmut heval heq hcorr
+    intros g' n ℓ σ σ' x e v edge _hmem hsrc hmut heval heq hcorr
     simp only [cpβ_corr]
-    generalize h : ((cpDFA vars).transfer g' n ℓ) = ℓ'
+    rw [cpDFA_transferAlong, hsrc]
+    generalize h : (cpTransfer vars g' n ℓ) = ℓ'
     have hkind :
         g'.nodeKind n = some (.Assign x e) ∨ g'.nodeKind n = some (.Decl x e) := hmut
     funext j
@@ -445,34 +451,32 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) :
           simp [heq, State.updated]
           grind
         rw [this]
-      have htr : (cpDFA vars).transfer g' n ℓ j = ℓ j := by
-        change cpTransfer vars g' n ℓ j = ℓ j
+      have htr : cpTransfer vars g' n ℓ j = ℓ j := by
         unfold cpTransfer
         rcases hkind with h | h <;> rw [h] <;> simp [hxi]
       rw [<- h, htr, hβ]; exact cpβ_corr_pw hcorr j
     | some i =>
       have hgetx : vars.get i = x := vars_get_of_varIdx hxi
-      have htr_i : (cpDFA vars).transfer g' n ℓ i = evalExpr vars ℓ e := by
-        change cpTransfer vars g' n ℓ i = _
+      have htr_i : cpTransfer vars g' n ℓ i = evalExpr vars ℓ e := by
         unfold cpTransfer
         rcases hkind with h | h <;> rw [h] <;> simp [hxi]
       have htr_off : ∀ j, j ≠ i →
-          (cpDFA vars).transfer g' n ℓ j = ℓ j := by
+          cpTransfer vars g' n ℓ j = ℓ j := by
         intro j hji
-        change cpTransfer vars g' n ℓ j = ℓ j
         unfold cpTransfer
         rcases hkind with h | h <;> rw [h] <;> simp [hxi, hji]
       by_cases hji : j = i
       · subst hji
         cases v with
-        | Int n =>
-          have hβ : cpβ σ' j = .const n := by
+        | Int m =>
+          have hβ : cpβ σ' j = .const m := by
             unfold cpβ
-            have : σ'.E (vars.get j) = some (.Int n) := by
+            have : σ'.E (vars.get j) = some (.Int m) := by
               rw [heq, hgetx]; unfold State.updated; simp
             rw [this]
-          rw [hβ]
-          grind [cpβVal, evalExpr_sound hcorr heval]
+          rw [hβ, ← h, htr_i]
+          have hev := evalExpr_sound hcorr heval
+          simpa [cpβVal] using hev
       · have htr_j : ℓ' j = ℓ j := by rw [← h]; exact htr_off j hji
         have hgetj_ne : vars.get j ≠ x := by
           intro hgj
@@ -489,12 +493,12 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) :
           rw [this]
         rw [htr_j, hβ]; exact cpβ_corr_pw hcorr j
   preserve_branch := by
-    intros g' n ℓ σ σ' c _k _v hbr _heval _hbt heq hcorr
+    intros g' n ℓ σ σ' c _k _v edge _hmem hsrc _hkind hbr _heval _hbt heq hcorr
     simp only [cpβ_corr]
+    rw [cpDFA_transferAlong, hsrc]
     -- Cond is identity for `cpTransfer`, and the env doesn't change.
-    have htr : (cpDFA vars).transfer g' n ℓ = ℓ := by
+    have htr : cpTransfer vars g' n ℓ = ℓ := by
       funext j
-      change cpTransfer vars g' n ℓ j = ℓ j
       unfold cpTransfer
       rw [hbr]
     have hβeq : (cpβ σ' : CPFact vars) = cpβ σ := by
@@ -502,12 +506,12 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) :
     rw [htr, hβeq]
     exact hcorr
   preserve_advance := by
-    intros g' n ℓ σ σ' hskip heq hcorr
+    intros g' n ℓ σ σ' edge _hmem hsrc _hkind hskip heq hcorr
     simp only [cpβ_corr]
+    rw [cpDFA_transferAlong, hsrc]
     -- Skip is identity for `cpTransfer`, and the env doesn't change.
-    have htr : (cpDFA vars).transfer g' n ℓ = ℓ := by
+    have htr : cpTransfer vars g' n ℓ = ℓ := by
       funext j
-      change cpTransfer vars g' n ℓ j = ℓ j
       unfold cpTransfer
       rw [hskip]
     have hβeq : (cpβ σ' : CPFact vars) = cpβ σ := by

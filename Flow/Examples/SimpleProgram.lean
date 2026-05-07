@@ -1,6 +1,7 @@
 import Flow.Lang.Defs
 import Flow.Lang.CFG
 import Flow.Analysis.CP
+import Flow.Analysis.WorklistProofs
 import Flow.Lang.BuildSpec
 import Flow.Utils.DotPrinter
 
@@ -37,24 +38,36 @@ def res := runDataflow sv_CFG (cpTransfer sv simpleCFG)
     (cpEdgeTransfer sv)
     (cpEntryInit sv)
 
-def rd := fun n =>
-    if h : n ∈ sv_CFG.nodes then res.1 ⟨n, h⟩
+def rd : NodeID → CPFact sv := fun n =>
+    if h : n ∈ sv_CFG.nodes then
+      expectedIn sv_CFG (cpEdgeTransfer sv) (cpEntryInit sv) res.2 ⟨n, h⟩
     else (fun _ => CPVal.bot)
 
+private lemma simpleCFG_no_entry_edge :
+    ∀ e ∈ simpleCFG.edges, e.dst ≠ simpleCFG.entry := by decide
+
+private lemma sv_CFG_hpost :
+    IsForwardPostFixpoint sv_CFG (cpTransfer sv simpleCFG) (cpEdgeTransfer sv)
+      (cpEntryInit sv) res.2 :=
+  worklistForward_sound_postfixpoint sv_CFG (cpTransfer sv simpleCFG)
+    (cpEdgeTransfer sv) (cpEntryInit sv) (fun _ => ⊥) sv_CFG.nodes_mem
+    (by intro m hm; exact absurd (List.mem_attach _ m) hm)
+
 lemma rd_postfix :
-    PostFixpoint (cpDFA sv) cpAbsorbs simpleCFG rd := by
-  intro n n' hn hn' ⟨k, hedge⟩
-  unfold CFG.hasEdge at hedge
-  simp only [cpAbsorbs]
-  have hedges : simpleCFG.edges =
-      [⟨2,3,.TBranch⟩, ⟨2,4,.FBranch⟩, ⟨3,5,.Normal⟩,
-       ⟨4,5,.Normal⟩, ⟨1,2,.Normal⟩, ⟨0,1,.Normal⟩] := by decide
-  rw [hedges] at hedge
-  clear hedges
-  simp only [List.mem_cons, Edge.mk.injEq, List.not_mem_nil, or_false] at hedge
-  rcases hedge
-    with ⟨rfl,rfl,rfl⟩|⟨rfl,rfl,rfl⟩|⟨rfl,rfl,rfl⟩|⟨rfl,rfl,rfl⟩|⟨rfl,rfl,rfl⟩|⟨rfl,rfl,rfl⟩
-  all_goals native_decide -- sheesh
+    PostFixpoint (cpDFA sv) cpAbsorbs simpleCFG rd :=
+  postFixpoint_of_isForwardPostFixpoint
+    (g := simpleCFG) (G := sv_CFG)
+    (hnodes  := by
+      intro n; simp [sv_CFG, forCFG, List.mem_range])
+    (hedges  := rfl) (hentry := rfl) (hsrcOf := fun _ => rfl)
+    (hinEdges := by
+      intro n e
+      simp [sv_CFG, forCFG, inEdges, List.mem_filter])
+    (nodeTransfer := cpTransfer sv simpleCFG)
+    (edgeTransfer := cpEdgeTransfer sv)
+    (entryInit := cpEntryInit sv) (outF := res.2)
+    (hpost := sv_CFG_hpost)
+    (hno_entry_edge := simpleCFG_no_entry_edge)
 
 theorem cp_correct
     {n n' : Nat}

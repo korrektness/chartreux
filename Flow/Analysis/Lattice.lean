@@ -133,6 +133,15 @@ instance [fh : FiniteHeight A] : FiniteHeight (Domain n A) where
         exact FiniteHeight.height_le_of_join _ _
 
 end Domain
+
+instance instLatticeLikeDomain
+    {n : Nat} {A : Type} [Max A] [Bot A] [FiniteHeight A] [ll : LatticeLike A] :
+    LatticeLike (Domain n A) where
+  join_comm a b := by funext i; exact ll.join_comm (a i) (b i)
+  join_assoc a b c := by funext i; exact ll.join_assoc (a i) (b i) (c i)
+  join_idem a := by funext i; exact ll.join_idem (a i)
+  bot_le a := by funext i; exact ll.bot_le (a i)
+
 end Basics
 
 section Dataflow
