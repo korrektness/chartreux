@@ -313,10 +313,7 @@ theorem exit_lt {b s b' en ex} (hbs : BuildSpec b s b' en ex)
     rw [BuilderWF] at h_b
     grind
 
-/-! ## Per-constructor edge witnesses
-
-Convenience: `BuildSpec.if_` and `BuildSpec.while_` insert several edges.
-The lemmas below extract the corresponding `hasEdge` facts directly. -/
+/-! ## Per-constructor edge witnesses -/
 
 theorem seq_normal_edge {b b₁ b₂ : CFGBuilder} {s₁ s₂ : Stmt}
     {en₁ ex₁ en₂ ex₂ : NodeID}
@@ -324,7 +321,6 @@ theorem seq_normal_edge {b b₁ b₂ : CFGBuilder} {s₁ s₂ : Stmt}
     (b₂.addEdge ex₁ en₂ .Normal).cfg.hasEdge ex₁ en₂ .Normal := by
   simp [CFG.hasEdge, addEdge_edges]
 
-/-- The four edges introduced by the `if_` constructor. -/
 theorem if_edges {b b₁ b₂ : CFGBuilder} {c : Expr} {t f : Stmt}
     {en_t ex_t en_f ex_f : NodeID}
     (_hbs_t : BuildSpec (b.addNode (.Cond c)).fst t b₁ en_t ex_t)
@@ -338,7 +334,6 @@ theorem if_edges {b b₁ b₂ : CFGBuilder} {c : Expr} {t f : Stmt}
     g.hasEdge ex_f b₂.nextID .Normal := by
   refine ⟨?_, ?_, ?_, ?_⟩ <;> simp [CFG.hasEdge]
 
-/-- The three edges introduced by the `while_` constructor. -/
 theorem while_edges {b b₁ : CFGBuilder} {c : Expr} {body : Stmt}
     {en_b ex_b : NodeID}
     (_hbs_b : BuildSpec (b.addNode (.Cond c)).fst body b₁ en_b ex_b) :
@@ -423,9 +418,6 @@ theorem decl_normal_edge {b : CFGBuilder} (x : String) (e : Expr) :
     b'.cfg.hasEdge b.nextID (b.nextID + 1) .Normal := by
   simp [CFG.hasEdge]
 
-/-- Every `BuildSpec` exits at a `.Skip` node. Each constructor either
-    emits a trailing `Skip` (assign/decl/if_/while_), is itself a `Skip`
-    (skip), or recurses into a sub-build whose exit is `Skip` (seq). -/
 theorem exit_nodeKind_skip {b s b' en ex} (hbs : BuildSpec b s b' en ex)
     (hwf : BuilderWF b) : b'.cfg.nodeKind ex = some .Skip := by
   induction hbs with
@@ -497,7 +489,8 @@ theorem of_addEdge (b : CFGBuilder) (s d : NodeID) (k : EdgeKind) :
 
 end SubCFG
 
-/-! ## `buildGraphSpec` — `buildGraph` with a paired `BuildSpec` witness -/
+/-! ## Builders -/
+/-- `buildGraphSpec`: `buildGraph` with a paired `BuildSpec` witness -/
 def buildGraphSpec (b : CFGBuilder) (s : Stmt) :
     Σ' (b' : CFGBuilder) (en ex : NodeID), BuildSpec b s b' en ex :=
   match s with
@@ -536,7 +529,7 @@ def buildGraphSpec (b : CFGBuilder) (s : Stmt) :
           nenc nex .FBranch,
         nenc, nex, .while_ r_b.2.2.2⟩
 
-/-- Legacy: drop the witness -/
+/-- Compatibility: drop the witness -/
 def buildGraphTuple (b : CFGBuilder) (s : Stmt) : CFGBuilder × (NodeID × NodeID) :=
   let r := buildGraphSpec b s
   (r.1, (r.2.1, r.2.2.1))

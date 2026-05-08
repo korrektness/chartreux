@@ -22,6 +22,8 @@ def DFA.transferAlong (A : DFA) (g : CFG) (e : Edge) (ℓ : A.L) : A.L :=
 
 structure DFASemantics (A : DFA) where
   Corr : CFG → A.L → CEK → Prop
+  preserve_entry :
+    ∀ {g : CFG} {σ : CEK}, IsInitial g σ → Corr g (A.entry g) σ
   preserve_id :
     ∀ {g : CFG} {ℓ : A.L} {σ σ' : CEK},
       σ'.E = σ.E →
@@ -46,10 +48,6 @@ structure DFASemantics (A : DFA) where
       σ'.E = σ.E →
       Corr g ℓ σ →
       Corr g (A.transferAlong g e ℓ) σ'
-  /-- Node-advancing without writeback: at a `.Skip` node, the environment
-      is preserved and the CFG advances along a `.Normal` edge. The
-      analysis must show that applying the local transfer at `n` keeps
-      `Corr` for the post-state under any value of the post-fixpoint. -/
   preserve_advance :
     ∀ {g : CFG} {n : NodeID} {ℓ : A.L} {σ σ' : CEK} (e : Edge),
       e ∈ g.edges → e.src = n → e.kind = .Normal →
@@ -57,11 +55,6 @@ structure DFASemantics (A : DFA) where
       σ'.E = σ.E →
       Corr g ℓ σ →
       Corr g (A.transferAlong g e ℓ) σ'
-  /-- The analysis's `entry` seed must over-approximate every initial CEK
-      state of `g`. Closes the gap between the abstract `entry` value and
-      actual concrete entry states. -/
-  preserve_entry :
-    ∀ {g : CFG} {σ : CEK}, IsInitial g σ → Corr g (A.entry g) σ
 
 def PostFixpoint (A : DFA) (absorbs : A.L → A.L → Prop)
     (g : CFG) (rd : NodeID → A.L) : Prop :=
