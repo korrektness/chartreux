@@ -1,4 +1,4 @@
-import Flow.Lang.BuildSpec
+import Flow.Lang.CFG
 import Flow.Lang.Eval
 import Flow.Eval.Refinement
 
@@ -32,7 +32,7 @@ frame.
 
 namespace Flow.Eval.Located
 
-open Flow.Lang
+open CFGBuilder
 open Flow.Eval.Refinement
 
 /-! ## Helpers for the expression-evaluation invariant (option (a)) -/
