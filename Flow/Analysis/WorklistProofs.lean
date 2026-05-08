@@ -157,8 +157,7 @@ private lemma joinPredEdges_mono
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
     (edge_mono : ∀ e, mono_f (edgeTransfer e))
     (outF1 outF2 : StateN g A) (hle : StateN.le outF1 outF2) (n : NodeOf g) :
-    Eq ((joinPredEdges g edgeTransfer outF1 n) ⊔ (joinPredEdges g edgeTransfer outF2 n))
-       (joinPredEdges g edgeTransfer outF1 n) := by
+    (joinPredEdges g edgeTransfer outF1 n) ⊑ (joinPredEdges g edgeTransfer outF2 n) := by
   unfold joinPredEdges
   exact foldl_join_eT_mono g edgeTransfer edge_mono
     outF1 outF2 hle n (g.inEdges n.val).attach ⊥ ⊥ (ll.join_idem ⊥)
@@ -170,9 +169,8 @@ private lemma expectedIn_mono
     [ll : LatticeLike A] [tm : TransferMono nodeTransfer edgeTransfer]
     (outF1 outF2 : StateN g A)
     (hle : StateN.le outF1 outF2) (n : NodeOf g) :
-    Eq ((expectedIn g edgeTransfer entryInit outF1 n) ⊔
-        (expectedIn g edgeTransfer entryInit outF2 n))
-       (expectedIn g edgeTransfer entryInit outF1 n) := by
+    (expectedIn g edgeTransfer entryInit outF1 n) ⊑
+        (expectedIn g edgeTransfer entryInit outF2 n) := by
   simp only [expectedIn]
   split
   · exact ll.join_idem _
@@ -194,30 +192,6 @@ private lemma T_postfix_of_postfix
     (fun m => nodeTransfer m.val (expectedIn g edgeTransfer entryInit f m))
   intro m
   simpa [ll.join_comm] using hpost m
-
-private lemma join_ge_trans [Max A] [Bot A] [FiniteHeight A] [ll : LatticeLike A]
-    (a b c : A) (hab : a ⊔ b = a) (hbc : b ⊔ c = b) :
-    a ⊔ c = a := by
-  calc a ⊔ c = (a ⊔ b) ⊔ c := by rw [hab]
-    _ = a ⊔ (b ⊔ c) := ll.join_assoc a b c
-    _ = a ⊔ b := by rw [hbc]
-    _ = a := hab
-
-private lemma StateN.le_trans {g : AnalysisCFG Node Edge} [Max A] [Bot A] [FiniteHeight A]
-    [LatticeLike A]
-    (f1 f2 f3 : StateN g A) (h12 : StateN.le f1 f2) (h23 : StateN.le f2 f3) :
-    StateN.le f1 f3 :=
-  fun n => join_ge_trans _ _ _ (h12 n) (h23 n)
-
-private lemma StateN.le_update_join {g : AnalysisCFG Node Edge} [Max A] [Bot A] [FiniteHeight A]
-    [ll : LatticeLike A]
-    (outF : StateN g A) (n : NodeOf g) (v : A) :
-    StateN.le (outF.update n (outF n ⊔ v)) outF := by
-  intro m; simp only [StateN.update]
-  split
-  · rename_i h; subst h
-    rw [ll.join_assoc, ll.join_comm v, ← ll.join_assoc, ll.join_idem]
-  · exact ll.join_idem _
 
 /-! ## Main theorems -/
 
@@ -358,7 +332,7 @@ theorem worklistForward_sound_fixpoint
     T_postfix_of_postfix g nodeTransfer edgeTransfer entryInit res hpostres
   have hbase : StateN.le (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit res n))
                 out0 :=
-    fun n => by rw [ll.join_comm]; exact hbot n _
+    fun n => by simp only [ll.join_comm]; exact hbot n _
   have hleast : StateN.le (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit res n))
                 res :=
     worklistForward_complete_least_postfixpoint g nodeTransfer edgeTransfer entryInit out0
@@ -381,8 +355,7 @@ private lemma foldl_ge_of_mem
     [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
     {α : Type} (f : α → A)
     (l : List α) (a : α) (ha : a ∈ l) (init : A) :
-    (l.foldl (fun acc x => acc ⊔ f x) init) ⊔ f a
-      = l.foldl (fun acc x => acc ⊔ f x) init := by
+    (l.foldl (fun acc x => acc ⊔ f x) init) ⊑ f a := by
   induction l generalizing init with
   | nil => cases ha
   | cons hd tl ih =>
@@ -399,9 +372,8 @@ private lemma joinPredEdges_ge_edge
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge → A → A)
     (outF : StateN g A) (n : NodeOf g)
     (e : Edge) (he : e ∈ g.inEdges n.val) :
-    (joinPredEdges g edgeTransfer outF n) ⊔
-        edgeTransfer e (outF ⟨g.srcOf e, g.inEdges_src_mem n.val e he⟩)
-      = joinPredEdges g edgeTransfer outF n := by
+    (joinPredEdges g edgeTransfer outF n) ⊑
+      edgeTransfer e (outF ⟨g.srcOf e, g.inEdges_src_mem n.val e he⟩) := by
   unfold joinPredEdges
   let f : {x // x ∈ g.inEdges n.val} → A := fun ⟨x, hx⟩ =>
     edgeTransfer x (outF ⟨g.srcOf x, g.inEdges_src_mem n.val x hx⟩)

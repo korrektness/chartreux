@@ -1,3 +1,4 @@
+import Flow.Analysis.Utils
 import Mathlib.Order.Notation
 
 variable {A : Type} [Max A] [Bot A]
@@ -6,6 +7,9 @@ section Basics
 
 -- lattice theory
 infix:90 "⊑" => fun x y => x ⊔ y = x
+
+def mono_f {A : Type} [Max A] (f : A -> A) : Prop :=
+  ∀ x y, x ⊑ y -> f x ⊑ f y
 
 class FiniteHeight (A : Type) [Max A] where
   height : A -> Nat
@@ -23,9 +27,6 @@ omit [Bot A] in theorem height_le_of_join [FiniteHeight A] (a b : A) :
 
 end FiniteHeight
 
-def mono_f {A : Type} [Max A] (f : A -> A) : Prop :=
-  ∀ x y, x ⊑ y -> f x ⊑ f y
-
 class LatticeLike
     (A : Type) [Max A] [Bot A] [FiniteHeight A] where
   -- regular lattice structure
@@ -33,6 +34,15 @@ class LatticeLike
   join_assoc : ∀ a b c : A, (a ⊔ b) ⊔ c = a ⊔ (b ⊔ c)
   join_idem : ∀ a : A, a ⊔ a = a
   bot_le : ∀ a : A, a ⊔ ⊥ = a
+
+set_option linter.style.whitespace false in
+lemma join_ge_trans [FiniteHeight A] [ll : LatticeLike A]
+    (a b c : A) (hab : a ⊑ b) (hbc : b ⊑ c) :
+    a ⊔ c = a := by
+  calc a ⊔ c = (a ⊔ b) ⊔ c := by rw [hab]
+    _ = a ⊔ (b ⊔ c) := ll.join_assoc a b c
+    _ = a ⊔ b := by rw [hbc]
+    _ = a := hab
 
 -- extension to multivariate case
 variable {n : Nat}
@@ -81,12 +91,11 @@ instance [DecidableEq A] : DecidableEq (Domain n A) := fun ρ₁ ρ₂ =>
   else
     isFalse (fun h' => h ((domainBEq_iff ρ₁ ρ₂).mpr h'))
 
--- finite height instance
-
 @[simp]
 def domHeight [fh : FiniteHeight A] (ρ : Domain n A) : Nat :=
   (List.finRange n |>.map fun i => fh.height (ρ i)) |>.sum
 
+-- finite height instance
 instance [fh : FiniteHeight A] : FiniteHeight (Domain n A) where
   height := domHeight
   maxHeight := n * fh.maxHeight
@@ -132,16 +141,14 @@ instance [fh : FiniteHeight A] : FiniteHeight (Domain n A) where
         refine Nat.add_lt_add_of_le_of_lt ?_ (ih htl)
         exact FiniteHeight.height_le_of_join _ _
 
-end Domain
-
-instance instLatticeLikeDomain
-    {n : Nat} {A : Type} [Max A] [Bot A] [FiniteHeight A] [ll : LatticeLike A] :
-    LatticeLike (Domain n A) where
+instance {n : Nat} {A : Type} [Max A] [Bot A] [FiniteHeight A]
+    [ll : LatticeLike A] : LatticeLike (Domain n A) where
   join_comm a b := by funext i; exact ll.join_comm (a i) (b i)
   join_assoc a b c := by funext i; exact ll.join_assoc (a i) (b i) (c i)
   join_idem a := by funext i; exact ll.join_idem (a i)
   bot_le a := by funext i; exact ll.bot_le (a i)
 
+end Domain
 end Basics
 
 section Dataflow
@@ -164,24 +171,112 @@ variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
 
 abbrev NodeOf (g : AnalysisCFG Node Edge) := {n // n ∈ g.nodes}
 
+namespace AnalysisCFG
 /-- the list of all nodes in `g`, packaged as `NodeOf g`. Mirrors the
     reference's `g.nodes_mem`. -/
-def AnalysisCFG.nodes_mem (g : AnalysisCFG Node Edge) : List (NodeOf g) :=
+def nodes_mem (g : AnalysisCFG Node Edge) : List (NodeOf g) :=
   g.nodes.attach
 
 /-- successors of a node, packaged as `NodeOf g`. Successors are derived
     from the predecessor edges of each candidate node so that we get the
     `NodeOf g` membership proof for free via `inEdges_src_mem`. -/
-def AnalysisCFG.succOf (g : AnalysisCFG Node Edge) (n : NodeOf g) : List (NodeOf g) :=
+def succOf (g : AnalysisCFG Node Edge) (n : NodeOf g) : List (NodeOf g) :=
   g.nodes.attach.filter (fun m => (g.inEdges m.val).any (fun e => g.srcOf e = n.val))
+end AnalysisCFG
 
 abbrev StateN (g : AnalysisCFG Node Edge) (A : Type) := NodeOf g -> A
-def StateN.empty {g : AnalysisCFG Node Edge} : StateN g A := fun _ => ⊥
-def StateN.update {g : AnalysisCFG Node Edge} (f : StateN g A)
+
+namespace StateN
+
+def empty {g : AnalysisCFG Node Edge} : StateN g A := fun _ => ⊥
+def update {g : AnalysisCFG Node Edge} (f : StateN g A)
     (n : NodeOf g) (v : A) : StateN g A :=
   fun m => if m = n then v else f m
 
+/-! ## Utility lemmas on list-sums under update -/
+
+omit [Bot A] in
+private lemma gmap_height_update_eq [FiniteHeight A]
+    {g : AnalysisCFG Node Edge}
+    (nodes : List (NodeOf g)) (outF : StateN g A) (node : NodeOf g) (newOut : A) :
+    Eq (nodes.map (fun x => FiniteHeight.height (StateN.update outF node newOut x)))
+       (nodes.map (fun x => if x = node then FiniteHeight.height newOut
+        else FiniteHeight.height (outF x))) := by
+  congr 1; ext x; simp [StateN.update]; split <;> rfl
+
+omit [Bot A] in
+private lemma gmap_update_sum_lt [FiniteHeight A]
+    {g : AnalysisCFG Node Edge}
+    (nodes : List (NodeOf g)) (outF : StateN g A) (node : NodeOf g) (newOut : A)
+    (hn : node ∈ nodes)
+    (hlt : FiniteHeight.height (outF node) < FiniteHeight.height newOut) :
+    (nodes.map (fun x => FiniteHeight.height (outF x))).sum
+    < (nodes.map (fun x => FiniteHeight.height (StateN.update outF node newOut x))).sum := by
+  rw [gmap_height_update_eq]
+  exact Utils.sum_map_update_lt nodes
+    (fun x => FiniteHeight.height (outF x)) node (FiniteHeight.height newOut) hn hlt
+
+/- pointwise instances of max/bot/le -/
 instance {g : AnalysisCFG Node Edge} : Max (StateN g A) where
   max f g := fun n => f n ⊔ g n
 
+instance {g : AnalysisCFG Node Edge} [Bot A] : Bot (StateN g A) where
+  bot := fun _ => ⊥
+
+def le {g : AnalysisCFG Node Edge} [Max A] (f₁ f₂ : StateN g A) : Prop :=
+  ∀ n, (f₁ n) ⊑ (f₂ n)
+
+/-! ## Termination measure on `StateN` -/
+
+omit [Bot A] in
+/-- height of a `StateN`, termination condition for the worklist algorithm. -/
+def height [fh : FiniteHeight A] (g : AnalysisCFG Node Edge) (f : StateN g A) : Nat :=
+  fh.maxHeight * g.nodes.length
+    - (g.nodes.attach.map (fun x => fh.height (f x))).sum
+
+omit [Bot A] in lemma sum_height_le_max [fh : FiniteHeight A]
+    {g : AnalysisCFG Node Edge} (l : List (NodeOf g)) (f : StateN g A) :
+    (l.map (fun x => fh.height (f x))).sum ≤ fh.maxHeight * l.length := by
+  induction l with
+  | nil => simp
+  | cons h t ih =>
+    simp only [List.map_cons, List.sum_cons, List.length_cons]
+    calc
+      _ ≤ fh.maxHeight + (t.map (fun x ↦ fh.height (f x))).sum := by
+        simp [fh.maxHeight_ub]
+      _ ≤ fh.maxHeight + fh.maxHeight * t.length := by
+        simp [ih]
+      _ ≤ fh.maxHeight * (t.length + 1) := by
+        grind
+
+omit [Bot A] in
+theorem height_update_decreases [FiniteHeight A]
+    (g : AnalysisCFG Node Edge) (outF : StateN g A) (node : NodeOf g) (newOut : A)
+    (hlt : FiniteHeight.height (outF node) < FiniteHeight.height newOut) :
+    StateN.height g (StateN.update outF node newOut) < StateN.height g outF := by
+  have hn : node ∈ g.nodes.attach := List.mem_attach _ _
+  have h_le := StateN.sum_height_le_max g.nodes.attach (StateN.update outF node newOut)
+  have h_lt := gmap_update_sum_lt g.nodes.attach outF node newOut hn hlt
+  unfold StateN.height
+  have h_len : g.nodes.length = g.nodes.attach.length := by simp
+  rw [h_len]
+  omega
+
+lemma le_trans {g : AnalysisCFG Node Edge} [FiniteHeight A]
+    [LatticeLike A]
+    (f1 f2 f3 : StateN g A) (h12 : StateN.le f1 f2) (h23 : StateN.le f2 f3) :
+    StateN.le f1 f3 :=
+  fun n => join_ge_trans _ _ _ (h12 n) (h23 n)
+
+lemma le_update_join {g : AnalysisCFG Node Edge} [FiniteHeight A]
+    [ll : LatticeLike A]
+    (outF : StateN g A) (n : NodeOf g) (v : A) :
+    StateN.le (outF.update n (outF n ⊔ v)) outF := by
+  intro m; simp only [StateN.update]
+  split
+  · rename_i h; subst h
+    rw [ll.join_assoc, ll.join_comm v, ← ll.join_assoc, ll.join_idem]
+  · exact ll.join_idem _
+
+end StateN
 end Dataflow
