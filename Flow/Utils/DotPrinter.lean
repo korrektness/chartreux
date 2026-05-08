@@ -121,4 +121,11 @@ def toDotWith {A : Type} [ToString A]
     (inSt outSt : StateN ag A) : String :=
   Flow.Utils.DotPrinter.toDotCore g (annotatorOfStates ag inSt outSt)
 
+/-- Variant of `toDotWith` that takes plain `NodeID → A` annotators
+    (e.g. the bundled `AnalysisResult.inFacts` / `outFacts`). -/
+def toDotWithFn {A : Type} [ToString A]
+    (g : CFG) (inF outF : NodeID → A) : String :=
+  Flow.Utils.DotPrinter.toDotCore g
+    (fun n => some (toString (inF n), toString (outF n)))
+
 end CFG

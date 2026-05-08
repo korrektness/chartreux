@@ -4,6 +4,27 @@ import Flow.Analysis.Generic
 
 namespace Flow.Analysis
 
+/-- Edges entering a node, computed by filtering `g.edges`. -/
+def inEdges (g : CFG) (n : NodeID) : List Edge :=
+  g.edges.filter (fun e => e.dst = n)
+
+/-- Build an `AnalysisCFG NodeID Edge` from a concrete `CFG`. -/
+def forCFG (g : CFG)
+    (hwf : ∀ n e, e ∈ inEdges g n → e.src < g.nodes.length) :
+    AnalysisCFG NodeID Edge where
+  nodes := List.range g.nodes.length
+  edges := g.edges
+  entry := g.entry
+  exit  := g.exit
+  srcOf e := e.src
+  dstOf e := e.dst
+  succ := g.succ
+  pred := g.pred
+  inEdges n := inEdges g n
+  inEdges_src_mem := by
+    intro n e he
+    exact List.mem_range.mpr (hwf n e he)
+
 variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
 variable {A : Type}
 
@@ -440,3 +461,93 @@ theorem postFixpoint_of_isForwardPostFixpoint
   exact join_ge_trans _ _ _ h_join_ge h_edge
 
 end Flow.Analysis
+
+/-! ## Bundled analysis API -/
+
+namespace Flow
+
+open Flow.Analysis Flow.Analysis.Generic Flow.Eval.Refinement
+
+/-- A bundled analysis: a `DFA`, the lattice infrastructure on its
+    abstract domain, a semantics with proof obligations, and an
+    absorption relation with monotonicity. -/
+structure Analysis where
+  dfa : Generic.DFA
+  botL : Bot dfa.L
+  maxL : Max dfa.L
+  decEqL : DecidableEq dfa.L
+  fhL : FiniteHeight dfa.L
+  llL : LatticeLike dfa.L
+  semantics : Generic.DFASemantics dfa
+  absorbs : dfa.L → dfa.L → Prop
+  absorbs_refl : ∀ ℓ : dfa.L, absorbs ℓ ℓ
+  /-- Compatibility between `⊑` (defined via `botL`/`maxL`/`fhL`/`llL`)
+      and `absorbs`: anything below `ℓ` is absorbed by `ℓ`. -/
+  le_absorbs :
+    ∀ ℓ ℓ' : dfa.L,
+      letI := botL; letI := maxL; letI := fhL; letI := llL
+      ℓ' ⊑ ℓ → absorbs ℓ ℓ'
+  mono_absorb :
+    ∀ {g : CFG} {ℓ ℓ' : dfa.L} {σ : CEK},
+      absorbs ℓ ℓ' → semantics.Corr g ℓ σ → semantics.Corr g ℓ' σ
+  transferMono :
+    ∀ g : CFG, TransferMono (dfa.nodeTransfer g) (dfa.edgeTransfer g)
+
+/-- Per-node entry / exit facts together with the post-fixpoint proof. -/
+structure AnalysisResult (a : Analysis) (g : CFG) where
+  inFacts : NodeID → a.dfa.L
+  outFacts : NodeID → a.dfa.L
+  isPostFix : Generic.PostFixpoint a.dfa a.absorbs g inFacts
+  inFacts_entry : a.absorbs (a.dfa.entry g) (inFacts g.entry)
+
+/-- Run the worklist on a `CFG` and bundle the result with the
+    post-fixpoint proof. The user only has to provide `g.WellFormed`
+    (typically discharged by `decide`). -/
+def analyze (a : Analysis) (g : CFG) (h : g.WellFormed) :
+    AnalysisResult a g :=
+  letI := a.botL
+  letI := a.maxL
+  letI := a.decEqL
+  letI := a.fhL
+  letI := a.llL
+  letI := a.transferMono g
+  let G : AnalysisCFG NodeID Edge :=
+    forCFG g (fun _ e he => h.2.1 e ((List.mem_filter.mp he).1))
+  let entryInit := a.dfa.entry g
+  let nT : NodeID → a.dfa.L → a.dfa.L := a.dfa.nodeTransfer g
+  let eT : Edge → a.dfa.L → a.dfa.L := a.dfa.edgeTransfer g
+  let res := runDataflow G nT eT entryInit
+  let inFacts : NodeID → a.dfa.L := fun n =>
+    if hn : n ∈ G.nodes then expectedIn G eT entryInit res.2 ⟨n, hn⟩
+    else ⊥
+  let outFacts : NodeID → a.dfa.L := fun n =>
+    if hn : n ∈ G.nodes then res.2 ⟨n, hn⟩
+    else ⊥
+  have hpost : IsForwardPostFixpoint G nT eT entryInit res.2 :=
+    worklistForward_sound_postfixpoint G nT eT entryInit (fun _ => ⊥)
+      G.nodes_mem (by intro m hm; exact absurd (List.mem_attach _ m) hm)
+  have hpf : Generic.PostFixpoint a.dfa a.absorbs g inFacts := by
+    intro e he hsrc hdst
+    exact a.le_absorbs _ _ <|
+      postFixpoint_of_isForwardPostFixpoint g G
+        (by intro n; simp [G, forCFG, List.mem_range])
+        rfl rfl (fun _ => rfl)
+        (by intro n e; simp [G, forCFG, inEdges, List.mem_filter])
+        nT eT entryInit res.2 hpost h.2.2.2 e he hsrc hdst
+  have hentry : a.absorbs (a.dfa.entry g) (inFacts g.entry) := by
+    have hmem : g.entry ∈ G.nodes := by
+      simpa [G, forCFG, List.mem_range] using h.1
+    change a.absorbs (a.dfa.entry g)
+      (if hn : g.entry ∈ G.nodes then
+         expectedIn G eT entryInit res.2 ⟨g.entry, hn⟩
+       else ⊥)
+    rw [dif_pos hmem]
+    unfold expectedIn
+    rw [if_pos (show (⟨g.entry, hmem⟩ : NodeOf G).val = G.entry from rfl)]
+    exact a.absorbs_refl _
+  { inFacts := inFacts
+  , outFacts := outFacts
+  , isPostFix := hpf
+  , inFacts_entry := hentry }
+
+end Flow

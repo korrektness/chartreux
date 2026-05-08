@@ -1,5 +1,6 @@
 import Flow.Analysis.Generic
 import Flow.Analysis.Worklist
+import Flow.Analysis.WorklistProofs
 import Flow.Lang.Eval
 import Flow.Lang.CFG
 import Mathlib.Data.List.Nodup
@@ -123,46 +124,6 @@ instance : LatticeLike CPVal where
 
 end CPVal
 
-theorem List.mem_eraseDups {α} [BEq α] [LawfulBEq α] :
-    ∀ (l : List α) (a : α), a ∈ l.eraseDups ↔ a ∈ l
-  | [], _ => by simp [List.eraseDups]
-  | h :: t, a => by
-    rw [List.eraseDups_cons]
-    simp only [List.mem_cons]
-    rw [mem_eraseDups (t.filter _) a, List.mem_filter]
-    constructor
-    · rintro (rfl | ⟨ha, _⟩)
-      · exact Or.inl rfl
-      · exact Or.inr ha
-    · rintro (rfl | ha)
-      · exact Or.inl rfl
-      · by_cases heq : a = h
-        · exact Or.inl heq
-        · refine Or.inr ⟨ha, ?_⟩
-          simp [heq]
-termination_by l _ => l.length
-decreasing_by grind [List.length_filter_le]
-
-theorem eraseDups_nodup {α} [BEq α] [LawfulBEq α] : ∀ l : List α, l.eraseDups.Nodup
-  | [] => by exact List.nodup_nil
-  | h :: t => by
-    rw [List.eraseDups_cons]
-    refine List.Nodup.cons ?_ (eraseDups_nodup _)
-    intro hmem
-    rw [List.mem_eraseDups, List.mem_filter] at hmem
-    grind
-termination_by l => l.length
-decreasing_by grind [List.length_filter_le]
-
-/-- All variables in G -/
-def varsInProgram (g : CFG) : {l : List String // l.Nodup} :=
-  let base := g.nodes.filterMap (fun k =>
-    match k with
-    | .Assign x _ => some x
-    | .Decl x _   => some x
-    | _           => none)
-  let res := base.eraseDups
-  ⟨res, eraseDups_nodup base⟩
 
 /-- Index of variable `x` in the variable list `vars`, or `none` if `x`
     is not tracked. -/
@@ -285,26 +246,6 @@ instance instTransferMonoCP (vars : List String) (g : CFG) :
   node_mono := cpTransfer_mono vars g
   edge_mono := cpEdgeTransfer_mono vars
 
-/-- Edges entering a node, computed by filtering `g.edges`. -/
-def inEdges (g : CFG) (n : NodeID) : List Edge :=
-  g.edges.filter (fun e => e.dst = n)
-
-/-- Build a `Flow.Analysis.AnalysisCFG NodeID Edge` from a concrete `CFG`. -/
-def forCFG (g : CFG)
-    (hwf : ∀ n e, e ∈ inEdges g n → e.src < g.nodes.length) :
-    AnalysisCFG NodeID Edge where
-  nodes := List.range g.nodes.length
-  edges := g.edges
-  entry := g.entry
-  exit  := g.exit
-  srcOf e := e.src
-  dstOf e := e.dst
-  succ := g.succ
-  pred := g.pred
-  inEdges n := inEdges g n
-  inEdges_src_mem := by
-    intro n e he
-    exact List.mem_range.mpr (hwf n e he)
 
 section Corr
 variable {vars : List String}
@@ -554,4 +495,39 @@ theorem soundness
   steps_preserves_corr (cpSemantics vars hnd) (@mono_absorb_cp vars) hpf hsteps hcorr
 
 end Corr
+
+/-! ## Bundled CP analysis -/
+
+/-- A bundled `Flow.Analysis` for constant propagation, parameterized by
+    the variable list and a `Nodup` proof. -/
+def cpAnalysis (vars : List String) (hnd : vars.Nodup) : Flow.Analysis where
+  dfa          := cpDFA vars
+  botL         := (inferInstance : Bot (CPFact vars))
+  maxL         := (inferInstance : Max (CPFact vars))
+  decEqL       := (inferInstance : DecidableEq (CPFact vars))
+  fhL          := (inferInstance : FiniteHeight (CPFact vars))
+  llL          := (inferInstance : LatticeLike (CPFact vars))
+  semantics    := cpSemantics vars hnd
+  absorbs      := @cpAbsorbs vars
+  absorbs_refl := by
+    intro ℓ; grind [cpAbsorbs, Domain.max_app, CPVal.join_idem]
+  le_absorbs   := by intro ℓ ℓ' h; exact h
+  mono_absorb  := @mono_absorb_cp vars
+  transferMono := instTransferMonoCP vars
+
+/-- Turn-key correctness for the bundled CP analysis: at every reachable
+    program point, the computed in-fact correctly approximates the
+    concrete state. -/
+theorem cp_reachable_correct
+    {vars : List String} (hnd : vars.Nodup)
+    {g : CFG} (hwf : g.WellFormed)
+    {n : Nat} {h : n < g.nodes.length} {σ : CEK}
+    (hreach : Flow.Analysis.Generic.Reachable g h σ) :
+    cpβ_corr g ((Flow.analyze (cpAnalysis vars hnd) g hwf).inFacts n) σ := by
+  let A := cpAnalysis vars hnd
+  let R := Flow.analyze A g hwf
+  exact Flow.Analysis.Generic.reachable_corr (A := A.dfa) A.semantics
+    (absorbs := A.absorbs) (mono_absorb := A.mono_absorb)
+    (rd := R.inFacts) R.isPostFix R.inFacts_entry hreach
+
 end Flow.Analysis.CP

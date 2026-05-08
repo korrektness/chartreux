@@ -1,5 +1,6 @@
 import Flow.Lang.Defs
 import Mathlib.Tactic.Lemma
+import Mathlib.Data.List.Nodup
 
 inductive NodeKind where
 | Assign (x : String) (e : Expr)
@@ -99,8 +100,6 @@ inductive BuildSpec : CFGBuilder → Stmt → CFGBuilder → NodeID → NodeID �
       (((b.addNode (.Assign x e)).fst.addNode .Skip).fst.addEdge
         b.nextID (b.nextID + 1) .Normal)
       b.nextID (b.nextID + 1)
-/-- `Decl x e` emits a `Decl` node followed by a fresh `Skip`
-    successor connected by a `Normal` edge. Symmetric to `assign`. -/
 | decl (b : CFGBuilder) (x : String) (e : Expr) :
     BuildSpec b (.Decl x e)
       (((b.addNode (.Decl x e)).fst.addNode .Skip).fst.addEdge
@@ -572,3 +571,68 @@ def buildGraphTuple (b : CFGBuilder) (s : Stmt) : CFGBuilder × (NodeID × NodeI
 --     (b, (nenc, nexit))
 
 end CFGBuilder
+
+/-! ## High-level CFG conveniences -/
+
+private theorem List.mem_eraseDups {α} [BEq α] [LawfulBEq α] :
+    ∀ (l : List α) (a : α), a ∈ l.eraseDups ↔ a ∈ l
+  | [], _ => by simp [List.eraseDups]
+  | h :: t, a => by
+    rw [List.eraseDups_cons]
+    simp only [List.mem_cons]
+    rw [List.mem_eraseDups (t.filter _) a, List.mem_filter]
+    constructor
+    · rintro (rfl | ⟨ha, _⟩)
+      · exact Or.inl rfl
+      · exact Or.inr ha
+    · rintro (rfl | ha)
+      · exact Or.inl rfl
+      · by_cases heq : a = h
+        · exact Or.inl heq
+        · refine Or.inr ⟨ha, ?_⟩
+          simp [heq]
+termination_by l _ => l.length
+decreasing_by grind [List.length_filter_le]
+
+private theorem List.eraseDups_nodup {α} [BEq α] [LawfulBEq α] :
+    ∀ l : List α, l.eraseDups.Nodup
+  | [] => by exact List.nodup_nil
+  | h :: t => by
+    rw [List.eraseDups_cons]
+    refine List.Nodup.cons ?_ (List.eraseDups_nodup _)
+    intro hmem
+    rw [List.mem_eraseDups, List.mem_filter] at hmem
+    grind
+termination_by l => l.length
+decreasing_by grind [List.length_filter_le]
+
+namespace CFG
+
+/-- Structural well-formedness of a CFG: every edge has its endpoints
+    in range, and no edge points back at the entry. Decidable, so user
+    code can discharge it with `decide`. -/
+def WellFormed (g : CFG) : Prop :=
+  g.entry < g.nodes.length ∧
+  (∀ e ∈ g.edges, e.src < g.nodes.length) ∧
+  (∀ e ∈ g.edges, e.dst < g.nodes.length) ∧
+  (∀ e ∈ g.edges, e.dst ≠ g.entry)
+
+instance (g : CFG) : Decidable g.WellFormed := by
+  unfold WellFormed; infer_instance
+
+/-- Build a CFG from a `Stmt` using the empty builder. -/
+def ofStmt (s : Stmt) : CFG :=
+  let r := CFGBuilder.empty.buildGraphTuple s
+  { r.1.cfg with entry := r.2.1, exit := r.2.2 }
+
+/-- All variables appearing in the program (declarations and
+    assignments), de-duplicated, with a `Nodup` witness. -/
+def vars (g : CFG) : { l : List String // l.Nodup } :=
+  let base := g.nodes.filterMap (fun k =>
+    match k with
+    | .Assign x _ => some x
+    | .Decl x _   => some x
+    | _           => none)
+  ⟨base.eraseDups, List.eraseDups_nodup base⟩
+
+end CFG

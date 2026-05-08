@@ -6,6 +6,7 @@ import Flow.Utils.DotPrinter
 
 open Flow.Analysis Flow.Analysis.CP Flow.Analysis.Generic CFGBuilder Flow.Eval.Refinement
 
+section Simple
 open Expr Stmt BinOp in
 def simple :=
   Seq (Decl "a" (.Int 0))
@@ -18,7 +19,7 @@ def simpleCFG : CFG :=
   let (b, (entry, exit)) := CFGBuilder.empty.buildGraphTuple simple
   { b.cfg with entry, exit }
 
-def sv := varsInProgram simpleCFG
+def sv := simpleCFG.vars
 
 private lemma sv_edges_wf : ∀ {e} {_ : e ∈ simpleCFG.edges},
   e.src < simpleCFG.nodes.length := by decide
@@ -86,3 +87,39 @@ theorem cp_correct_reachable
 
 #eval IO.println (CFG.toDot simpleCFG)
 #eval IO.println (CFG.toDotWith simpleCFG sv_CFG res.1 res.2)
+end Simple
+
+section Hard
+open Expr Stmt BinOp in
+/-- The example program. -/
+def loopy : Stmt :=
+  Seq (Decl "x" (.Int 2))
+    (Seq (Decl "y" (.Int 3))
+      (Seq (Decl "i" (.Int 0))
+        (Seq (Decl "z" (.Int 0))
+          (While (BinOp gt (Var "n") (Var "i"))
+            (Seq (Assign "i" (BinOp add (Var "i") (.Int 1)))
+                 (If (BinOp gt (Var "x") (.Int 0))
+                   (Assign "z" (BinOp mul (Var "x") (Var "y")))
+                   (Assign "z" (BinOp mul (Var "y") (Var "x")))))))))
+
+def loopyCFG : CFG := CFG.ofStmt loopy
+
+private lemma loopyCFG_wf : loopyCFG.WellFormed := by decide
+
+def loopyVars : { l : List String // l.Nodup } := loopyCFG.vars
+
+def loopyResult :
+    Flow.AnalysisResult (cpAnalysis loopyVars.val loopyVars.prop) loopyCFG :=
+  Flow.analyze (cpAnalysis loopyVars.val loopyVars.prop) loopyCFG loopyCFG_wf
+
+theorem loopy_cp_correct
+    {n : Nat} {h : n < loopyCFG.nodes.length} {σ : CEK}
+    (hreach : Reachable loopyCFG h σ) :
+    cpβ_corr loopyCFG (loopyResult.inFacts n) σ :=
+  cp_reachable_correct loopyVars.prop loopyCFG_wf hreach
+
+#eval IO.println (CFG.toDot loopyCFG)
+#eval IO.println (CFG.toDotWithFn (A := CPFact loopyVars.val) loopyCFG
+  loopyResult.inFacts loopyResult.outFacts)
+end Hard
