@@ -20,7 +20,6 @@ class TransferMono
   node_mono : ∀ n, mono_f (nodeTransfer n)
   edge_mono : ∀ e, mono_f (edgeTransfer e)
 
-/-! ## Forward worklist algorithm -/
 
 /-- computes the join of the results of applying an edge transfer function
     to all incoming edges of a given node `n` in `g`. -/

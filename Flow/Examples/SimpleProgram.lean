@@ -4,7 +4,7 @@ import Flow.Analysis.CP
 import Flow.Analysis.WorklistProofs
 import Flow.Utils.DotPrinter
 
-open Flow.Analysis Flow.Analysis.CP Flow.Analysis.Generic CFGBuilder
+open Flow.Analysis Flow.Analysis.CP Flow.Analysis.Generic CFGBuilder Flow.Eval.Refinement
 
 open Expr Stmt BinOp in
 def simple :=
@@ -14,17 +14,12 @@ def simple :=
         (Assign "b" (BinOp add (Var "a") (Var "b")))
         (Assign "b" (BinOp add (Var "b") (Var "b")))))
 
-
 def simpleCFG : CFG :=
   let (b, (entry, exit)) := CFGBuilder.empty.buildGraphTuple simple
   { b.cfg with entry, exit }
 
 def sv := varsInProgram simpleCFG
--- to refactor out: shouldn't need to carry this around
-lemma sv_nodup : sv.Nodup := eraseDups_nodup sv
 
--- to refactor out: these proofs should work for all CFGs so shouldn't need to
--- have it around.
 private lemma sv_edges_wf : ∀ {e} {_ : e ∈ simpleCFG.edges},
   e.src < simpleCFG.nodes.length := by decide
 def sv_CFG := forCFG simpleCFG (by {
@@ -72,10 +67,22 @@ theorem cp_correct
     {n n' : Nat}
     {h : n < simpleCFG.nodes.length} {h' : n' < simpleCFG.nodes.length}
     {σ σ'}
-    (hsteps : Flow.Eval.Refinement.StepsN simpleCFG h σ h' σ')
+    (hsteps : StepsN simpleCFG h σ h' σ')
     (hcorr : cpβ_corr simpleCFG (rd n) σ) :
     cpβ_corr simpleCFG (rd n') σ' :=
-  Flow.Analysis.CP.soundness sv_nodup rd_postfix hsteps hcorr
+  soundness sv.prop rd_postfix hsteps hcorr
+
+private lemma rd_entry_absorb :
+    cpAbsorbs (cpEntryInit sv) (rd simpleCFG.entry) := by
+  simp only [cpAbsorbs]
+  decide
+
+theorem cp_correct_reachable
+    {n : Nat} {h : n < simpleCFG.nodes.length} {σ : CEK}
+    (hreach : Reachable simpleCFG h σ) :
+    cpβ_corr simpleCFG (rd n) σ :=
+  reachable_corr (cpSemantics sv sv.prop) (@mono_absorb_cp sv)
+    rd_postfix rd_entry_absorb hreach
 
 #eval IO.println (CFG.toDot simpleCFG)
 #eval IO.println (CFG.toDotWith simpleCFG sv_CFG res.1 res.2)

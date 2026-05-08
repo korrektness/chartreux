@@ -9,9 +9,7 @@ namespace Flow.Analysis.CP
 open Analysis
 open Generic
 
-/-! ## The per-variable lattice `CPVal` -/
-
-/-- Abstract value tracked for a single variable. -/
+/-- Abstract value for a single variable -/
 inductive CPVal where
   | bot
   | const (n : Int)
@@ -90,8 +88,7 @@ lemma join_idem (a : CPVal) : a ⊔ a = a := by
 
 lemma bot_le (a : CPVal) : a ⊔ CPVal.bot = a := join_bot_right a
 
-/-- The `FiniteHeight` instance for `CPVal`.  Height is bounded by `2` and
-    the join strictly increases the height whenever it changes the value. -/
+/-- `FiniteHeight` for CPVal : bounded by 2. -/
 instance : FiniteHeight CPVal where
   height := height
   maxHeight := 2
@@ -126,17 +123,6 @@ instance : LatticeLike CPVal where
 
 end CPVal
 
-/-! ## Whole-program facts: `CPFact vars` -/
-
-/-- The list of variables ever assigned to or declared in `g`, in source
-    order.  Duplicates are removed by `List.eraseDups`. -/
-def varsInProgram (g : CFG) : List String :=
-  (g.nodes.filterMap (fun k =>
-    match k with
-    | .Assign x _ => some x
-    | .Decl x _   => some x
-    | _           => none)).eraseDups
-
 theorem List.mem_eraseDups {α} [BEq α] [LawfulBEq α] :
     ∀ (l : List α) (a : α), a ∈ l.eraseDups ↔ a ∈ l
   | [], _ => by simp [List.eraseDups]
@@ -167,6 +153,16 @@ theorem eraseDups_nodup {α} [BEq α] [LawfulBEq α] : ∀ l : List α, l.eraseD
     grind
 termination_by l => l.length
 decreasing_by grind [List.length_filter_le]
+
+/-- All variables in G -/
+def varsInProgram (g : CFG) : {l : List String // l.Nodup} :=
+  let base := g.nodes.filterMap (fun k =>
+    match k with
+    | .Assign x _ => some x
+    | .Decl x _   => some x
+    | _           => none)
+  let res := base.eraseDups
+  ⟨res, eraseDups_nodup base⟩
 
 /-- Index of variable `x` in the variable list `vars`, or `none` if `x`
     is not tracked. -/
@@ -518,6 +514,13 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) :
       funext i; unfold cpβ; rw [heq]
     rw [htr, hβeq]
     exact hcorr
+  preserve_entry := by
+    intro _g σ hinit
+    obtain ⟨hE, _⟩ := hinit
+    change cpEntryInit vars ⊑ (cpβ σ : CPFact vars)
+    funext i
+    simp only [Domain.max_app, cpEntryInit, cpβ, hE, State.empty,
+               CPVal.join_idem]
 
 def cpAbsorbs (ℓ ℓ' : CPFact vars) : Prop := ℓ' ⊑ ℓ
 

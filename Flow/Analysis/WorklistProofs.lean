@@ -1,18 +1,6 @@
 import Flow.Analysis.Worklist
 import Flow.Analysis.Generic
 
-/-!
-# Correctness proofs for the forward worklist dataflow algorithm
-
-Port of `readings/AnalysisProofs.ref` lifted to the abstract
-`class CFG (Node Edge : Type)`.  The five public theorems are:
-
-* `worklistForward_mono`
-* `worklistForward_invariant`
-* `worklistForward_sound_postfixpoint`
-* `worklistForward_complete_least_postfixpoint`
-* `worklistForward_sound_fixpoint`
--/
 
 namespace Flow.Analysis
 
@@ -92,7 +80,7 @@ private lemma expectedIn_update_non_pred
   · exact joinPredEdges_update_non_pred g edgeTransfer outF n v m
       (not_succ_no_in_edge g n m h)
 
-/-! ## Public predicates -/
+/-! ## Predicates -/
 
 /-- a mapping is a forward fixpoint if, at every node, applying the
     transfer function to the incoming facts yields outF itself. -/
@@ -110,7 +98,7 @@ def IsForwardPostFixpoint [Bot A] [Max A]
   ∀ n : NodeOf g,
     (nodeTransfer n.val (expectedIn g edgeTransfer entryInit outF n)) ⊔ (outF n) = (outF n)
 
-/-! ## Monotonicity lemmas -/
+/-! ## Monotonicity -/
 
 private lemma foldl_join_eT_mono
     [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
@@ -195,7 +183,7 @@ private lemma T_postfix_of_postfix
 
 /-! ## Main theorems -/
 
-/-- the result of the worklist algorithm is always ≥ the initial facts. -/
+/-- the result of the worklist algorithm is always ⊑ the initial facts. -/
 theorem worklistForward_mono
     [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
@@ -218,7 +206,7 @@ theorem worklistForward_mono
 /-- Generic invariant propagation combinator for the worklist algorithm.
     If a predicate `P` on `(outF, wl)` holds initially and is preserved by
     both the "unchanged" and "changed" branches, then `P (result, [])` holds. -/
-theorem worklistForward_invariant
+private theorem worklistForward_invariant
     [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A) (wl : List (NodeOf g))
@@ -385,6 +373,7 @@ end Flow.Analysis
 
 namespace Flow.Analysis
 
+/-- Bridge: isForwardFixpoint to Generic.PostFixpoint -/
 theorem postFixpoint_of_isForwardPostFixpoint
     {A : Type} [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
     (g : CFG) (G : AnalysisCFG NodeID Edge)
@@ -413,15 +402,12 @@ theorem postFixpoint_of_isForwardPostFixpoint
   have hdst_mem : e.dst ∈ G.nodes := (hnodes e.dst).mpr hdst
   let m_src : NodeOf G := ⟨e.src, hsrc_mem⟩
   let m_dst : NodeOf G := ⟨e.dst, hdst_mem⟩
-  -- The goal is `b ⊑ a` for `b := rd e.dst` and
-  -- `a := transferAlong (rd e.src) = edge e (node e.src (rd e.src))`.
   change (if h : e.dst ∈ G.nodes then expectedIn G edgeTransfer entryInit outF ⟨e.dst, h⟩
           else ⊥)
          ⊑ edgeTransfer e (nodeTransfer e.src
               (if h : e.src ∈ G.nodes then expectedIn G edgeTransfer entryInit outF ⟨e.src, h⟩
                else ⊥))
   rw [dif_pos hsrc_mem, dif_pos hdst_mem]
-  -- m_dst.val ≠ entry, so expectedIn = joinPredEdges at m_dst.
   have h_dst_ne : m_dst.val ≠ G.entry := by
     rw [hentry]; exact hno_entry_edge e he
   have h_expIn_dst : expectedIn G edgeTransfer entryInit outF m_dst
@@ -430,19 +416,15 @@ theorem postFixpoint_of_isForwardPostFixpoint
   rw [show
         (expectedIn G edgeTransfer entryInit outF ⟨e.dst, hdst_mem⟩)
           = joinPredEdges G edgeTransfer outF m_dst from h_expIn_dst]
-  -- IsForwardPostFixpoint at m_src — gives `outF m_src ⊑ nT e.src (expIn m_src)`
-  -- (via comm of ⊔).
   have h_node : outF m_src ⊑
                   nodeTransfer e.src (expectedIn G edgeTransfer entryInit outF m_src) := by
     have h := hpost m_src
     change outF m_src ⊔ _ = outF m_src
     rw [ll.join_comm]; exact h
-  -- edge_mono pushes that ⊑ through edgeTransfer e.
   have h_edge : edgeTransfer e (outF m_src) ⊑
                 edgeTransfer e
                   (nodeTransfer e.src (expectedIn G edgeTransfer entryInit outF m_src)) :=
     tm.edge_mono e _ _ h_node
-  -- The destination's joinPredEdges absorbs the edge contribution from m_src.
   have he_in : e ∈ G.inEdges m_dst.val :=
     (hinEdges m_dst.val e).mpr ⟨hedges ▸ he, rfl⟩
   have h_outF_eq : outF ⟨G.srcOf e, G.inEdges_src_mem m_dst.val e he_in⟩ = outF m_src := by

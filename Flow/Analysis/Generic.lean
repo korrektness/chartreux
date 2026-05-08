@@ -9,7 +9,7 @@ open Flow.Eval.Refinement
 /-! ## Abstract dataflow framework -/
 
 structure DFA where
-  L            : Type
+  L : Type
   nodeTransfer : CFG → NodeID → L → L
   edgeTransfer : CFG → Edge → L → L
   entry        : CFG → L
@@ -57,6 +57,11 @@ structure DFASemantics (A : DFA) where
       σ'.E = σ.E →
       Corr g ℓ σ →
       Corr g (A.transferAlong g e ℓ) σ'
+  /-- The analysis's `entry` seed must over-approximate every initial CEK
+      state of `g`. Closes the gap between the abstract `entry` value and
+      actual concrete entry states. -/
+  preserve_entry :
+    ∀ {g : CFG} {σ : CEK}, IsInitial g σ → Corr g (A.entry g) σ
 
 def PostFixpoint (A : DFA) (absorbs : A.L → A.L → Prop)
     (g : CFG) (rd : NodeID → A.L) : Prop :=
@@ -125,5 +130,27 @@ theorem steps_preserves_corr
     have hadv := S.preserve_advance (n := n₀) edge hmem rfl rfl hkind₀ rfl hcorr
     exact mono_absorb (hpf edge hmem h₀ h₁) hadv
 
+/-! ## Reachability and unconditional soundness -/
+
+def Reachable (g : CFG) {n : Nat} (h : n < g.nodes.length) (σ : CEK) : Prop :=
+  ∃ (σ₀ : CEK) (h₀ : g.entry < g.nodes.length),
+    IsInitial g σ₀ ∧ StepsN g h₀ σ₀ h σ
+
+theorem reachable_corr
+    {A : DFA} (S : DFASemantics A)
+    {absorbs : A.L → A.L → Prop}
+    (mono_absorb :
+      ∀ {g : CFG} {ℓ ℓ' : A.L} {σ : CEK},
+        absorbs ℓ ℓ' → S.Corr g ℓ σ → S.Corr g ℓ' σ)
+    {g : CFG} {rd : NodeID → A.L}
+    (hpf : PostFixpoint A absorbs g rd)
+    (hentry : absorbs (A.entry g) (rd g.entry))
+    {n : Nat} {h : n < g.nodes.length} {σ : CEK}
+    (hreach : Reachable g h σ) :
+    S.Corr g (rd n) σ := by
+  obtain ⟨σ₀, h₀, hinit, hsteps⟩ := hreach
+  have h_entry : S.Corr g (A.entry g) σ₀ := S.preserve_entry hinit
+  have h_rd0   : S.Corr g (rd g.entry) σ₀ := mono_absorb hentry h_entry
+  exact steps_preserves_corr S mono_absorb hpf hsteps h_rd0
 
 end Flow.Analysis.Generic

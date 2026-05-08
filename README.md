@@ -26,6 +26,7 @@ Remains:
 - `Flow/Lang/`: syntax, CEK semantics, CFGs, and CFG construction.
 - `Flow/Eval/`: decorated semantics and collection-style semantics.
 - `Flow/Analysis/`: the abstract interpretation framework, worklist solver, and constant propagation.
+- `Flow/Examples`: usage examples for the framework: program definitions/proof instantiations.
 - `Flow.lean`: umbrella import for the `Flow/` library.
 
 

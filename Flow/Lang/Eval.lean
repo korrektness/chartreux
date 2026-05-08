@@ -3,6 +3,7 @@ import Flow.Lang.Defs
 def State := String -> Option Val
 def State.updated (σ : State) (x : String) (v : Val) : State :=
   fun y => if x = y then v else σ y
+def State.empty : State := fun _ => none
 
 def applyOp : BinOp -> Int -> Int -> Int
 | .add, n₁, n₂ => (n₁ + n₂)

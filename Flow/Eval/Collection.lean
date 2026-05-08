@@ -35,13 +35,11 @@ def CollectingSem : DFASemantics Collecting where
   Corr := Corr
   preserve_id := by
     intro g R σ σ' hE hR
-    show R σ'.E
-    simp [hE]
-    exact hR
+    simpa [Corr, hE]
   preserve_assign := by
     intro g n R σ σ' x e v edge _hmem hsrc hassign heval hE hR
     rw [Collecting_transferAlong, hsrc]
-    show (transfer g n R) σ'.E
+    change (transfer g n R) σ'.E
     rcases hassign with h | h
     · simp only [transfer, h]
       exact ⟨σ.E, v, hR, heval, hE⟩
@@ -50,16 +48,18 @@ def CollectingSem : DFASemantics Collecting where
   preserve_branch := by
     intro g n R σ σ' c _k _v edge _hmem hsrc _hkind hbr _heval _hbt hE hR
     rw [Collecting_transferAlong, hsrc]
-    show (transfer g n R) σ'.E
+    change (transfer g n R) σ'.E
     simp [NodeBranches] at hbr
     simp only [transfer, hbr, hE]
     exact hR
   preserve_advance := by
     intro g n R σ σ' edge _hmem hsrc _hkind hskip hE hR
     rw [Collecting_transferAlong, hsrc]
-    show (transfer g n R) σ'.E
+    change (transfer g n R) σ'.E
     simp only [transfer, hskip, hE]
     exact hR
+  preserve_entry := by
+    intro _ _ _; trivial
 
 -- set inclusion
 def absorbs (R R' : SetState) : Prop := ∀ σ, R σ → R' σ
