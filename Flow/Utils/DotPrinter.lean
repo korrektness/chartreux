@@ -57,15 +57,24 @@ abbrev Annotator := NodeID → Option (String × String)
 
 private def renderNode (entry exit : NodeID) (annot : Annotator)
     (id : NodeID) (k : NodeKind) : String :=
-  let body := toString id ++ ": " ++ NodeKind.toStr k
+  let isInternalSkip := k = .Skip ∧ id ≠ entry ∧ id ≠ exit
+  let body := if isInternalSkip then "" else toString id ++ ": " ++ NodeKind.toStr k
   let label :=
-    match annot id with
-    | some (i, o) =>
-      "IN: " ++ i ++ "\n" ++ body ++ "\n" ++ "OUT: " ++ o ++ "\n"
-    | none => body
+    if isInternalSkip then
+      ""
+    else
+      match annot id with
+      | some (i, o) =>
+        "IN: " ++ i ++ "\n" ++ body ++ "\n" ++ "OUT: " ++ o ++ "\n"
+      | none => body
   let escaped := escapeDot label
   let baseAttrs := "label=\"" ++ escaped ++ "\""
-  let withEntry := if id = entry then baseAttrs ++ ",style=bold" else baseAttrs
+  let withSkip :=
+    if isInternalSkip then
+      baseAttrs ++ ",shape=box,width=0.2,height=0.2,fixedsize=true"
+    else
+      baseAttrs
+  let withEntry := if id = entry then withSkip ++ ",style=bold" else withSkip
   let attrs := if id = exit then withEntry ++ ",shape=doubleoctagon" else withEntry
   "  n" ++ toString id ++ " [" ++ attrs ++ "];"
 
