@@ -1,7 +1,6 @@
 import Flow.Lang.Defs
 import Flow.Lang.CFG
 import Flow.Lang.Eval
-import Flow.Lang.BuildSpec
 
 import Flow.Eval.Refinement
 import Flow.Eval.Located

@@ -2,13 +2,11 @@ import Flow.Lang.Defs
 import Flow.Lang.CFG
 import Flow.Analysis.CP
 import Flow.Analysis.WorklistProofs
-import Flow.Lang.BuildSpec
 import Flow.Utils.DotPrinter
 
-open Flow.Analysis Flow.Analysis.CP Flow.Lang Flow.Analysis.Generic
+open Flow.Analysis Flow.Analysis.CP Flow.Analysis.Generic CFGBuilder
 
-open Expr Stmt BinOp
-
+open Expr Stmt BinOp in
 def simple :=
   Seq (Decl "a" (.Int 0))
     (Seq (Decl "b" (.Int 1))
@@ -16,8 +14,9 @@ def simple :=
         (Assign "b" (BinOp add (Var "a") (Var "b")))
         (Assign "b" (BinOp add (Var "b") (Var "b")))))
 
+
 def simpleCFG : CFG :=
-  let (b, (entry, exit)) := CFGBuilder.empty.buildGraph simple
+  let (b, (entry, exit)) := CFGBuilder.empty.buildGraphTuple simple
   { b.cfg with entry, exit }
 
 def sv := varsInProgram simpleCFG
