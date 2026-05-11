@@ -1,5 +1,5 @@
-import Flow.Lang.CFG
-import Flow.Lang.Eval
+import Flow.TIP.CFG
+import Flow.TIP.Eval
 
 namespace Flow.Eval.Refinement
 

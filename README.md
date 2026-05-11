@@ -14,19 +14,23 @@ Implemented so far :
 - Two analyses (Constant Propagation, Collection Semantics)
 - Correctness for the two analyses!
 
-Remains:
-- [ ] Lots Lots Lots of cleanup
-  - [ ] Unify fixpoint definitions
-  - [ ] Simplify instantiation
-  - [ ] Generalize approach for more languages
-- [ ] Galois connections between collection semantics and further analyses for more composable proofs.
-
 ## Structure of this project
 
-- `Flow/Lang/`: syntax, CEK semantics, CFGs, and CFG construction.
-- `Flow/Eval/`: decorated semantics and collection-style semantics.
-- `Flow/Analysis/`: the abstract interpretation framework, worklist solver, and constant propagation.
-- `Flow/Examples`: usage examples for the framework: program definitions/proof instantiations.
-- `Flow.lean`: umbrella import for the `Flow/` library.
-
-
+```
+Flow/
+  Analysis/ -- generic, language-agnostic framework
+    Lattice.lean                       (FiniteHeight, LatticeLike, Domain, StateN)
+    Worklist.lean                      (algorithm)
+    WorklistProofs.lean                (mono/invariant/soundness/completeness)
+    Generic.lean                       (generic correctness of the algorithm)
+    Utils.lean
+  TIP/  -- concrete language
+    Defs.lean, LangSem.lean, Eval.lean (syntax + cek semantics)
+    CFG.lean                           (cfg Builder and well formedness)
+    Correspondence/
+      Refinement.lean, Located.lean    (cek <-> cfg semantic refinement)
+    Analyses/
+      CP.lean, Collection.lean         (example analyses)
+    Examples/SimpleProgram.lean        (application)
+    Utils/DotPrinter.lean
+```

@@ -1,5 +1,5 @@
-import Flow.Lang.Defs
-import Flow.Lang.CFG
+import Flow.TIP.Defs
+import Flow.TIP.CFG
 import Flow.Analysis.Lattice
 
 /-! # DOT (Graphviz) printer for `CFG`

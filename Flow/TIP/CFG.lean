@@ -1,4 +1,4 @@
-import Flow.Lang.Defs
+import Flow.TIP.Defs
 import Mathlib.Tactic.Lemma
 import Mathlib.Data.List.Nodup
 

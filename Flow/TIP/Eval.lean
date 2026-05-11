@@ -1,4 +1,4 @@
-import Flow.Lang.Defs
+import Flow.TIP.Defs
 
 def State := String -> Option Val
 def State.updated (σ : State) (x : String) (v : Val) : State :=

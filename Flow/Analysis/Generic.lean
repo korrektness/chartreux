@@ -1,147 +1,157 @@
-import Flow.Lang.CFG
-import Flow.Lang.Eval
-import Flow.Eval.Refinement
+import Flow.Analysis.Lattice
 
 namespace Flow.Analysis.Generic
 
-open Flow.Eval.Refinement
+variable {Node Edge State : Type} [DecidableEq Node] [DecidableEq Edge]
 
-/-! ## Abstract dataflow framework -/
-
-structure DFA where
+structure DFA (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
   L : Type
-  nodeTransfer : CFG → NodeID → L → L
-  edgeTransfer : CFG → Edge → L → L
-  entry        : CFG → L
+  nodeTransfer : AnalysisCFG Node Edge → Node → L → L
+  edgeTransfer : AnalysisCFG Node Edge → Edge → L → L
+  entry        : AnalysisCFG Node Edge → L
 
-/-- Combined per-edge transfer: apply the source node's transfer first,
-    then the edge filter. When `edgeTransfer = id` this collapses to the
-    classical node-only transfer. -/
-def DFA.transferAlong (A : DFA) (g : CFG) (e : Edge) (ℓ : A.L) : A.L :=
-  A.edgeTransfer g e (A.nodeTransfer g e.src ℓ)
+def DFA.transferAlong {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
+    (A : DFA Node Edge) (g : AnalysisCFG Node Edge)
+    (e : Edge) (ℓ : A.L) : A.L :=
+  A.edgeTransfer g e (A.nodeTransfer g (g.srcOf e) ℓ)
 
-structure DFASemantics (A : DFA) where
-  Corr : CFG → A.L → CEK → Prop
+/-- Generic wrapper for semantics over the CFG.
+    * `LStep` : proper transition relation
+    * `LStutter` : silent transition relation
+    * `IsInitial` : predicate for selecting the initial states
+    * `LStep_edge_mem` : every step follows a recognized edge.
+-/
+class LangSem (Node Edge State : Type)
+    [DecidableEq Node] [DecidableEq Edge] where
+  LStep : AnalysisCFG Node Edge → Edge → State → State → Prop
+  LStutter : AnalysisCFG Node Edge → Node → State → State → Prop
+  IsInitial : AnalysisCFG Node Edge → State → Prop
+  LStep_edge_mem :
+    ∀ {g : AnalysisCFG Node Edge} {e : Edge} {σ σ' : State},
+      LStep g e σ σ' → e ∈ g.edges
+
+/-- RTC of `LStep` along stutter edges. -/
+inductive LSteps [LangSem Node Edge State]
+    (g : AnalysisCFG Node Edge) : Node → State → Node → State → Prop where
+  | refl  (n : Node) (σ : State) : LSteps g n σ n σ
+  | step  {e : Edge} {n n'' : Node} {σ σ' σ'' : State} :
+      LangSem.LStep g e σ σ' →
+      LSteps g (g.dstOf e) σ' n'' σ'' →
+      g.srcOf e = n →
+      LSteps g n σ n'' σ''
+  | stut  {n n' : Node} {σ σ' σ'' : State} :
+      LangSem.LStutter g n σ σ' →
+      LSteps g n σ' n' σ'' →
+      LSteps g n σ n' σ''
+
+namespace LSteps
+
+variable [LangSem Node Edge State]
+
+/-- lift a single `LStep` to a `LSteps`. -/
+theorem single {g : AnalysisCFG Node Edge} {e : Edge}
+    {σ σ' : State} (hstep : LangSem.LStep g e σ σ') :
+    LSteps g (g.srcOf e) σ (g.dstOf e) σ' :=
+  .step hstep (.refl _ _) rfl
+
+/-- transitivity of `LSteps` -/
+theorem trans {g : AnalysisCFG Node Edge}
+    {n n₁ n' : Node} {σ σ₁ σ' : State}
+    (hl : LSteps g n σ n₁ σ₁) (hr : LSteps g n₁ σ₁ n' σ') :
+    LSteps g n σ n' σ' := by
+  induction hl with
+  | refl _ _ => exact hr
+  | step hstep _ hsrc ih => exact .step hstep (ih hr) hsrc
+  | stut hstut _ ih => exact .stut hstut (ih hr)
+
+end LSteps
+
+structure DFASemantics [LangSem Node Edge State] (A : DFA Node Edge) where
+  Corr : AnalysisCFG Node Edge → A.L → State → Prop
   preserve_entry :
-    ∀ {g : CFG} {σ : CEK}, IsInitial g σ → Corr g (A.entry g) σ
-  preserve_id :
-    ∀ {g : CFG} {ℓ : A.L} {σ σ' : CEK},
-      σ'.E = σ.E →
-      Corr g ℓ σ →
-      Corr g ℓ σ'
-  preserve_assign :
-    ∀ {g : CFG} {n : NodeID} {ℓ : A.L} {σ σ' : CEK}
-      {x : String} {e' : Expr} {v : Val} (e : Edge),
-      e ∈ g.edges → e.src = n →
-      NodeAssigns g n x e' →
-      EvalExpr σ.E e' v ->
-      σ'.E = σ.E.updated x v →
-      Corr g ℓ σ →
-      Corr g (A.transferAlong g e ℓ) σ'
-  preserve_branch :
-    ∀ {g : CFG} {n : NodeID} {ℓ : A.L} {σ σ' : CEK}
-      {c : Expr} {k : EdgeKind} {v : Val} (e : Edge),
-      e ∈ g.edges → e.src = n → e.kind = k →
-      NodeBranches g n c →
-      EvalExpr σ.E c v →
-      BranchTaken k v →
-      σ'.E = σ.E →
-      Corr g ℓ σ →
-      Corr g (A.transferAlong g e ℓ) σ'
-  preserve_advance :
-    ∀ {g : CFG} {n : NodeID} {ℓ : A.L} {σ σ' : CEK} (e : Edge),
-      e ∈ g.edges → e.src = n → e.kind = .Normal →
-      g.nodeKind n = some .Skip →
-      σ'.E = σ.E →
-      Corr g ℓ σ →
-      Corr g (A.transferAlong g e ℓ) σ'
+    ∀ {g : AnalysisCFG Node Edge} {σ : State},
+      LangSem.IsInitial g σ → Corr g (A.entry g) σ
+  preserve_step :
+    ∀ {g : AnalysisCFG Node Edge} {e : Edge} {σ σ' : State} {ℓ : A.L},
+      LangSem.LStep g e σ σ' → Corr g ℓ σ → Corr g (A.transferAlong g e ℓ) σ'
+  preserve_stutter :
+    ∀ {g : AnalysisCFG Node Edge} {n : Node} {σ σ' : State} {ℓ : A.L},
+      LangSem.LStutter g n σ σ' → Corr g ℓ σ → Corr g ℓ σ'
 
-def PostFixpoint (A : DFA) (absorbs : A.L → A.L → Prop)
-    (g : CFG) (rd : NodeID → A.L) : Prop :=
-  ∀ e ∈ g.edges,
-    e.src < g.nodes.length → e.dst < g.nodes.length →
-    absorbs (A.transferAlong g e (rd e.src)) (rd e.dst)
+/-- a node-indexed labelling is a post-fixpoint of `A`'s transfer if,
+    for every `e`, the fact at `srcOf e` after transfer is absorbed
+    by the fact at `dstOf e`. -/
+def PostFixpoint {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
+    (A : DFA Node Edge) (absorbs : A.L → A.L → Prop)
+    (g : AnalysisCFG Node Edge) (rd : Node → A.L) : Prop :=
+  ∀ e ∈ g.edges, absorbs (A.transferAlong g e (rd (g.srcOf e))) (rd (g.dstOf e))
 
+/-- step preservation of analysis correctness: if state `σ`
+    * is abstracted by the result at node `srcOf e`
+    * steps to state `σ'` through `e`
+    then `σ'` is abstracted by the result at node `dstOf e` -/
 theorem step_preserves_corr
-    {A : DFA} (S : DFASemantics A)
+    [LangSem Node Edge State]
+    {A : DFA Node Edge} (S : DFASemantics A)
     {absorbs : A.L → A.L → Prop}
     (mono_absorb :
-      ∀ {g : CFG} {ℓ ℓ' : A.L} {σ : CEK},
+      ∀ {g : AnalysisCFG Node Edge} {ℓ ℓ' : A.L} {σ : State},
         absorbs ℓ ℓ' → S.Corr g ℓ σ → S.Corr g ℓ' σ)
-    {g : CFG} {rd : NodeID → A.L}
+    {g : AnalysisCFG Node Edge} {rd : Node → A.L}
     (hpf : PostFixpoint A absorbs g rd)
-    {n n' : Nat}
-    {h : n < g.nodes.length} {h' : n' < g.nodes.length}
-    {σ σ' : CEK}
-    (hsim : StepN g h σ h' σ')
-    (hcorr : S.Corr g (rd n) σ) :
-    S.Corr g (rd n') σ' := by
-  cases hsim with
-  | stutter _ _ hE =>
-    exact S.preserve_id hE hcorr
-  | mutate _ _ x e' v _ hassign heval hedge hE =>
-    obtain ⟨k, hedge⟩ := hedge
-    let edge : Edge := ⟨n, n', k⟩
-    have hmem : edge ∈ g.edges := hedge
-    have hadv := S.preserve_assign (x := x) (e' := e') (v := v) edge
-                   hmem rfl hassign heval hE hcorr
-    exact mono_absorb (hpf edge hmem h h') hadv
-  | branch _ _ c k v _ hbr hedge heval hbt hE =>
-    let edge : Edge := ⟨n, n', k⟩
-    have hmem : edge ∈ g.edges := hedge
-    have hadv := S.preserve_branch (c := c) (k := k) (v := v) edge
-                   hmem rfl rfl hbr heval hbt hE hcorr
-    exact mono_absorb (hpf edge hmem h h') hadv
-  | advance _ _ _ hskip hedge hE =>
-    let edge : Edge := ⟨n, n', .Normal⟩
-    have hmem : edge ∈ g.edges := hedge
-    have hadv := S.preserve_advance (n := n) edge hmem rfl rfl hskip hE hcorr
-    exact mono_absorb (hpf edge hmem h h') hadv
+    {e : Edge} {σ σ' : State}
+    (hstep : LangSem.LStep g e σ σ')
+    (hcorr : S.Corr g (rd (g.srcOf e)) σ) :
+    S.Corr g (rd (g.dstOf e)) σ' :=
+  mono_absorb (hpf e (LangSem.LStep_edge_mem hstep)) (S.preserve_step hstep hcorr)
 
+/-- lift of step preservation through the multi-step closure of the step relation. -/
 theorem steps_preserves_corr
-    {A : DFA} (S : DFASemantics A)
+    [LangSem Node Edge State]
+    {A : DFA Node Edge} (S : DFASemantics A)
     {absorbs : A.L → A.L → Prop}
     (mono_absorb :
-      ∀ {g : CFG} {ℓ ℓ' : A.L} {σ : CEK},
+      ∀ {g : AnalysisCFG Node Edge} {ℓ ℓ' : A.L} {σ : State},
         absorbs ℓ ℓ' → S.Corr g ℓ σ → S.Corr g ℓ' σ)
-    {g : CFG} {rd : NodeID → A.L}
+    {g : AnalysisCFG Node Edge} {rd : Node → A.L}
     (hpf : PostFixpoint A absorbs g rd)
-    {n n' : Nat}
-    {h : n < g.nodes.length} {h' : n' < g.nodes.length}
-    {σ σ' : CEK}
-    (hsteps : StepsN g h σ h' σ')
+    {n n' : Node} {σ σ' : State}
+    (hsteps : LSteps g n σ n' σ')
     (hcorr : S.Corr g (rd n) σ) :
     S.Corr g (rd n') σ' := by
   induction hsteps with
   | refl _ _ => exact hcorr
-  | step _ _ _ hsim _ ih =>
-    exact ih (step_preserves_corr S mono_absorb hpf hsim hcorr)
-  | @skipBridge n₀ n₁ n₂ h₀ h₁ h₂ σ σ' hkind₀ hedge _ ih =>
+  | @step e n n'' σ σ' σ'' hstep _ hsrc ih =>
     apply ih
-    let edge : Edge := ⟨n₀, n₁, .Normal⟩
-    have hmem : edge ∈ g.edges := hedge
-    have hadv := S.preserve_advance (n := n₀) edge hmem rfl rfl hkind₀ rfl hcorr
-    exact mono_absorb (hpf edge hmem h₀ h₁) hadv
+    have h := step_preserves_corr S mono_absorb hpf hstep
+    rw [hsrc] at h
+    exact h hcorr
+  | stut hstut _ ih =>
+    exact ih (S.preserve_stutter hstut hcorr)
 
-/-! ## Reachability and unconditional soundness -/
+/-- State `σ` is `Reachable` if there's an initial state `σ₀` such that a
+    chain of steps exists from `σ₀` to `σ`. -/
+def Reachable [LangSem Node Edge State]
+    (g : AnalysisCFG Node Edge) (n : Node) (σ : State) : Prop :=
+  ∃ σ₀ : State, LangSem.IsInitial g σ₀ ∧ LSteps g g.entry σ₀ n σ
 
-def Reachable (g : CFG) {n : Nat} (h : n < g.nodes.length) (σ : CEK) : Prop :=
-  ∃ (σ₀ : CEK) (h₀ : g.entry < g.nodes.length),
-    IsInitial g σ₀ ∧ StepsN g h₀ σ₀ h σ
-
+/-- If state σ' is `Reachable`, then the analysis result at the node
+    corresponding to it is correct.
+    Direct application of `steps_preserves_corr` -/
 theorem reachable_corr
-    {A : DFA} (S : DFASemantics A)
+    [LangSem Node Edge State]
+    {A : DFA Node Edge} (S : DFASemantics A)
     {absorbs : A.L → A.L → Prop}
     (mono_absorb :
-      ∀ {g : CFG} {ℓ ℓ' : A.L} {σ : CEK},
+      ∀ {g : AnalysisCFG Node Edge} {ℓ ℓ' : A.L} {σ : State},
         absorbs ℓ ℓ' → S.Corr g ℓ σ → S.Corr g ℓ' σ)
-    {g : CFG} {rd : NodeID → A.L}
+    {g : AnalysisCFG Node Edge} {rd : Node → A.L}
     (hpf : PostFixpoint A absorbs g rd)
     (hentry : absorbs (A.entry g) (rd g.entry))
-    {n : Nat} {h : n < g.nodes.length} {σ : CEK}
-    (hreach : Reachable g h σ) :
+    {n : Node} {σ : State}
+    (hreach : Reachable g n σ) :
     S.Corr g (rd n) σ := by
-  obtain ⟨σ₀, h₀, hinit, hsteps⟩ := hreach
+  obtain ⟨σ₀, hinit, hsteps⟩ := hreach
   have h_entry : S.Corr g (A.entry g) σ₀ := S.preserve_entry hinit
   have h_rd0   : S.Corr g (rd g.entry) σ₀ := mono_absorb hentry h_entry
   exact steps_preserves_corr S mono_absorb hpf hsteps h_rd0

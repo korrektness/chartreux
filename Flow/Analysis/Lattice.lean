@@ -4,13 +4,14 @@ import Mathlib.Order.Notation
 variable {A : Type} [Max A] [Bot A]
 
 section Basics
+infix:90 " ⊑ " => fun x y => x ⊔ y = x
 
--- lattice theory
-infix:90 "⊑" => fun x y => x ⊔ y = x
-
+/-- a function is monotone if it maintains ordering of inputs. -/
 def mono_f {A : Type} [Max A] (f : A -> A) : Prop :=
   ∀ x y, x ⊑ y -> f x ⊑ f y
 
+/-- encoding of the finite height requirement on lattices to ensure termination
+    of Kildall's algorithm. -/
 class FiniteHeight (A : Type) [Max A] where
   height : A -> Nat
   maxHeight : Nat
@@ -27,38 +28,47 @@ omit [Bot A] in theorem height_le_of_join [FiniteHeight A] (a b : A) :
 
 end FiniteHeight
 
-class LatticeLike
-    (A : Type) [Max A] [Bot A] [FiniteHeight A] where
-  -- regular lattice structure
+/-- a type is `LatticeLike` if it has `FiniteHeight`, a bottom element `⊥`,
+    and its join operation satisfies the properties of lattices. -/
+class LatticeLike (A : Type) [Max A] [Bot A] [FiniteHeight A] where
   join_comm : ∀ a b : A, a ⊔ b = b ⊔ a
   join_assoc : ∀ a b c : A, (a ⊔ b) ⊔ c = a ⊔ (b ⊔ c)
   join_idem : ∀ a : A, a ⊔ a = a
   bot_le : ∀ a : A, a ⊔ ⊥ = a
 
-set_option linter.style.whitespace false in
 lemma join_ge_trans [FiniteHeight A] [ll : LatticeLike A]
     (a b c : A) (hab : a ⊑ b) (hbc : b ⊑ c) :
-    a ⊔ c = a := by
+    a ⊑ c := by
   calc a ⊔ c = (a ⊔ b) ⊔ c := by rw [hab]
     _ = a ⊔ (b ⊔ c) := ll.join_assoc a b c
     _ = a ⊔ b := by rw [hbc]
     _ = a := hab
 
--- extension to multivariate case
 variable {n : Nat}
 
+-- ## domains
+-- the goal of this section is to show that the type of a finite map from
+-- integers to lattice elements forms itself a lattice.
+
+/-- a domain is a finite map from integers to lattice elements. -/
 abbrev Domain (n : Nat) (A : Type) := Fin n -> A
+
+/-- its bottom element is the function that maps every variable to the
+    bottom element of `A`. -/
 instance : Bot (Domain n A) where
   bot := fun _ => ⊥
+
+/-- the lub is computed pointwise. -/
 instance : Max (Domain n A) where
   max ρ₁ ρ₂ := fun i => ρ₁ i ⊔ ρ₂ i
 
 namespace Domain
-omit [Bot A] in lemma max_app {x y : Domain n A} :
-    ∀ i, (x ⊔ y) i = x i ⊔ y i := by
-  intros i; rfl
 
--- operations on domains
+-- function application distributes over lub
+omit [Bot A] in lemma max_app {x y : Domain n A} {i : Fin n} :
+  (x ⊔ y) i = x i ⊔ y i := by rfl
+
+-- domain variable manipulation
 def getVar (ρ : Domain n A) (x : Nat) : A :=
   if h : x < n then ρ ⟨x, h⟩ else ⊥
 def setVar (ρ : Domain n A) (x : Nat) (v : A) : Domain n A :=
@@ -95,7 +105,8 @@ instance [DecidableEq A] : DecidableEq (Domain n A) := fun ρ₁ ρ₂ =>
 def domHeight [fh : FiniteHeight A] (ρ : Domain n A) : Nat :=
   (List.finRange n |>.map fun i => fh.height (ρ i)) |>.sum
 
--- finite height instance
+/-- If `A` is a `FiniteHeight` type, the finite map `Domain n A` is also
+    `FiniteHeight`. -/
 instance [fh : FiniteHeight A] : FiniteHeight (Domain n A) where
   height := domHeight
   maxHeight := n * fh.maxHeight
@@ -141,6 +152,8 @@ instance [fh : FiniteHeight A] : FiniteHeight (Domain n A) where
         refine Nat.add_lt_add_of_le_of_lt ?_ (ih htl)
         exact FiniteHeight.height_le_of_join _ _
 
+/-- If `A` is a `LatticeLike` type, the finite map `Domain n A` is also
+    `LatticeLike`. -/
 instance {n : Nat} {A : Type} [Max A] [Bot A] [FiniteHeight A]
     [ll : LatticeLike A] : LatticeLike (Domain n A) where
   join_comm a b := by funext i; exact ll.join_comm (a i) (b i)
@@ -163,27 +176,28 @@ class AnalysisCFG (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
   succ  : Node -> List Node
   pred  : Node -> List Node
   inEdges : Node -> List Edge
-  -- well-formedness:
   inEdges_src_mem :
     ∀ n e, e ∈ inEdges n -> srcOf e ∈ nodes
+  edges_mem_inEdges :
+    ∀ e, e ∈ edges -> e ∈ inEdges (dstOf e)
+  dstOf_mem :
+    ∀ e, e ∈ edges -> dstOf e ∈ nodes
 
 variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
 
 abbrev NodeOf (g : AnalysisCFG Node Edge) := {n // n ∈ g.nodes}
 
 namespace AnalysisCFG
-/-- the list of all nodes in `g`, packaged as `NodeOf g`. Mirrors the
-    reference's `g.nodes_mem`. -/
+/-- the list of all nodes in `g`, packaged as `NodeOf g`. -/
 def nodes_mem (g : AnalysisCFG Node Edge) : List (NodeOf g) :=
   g.nodes.attach
 
-/-- successors of a node, packaged as `NodeOf g`. Successors are derived
-    from the predecessor edges of each candidate node so that we get the
-    `NodeOf g` membership proof for free via `inEdges_src_mem`. -/
+/-- successors of a node, packaged as `NodeOf g`. -/
 def succOf (g : AnalysisCFG Node Edge) (n : NodeOf g) : List (NodeOf g) :=
   g.nodes.attach.filter (fun m => (g.inEdges m.val).any (fun e => g.srcOf e = n.val))
 end AnalysisCFG
 
+/-- analysis result: finite map from nodes of `g` to element of the analysis Lattice. -/
 abbrev StateN (g : AnalysisCFG Node Edge) (A : Type) := NodeOf g -> A
 
 namespace StateN
@@ -192,8 +206,6 @@ def empty {g : AnalysisCFG Node Edge} : StateN g A := fun _ => ⊥
 def update {g : AnalysisCFG Node Edge} (f : StateN g A)
     (n : NodeOf g) (v : A) : StateN g A :=
   fun m => if m = n then v else f m
-
-/-! ## Utility lemmas on list-sums under update -/
 
 omit [Bot A] in
 private lemma gmap_height_update_eq [FiniteHeight A]
@@ -225,8 +237,6 @@ instance {g : AnalysisCFG Node Edge} [Bot A] : Bot (StateN g A) where
 
 def le {g : AnalysisCFG Node Edge} [Max A] (f₁ f₂ : StateN g A) : Prop :=
   ∀ n, (f₁ n) ⊑ (f₂ n)
-
-/-! ## Termination measure on `StateN` -/
 
 omit [Bot A] in
 /-- height of a `StateN`, termination condition for the worklist algorithm. -/

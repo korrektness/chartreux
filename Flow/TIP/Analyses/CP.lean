@@ -1,14 +1,16 @@
 import Flow.Analysis.Generic
 import Flow.Analysis.Worklist
 import Flow.Analysis.WorklistProofs
-import Flow.Lang.Eval
-import Flow.Lang.CFG
+import Flow.TIP.Eval
+import Flow.TIP.CFG
+import Flow.TIP.LangSem
 import Mathlib.Data.List.Nodup
 
 namespace Flow.Analysis.CP
 
 open Analysis
 open Generic
+open Flow.TIP (tipLStep tipLStutter tipLangSem forCFG forCFG_of_wf)
 
 /-- Abstract value for a single variable -/
 inductive CPVal where
@@ -350,124 +352,145 @@ lemma evalExpr_sound {ρ : CPFact vars} {σ : CEK} {e : Expr} {v : Val}
       simp_all [Max.max, CPVal.join]
     grind
 
-def cpDFA (vars : List String) : DFA where
+/-- The DFA closure for CP, parameterised by the underlying TIP CFG.
+    The CFG is needed to read `nodeKind`. -/
+def cpDFA (vars : List String) (cfg : CFG) : DFA NodeID Edge where
   L            := CPFact vars
-  nodeTransfer := cpTransfer vars
-  edgeTransfer := fun _ e a => cpEdgeTransfer vars e a
-  entry        := fun _ => cpEntryInit vars
+  nodeTransfer := fun _G n => cpTransfer vars cfg n
+  edgeTransfer := fun _G e => cpEdgeTransfer vars e
+  entry        := fun _G => cpEntryInit vars
 
-@[simp] private lemma cpDFA_transferAlong (vars : List String) (g : CFG) (e : Edge)
-    (ℓ : CPFact vars) :
-    (cpDFA vars).transferAlong g e ℓ = cpTransfer vars g e.src ℓ := rfl
+@[simp] private lemma cpDFA_transferAlong (vars : List String) (cfg : CFG)
+    (G : AnalysisCFG NodeID Edge) (e : Edge) (ℓ : CPFact vars) :
+    (cpDFA vars cfg).transferAlong G e ℓ = cpTransfer vars cfg (G.srcOf e) ℓ := rfl
 
-def cpSemantics (vars : List String) (hnd : vars.Nodup) :
-    DFASemantics (cpDFA vars) where
-  Corr := cpβ_corr
-  preserve_id := by
-    intros _g ℓ σ σ' heq hcorr
-    simp [cpβ_corr]
-    have : (cpβ σ' : CPFact vars) = cpβ σ := by
-      funext i; unfold cpβ; rw [heq]
-    simpa [this] using hcorr
-  preserve_assign := by
-    intros g' n ℓ σ σ' x e v edge _hmem hsrc hmut heval heq hcorr
-    simp only [cpβ_corr]
-    rw [cpDFA_transferAlong, hsrc]
-    generalize h : (cpTransfer vars g' n ℓ) = ℓ'
-    have hkind :
-        g'.nodeKind n = some (.Assign x e) ∨ g'.nodeKind n = some (.Decl x e) := hmut
-    funext j
-    simp only [Domain.max_app]
-    cases hxi : varIdx vars x with
-    | none =>
-      have hx_notin : x ∉ vars := not_mem_of_varIdx_none hxi
-      have hne : vars.get j ≠ x := fun h => hx_notin (h ▸ List.get_mem ..)
+/-- Internal lemma: the env-update + Assign/Decl case of `preserve_step`.
+    Shared between Assign and Decl since they have the same shape. -/
+private lemma cp_preserve_assign_case (vars : List String) (hnd : vars.Nodup)
+    (cfg : CFG) (n : NodeID) (ℓ : CPFact vars) (σ σ' : CEK)
+    (x : String) (e : Expr) (v : Val)
+    (hkind : cfg.nodeKind n = some (.Assign x e) ∨ cfg.nodeKind n = some (.Decl x e))
+    (heval : EvalExpr σ.E e v)
+    (heq : σ'.E = σ.E.updated x v)
+    (hcorr : cpβ_corr cfg ℓ σ) :
+    cpβ_corr cfg (cpTransfer vars cfg n ℓ) σ' := by
+  simp only [cpβ_corr]
+  generalize h : (cpTransfer vars cfg n ℓ) = ℓ'
+  funext j
+  simp only [Domain.max_app]
+  cases hxi : varIdx vars x with
+  | none =>
+    have hx_notin : x ∉ vars := not_mem_of_varIdx_none hxi
+    have hne : vars.get j ≠ x := fun h => hx_notin (h ▸ List.get_mem ..)
+    have hβ : cpβ σ' j = cpβ σ j := by
+      unfold cpβ
+      have : σ'.E (vars.get j) = σ.E (vars.get j) := by
+        simp [heq, State.updated]; grind
+      rw [this]
+    have htr : cpTransfer vars cfg n ℓ j = ℓ j := by
+      unfold cpTransfer
+      rcases hkind with hh | hh <;> rw [hh] <;> simp [hxi]
+    rw [<- h, htr, hβ]; exact cpβ_corr_pw hcorr j
+  | some i =>
+    have hgetx : vars.get i = x := vars_get_of_varIdx hxi
+    have htr_i : cpTransfer vars cfg n ℓ i = evalExpr vars ℓ e := by
+      unfold cpTransfer
+      rcases hkind with hh | hh <;> rw [hh] <;> simp [hxi]
+    have htr_off : ∀ j, j ≠ i → cpTransfer vars cfg n ℓ j = ℓ j := by
+      intro j hji
+      unfold cpTransfer
+      rcases hkind with hh | hh <;> rw [hh] <;> simp [hxi, hji]
+    by_cases hji : j = i
+    · subst hji
+      cases v with
+      | Int m =>
+        have hβ : cpβ σ' j = .const m := by
+          unfold cpβ
+          have : σ'.E (vars.get j) = some (.Int m) := by
+            rw [heq, hgetx]; unfold State.updated; simp
+          rw [this]
+        rw [hβ, ← h, htr_i]
+        have hev := evalExpr_sound hcorr heval
+        simpa [cpβVal] using hev
+    · have htr_j : ℓ' j = ℓ j := by rw [← h]; exact htr_off j hji
+      have hgetj_ne : vars.get j ≠ x := by
+        intro hgj
+        have : vars.get j = vars.get i := by rw [hgj, hgetx]
+        have hji_eq : j = i := by
+          apply Fin.eq_of_val_eq
+          exact (List.Nodup.getElem_inj_iff hnd).mp this
+        exact hji hji_eq
       have hβ : cpβ σ' j = cpβ σ j := by
         unfold cpβ
         have : σ'.E (vars.get j) = σ.E (vars.get j) := by
-          simp [heq, State.updated]
-          grind
+          rw [heq]; unfold State.updated
+          exact if_neg (fun hxj => hgetj_ne hxj.symm)
         rw [this]
-      have htr : cpTransfer vars g' n ℓ j = ℓ j := by
-        unfold cpTransfer
-        rcases hkind with h | h <;> rw [h] <;> simp [hxi]
-      rw [<- h, htr, hβ]; exact cpβ_corr_pw hcorr j
-    | some i =>
-      have hgetx : vars.get i = x := vars_get_of_varIdx hxi
-      have htr_i : cpTransfer vars g' n ℓ i = evalExpr vars ℓ e := by
-        unfold cpTransfer
-        rcases hkind with h | h <;> rw [h] <;> simp [hxi]
-      have htr_off : ∀ j, j ≠ i →
-          cpTransfer vars g' n ℓ j = ℓ j := by
-        intro j hji
-        unfold cpTransfer
-        rcases hkind with h | h <;> rw [h] <;> simp [hxi, hji]
-      by_cases hji : j = i
-      · subst hji
-        cases v with
-        | Int m =>
-          have hβ : cpβ σ' j = .const m := by
-            unfold cpβ
-            have : σ'.E (vars.get j) = some (.Int m) := by
-              rw [heq, hgetx]; unfold State.updated; simp
-            rw [this]
-          rw [hβ, ← h, htr_i]
-          have hev := evalExpr_sound hcorr heval
-          simpa [cpβVal] using hev
-      · have htr_j : ℓ' j = ℓ j := by rw [← h]; exact htr_off j hji
-        have hgetj_ne : vars.get j ≠ x := by
-          intro hgj
-          have : vars.get j = vars.get i := by rw [hgj, hgetx]
-          have hji_eq : j = i := by
-            apply Fin.eq_of_val_eq
-            exact (List.Nodup.getElem_inj_iff hnd).mp this
-          exact hji hji_eq
-        have hβ : cpβ σ' j = cpβ σ j := by
-          unfold cpβ
-          have : σ'.E (vars.get j) = σ.E (vars.get j) := by
-            rw [heq]; unfold State.updated
-            exact if_neg (fun hxj => hgetj_ne hxj.symm)
-          rw [this]
-        rw [htr_j, hβ]; exact cpβ_corr_pw hcorr j
-  preserve_branch := by
-    intros g' n ℓ σ σ' c _k _v edge _hmem hsrc _hkind hbr _heval _hbt heq hcorr
-    simp only [cpβ_corr]
-    rw [cpDFA_transferAlong, hsrc]
-    -- Cond is identity for `cpTransfer`, and the env doesn't change.
-    have htr : cpTransfer vars g' n ℓ = ℓ := by
-      funext j
-      unfold cpTransfer
-      rw [hbr]
-    have hβeq : (cpβ σ' : CPFact vars) = cpβ σ := by
-      funext i; unfold cpβ; rw [heq]
-    rw [htr, hβeq]
-    exact hcorr
-  preserve_advance := by
-    intros g' n ℓ σ σ' edge _hmem hsrc _hkind hskip heq hcorr
-    simp only [cpβ_corr]
-    rw [cpDFA_transferAlong, hsrc]
-    -- Skip is identity for `cpTransfer`, and the env doesn't change.
-    have htr : cpTransfer vars g' n ℓ = ℓ := by
-      funext j
-      unfold cpTransfer
-      rw [hskip]
-    have hβeq : (cpβ σ' : CPFact vars) = cpβ σ := by
-      funext i; unfold cpβ; rw [heq]
-    rw [htr, hβeq]
-    exact hcorr
-  preserve_entry := by
-    intro _g σ hinit
-    obtain ⟨hE, _⟩ := hinit
-    change cpEntryInit vars ⊑ (cpβ σ : CPFact vars)
-    funext i
-    simp only [Domain.max_app, cpEntryInit, cpβ, hE, State.empty,
-               CPVal.join_idem]
+      rw [htr_j, hβ]; exact cpβ_corr_pw hcorr j
+
+/-- Internal lemma: the branch / advance (skip) case of `preserve_step`.
+    Whenever the source node's `cpTransfer` is the identity (Cond,
+    Skip, etc.) and the env doesn't change, correctness is preserved. -/
+private lemma cp_preserve_branch_case (vars : List String) (cfg : CFG)
+    (n : NodeID) (ℓ : CPFact vars) (σ σ' : CEK)
+    (htr_id : cpTransfer vars cfg n ℓ = ℓ) (hE : σ'.E = σ.E)
+    (hcorr : cpβ_corr cfg ℓ σ) :
+    cpβ_corr cfg (cpTransfer vars cfg n ℓ) σ' := by
+  simp only [cpβ_corr]
+  have hβeq : (cpβ σ' : CPFact vars) = cpβ σ := by
+    funext i; unfold cpβ; rw [hE]
+  rw [htr_id, hβeq]; exact hcorr
+
+/-- The CP `DFASemantics` for a fixed TIP CFG. The three preservation
+    fields directly consume the abstract `LangSem` transitions. -/
+def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
+    letI := tipLangSem cfg
+    DFASemantics (State := CEK) (cpDFA vars cfg) :=
+  letI : LangSem NodeID Edge CEK := tipLangSem cfg
+  { Corr := fun _G ℓ σ => cpβ_corr cfg ℓ σ
+    preserve_entry := by
+      intro _G σ hinit
+      obtain ⟨hE, _⟩ := hinit
+      change cpEntryInit vars ⊑ (cpβ σ : CPFact vars)
+      funext i
+      simp only [Domain.max_app, cpEntryInit, cpβ, hE, State.empty,
+                 CPVal.join_idem]
+    preserve_step := by
+      intro G e σ σ' ℓ hstep hcorr
+      -- Unpack the abstract `LStep` into TIP-specific witnesses.
+      obtain ⟨_hmem, hsrc, _hdst, hcase⟩ := hstep
+      simp only [cpDFA_transferAlong, hsrc]
+      rcases hcase with ⟨x, e', v, hassign, heval, hEupd⟩
+                       | ⟨c, v, hbr, _heval, _hbt, hE⟩
+                       | ⟨hskip, _hkind, hE⟩
+      · exact cp_preserve_assign_case vars hnd cfg e.src ℓ σ σ' x e' v
+          hassign heval hEupd hcorr
+      · -- Cond is identity for `cpTransfer`.
+        have htr_id : cpTransfer vars cfg e.src ℓ = ℓ := by
+          funext j; unfold cpTransfer; rw [hbr]
+        exact cp_preserve_branch_case vars cfg e.src ℓ σ σ' htr_id hE hcorr
+      · -- Skip is identity for `cpTransfer`.
+        have htr_id : cpTransfer vars cfg e.src ℓ = ℓ := by
+          funext j; unfold cpTransfer; rw [hskip]
+        exact cp_preserve_branch_case vars cfg e.src ℓ σ σ' htr_id hE hcorr
+    preserve_stutter := by
+      intro _G _n σ σ' ℓ hstut hcorr
+      -- `LStutter` boils down to `σ'.E = σ.E`.
+      change σ'.E = σ.E at hstut
+      simp only [cpβ_corr] at *
+      have hβ : (cpβ σ' : CPFact vars) = cpβ σ := by
+        funext i; unfold cpβ; rw [hstut]
+      simpa [hβ] using hcorr }
 
 def cpAbsorbs (ℓ ℓ' : CPFact vars) : Prop := ℓ' ⊑ ℓ
 
 theorem mono_absorb_cp
-    {g : CFG} {ℓ ℓ' : CPFact vars} {σ : CEK}
-    (h : cpAbsorbs ℓ ℓ') (hcorr : cpβ_corr g ℓ σ) : cpβ_corr g ℓ' σ := by
+    {cfg : CFG} {G : AnalysisCFG NodeID Edge} {ℓ ℓ' : CPFact vars} {σ : CEK}
+    (h : cpAbsorbs ℓ ℓ') (hcorr : (cpβ_corr cfg ℓ σ : Prop)) :
+    (cpβ_corr cfg ℓ' σ : Prop) := by
+  -- (`G` is irrelevant; only carried so that the lemma matches the
+  -- `Analysis.mono_absorb` signature.)
+  let _ := G
   simp only [cpβ_corr] at *
   simp only [cpAbsorbs] at h
   funext i
@@ -482,50 +505,59 @@ theorem mono_absorb_cp
     _ = ℓ' i ⊔ ℓ i := by rw [hci]
     _ = ℓ' i := hi
 
-theorem soundness
-    {g : CFG} {rd : NodeID → CPFact vars}
-    (hnd : vars.Nodup)
-    (hpf : PostFixpoint (cpDFA vars) cpAbsorbs g rd)
-    {n n' : Nat}
-    {h : n < g.nodes.length} {h' : n' < g.nodes.length}
-    {σ σ' : CEK}
-    (hsteps : Flow.Eval.Refinement.StepsN g h σ h' σ')
-    (hcorr : cpβ_corr g (rd n) σ) :
-    cpβ_corr g (rd n') σ' :=
-  steps_preserves_corr (cpSemantics vars hnd) (@mono_absorb_cp vars) hpf hsteps hcorr
-
 end Corr
 
 /-! ## Bundled CP analysis -/
 
 /-- A bundled `Flow.Analysis` for constant propagation, parameterized by
-    the variable list and a `Nodup` proof. -/
-def cpAnalysis (vars : List String) (hnd : vars.Nodup) : Flow.Analysis where
-  dfa          := cpDFA vars
-  botL         := (inferInstance : Bot (CPFact vars))
-  maxL         := (inferInstance : Max (CPFact vars))
-  decEqL       := (inferInstance : DecidableEq (CPFact vars))
-  fhL          := (inferInstance : FiniteHeight (CPFact vars))
-  llL          := (inferInstance : LatticeLike (CPFact vars))
-  semantics    := cpSemantics vars hnd
-  absorbs      := @cpAbsorbs vars
-  absorbs_refl := by
-    intro ℓ; grind [cpAbsorbs, Domain.max_app, CPVal.join_idem]
-  le_absorbs   := by intro ℓ ℓ' h; exact h
-  mono_absorb  := @mono_absorb_cp vars
-  transferMono := instTransferMonoCP vars
+    the variable list, a `Nodup` proof, and the underlying TIP CFG. -/
+def cpAnalysis (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
+    letI := tipLangSem cfg
+    Flow.Analysis NodeID Edge CEK :=
+  letI : LangSem NodeID Edge CEK := tipLangSem cfg
+  { dfa          := cpDFA vars cfg
+    botL         := (inferInstance : Bot (CPFact vars))
+    maxL         := (inferInstance : Max (CPFact vars))
+    decEqL       := (inferInstance : DecidableEq (CPFact vars))
+    fhL          := (inferInstance : FiniteHeight (CPFact vars))
+    llL          := (inferInstance : LatticeLike (CPFact vars))
+    semantics    := cpSemantics vars hnd cfg
+    absorbs      := @cpAbsorbs vars
+    absorbs_refl := by
+      intro ℓ; grind [cpAbsorbs, Domain.max_app, CPVal.join_idem]
+    le_absorbs   := by intro ℓ ℓ' h; exact h
+    mono_absorb  := fun {G} => @mono_absorb_cp vars cfg G
+    transferMono := fun G => instTransferMonoCP vars cfg }
+
+/-- TIP-facing wrapper around `Flow.analyze`: run the bundled CP
+    analysis directly on a TIP `CFG`. -/
+def cpAnalyzeCFG (vars : List String) (hnd : vars.Nodup)
+    (cfg : CFG) (hwf : cfg.WellFormed) :
+    letI := tipLangSem cfg
+    letI := tipLangSem cfg
+    Flow.AnalysisResult (cpAnalysis vars hnd cfg) (forCFG_of_wf cfg hwf) :=
+  letI : LangSem NodeID Edge CEK := tipLangSem cfg
+  let G := forCFG_of_wf cfg hwf
+  have hentry_mem : G.entry ∈ G.nodes := by
+    simpa [G, forCFG_of_wf, forCFG, List.mem_range] using hwf.1
+  have hno_entry : ∀ e ∈ G.edges, G.dstOf e ≠ G.entry := by
+    intro e he; exact hwf.2.2.2 e he
+  Flow.analyze (cpAnalysis vars hnd cfg) G hentry_mem hno_entry
 
 /-- Turn-key correctness for the bundled CP analysis: at every reachable
     program point, the computed in-fact correctly approximates the
     concrete state. -/
 theorem cp_reachable_correct
     {vars : List String} (hnd : vars.Nodup)
-    {g : CFG} (hwf : g.WellFormed)
-    {n : Nat} {h : n < g.nodes.length} {σ : CEK}
-    (hreach : Flow.Analysis.Generic.Reachable g h σ) :
-    cpβ_corr g ((Flow.analyze (cpAnalysis vars hnd) g hwf).inFacts n) σ := by
-  let A := cpAnalysis vars hnd
-  let R := Flow.analyze A g hwf
+    (cfg : CFG) (hwf : cfg.WellFormed) :
+    letI := tipLangSem cfg
+    ∀ {n : NodeID} {σ : CEK},
+      Flow.Analysis.Generic.Reachable (forCFG_of_wf cfg hwf) n σ →
+      cpβ_corr cfg ((cpAnalyzeCFG vars hnd cfg hwf).inFacts n) σ := by
+  letI : LangSem NodeID Edge CEK := tipLangSem cfg
+  intro n σ hreach
+  let A := cpAnalysis vars hnd cfg
+  let R := cpAnalyzeCFG vars hnd cfg hwf
   exact Flow.Analysis.Generic.reachable_corr (A := A.dfa) A.semantics
     (absorbs := A.absorbs) (mono_absorb := A.mono_absorb)
     (rd := R.inFacts) R.isPostFix R.inFacts_entry hreach
