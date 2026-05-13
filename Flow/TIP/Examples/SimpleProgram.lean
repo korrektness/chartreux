@@ -17,39 +17,35 @@ def simple :=
         (Assign "b" (BinOp add (Var "a") (Var "b")))
         (Assign "b" (BinOp add (Var "b") (Var "b")))))
 
-def simpleCFG : CFG :=
-  let (b, (entry, exit)) := CFGBuilder.empty.buildGraphTuple simple
-  { b.cfg with entry, exit }
+def simpleCFG : CFG := CFG.ofStmt simple
 
 private lemma simpleCFG_wf : simpleCFG.WellFormed := by decide
 
-def sv := simpleCFG.vars
+def sv : { l : List String // l.Nodup } := simpleCFG.vars
 
-def sv_CFG : AnalysisCFG NodeID Edge := forCFG_of_wf simpleCFG simpleCFG_wf
-
-def res : StateN sv_CFG (CPFact sv.val) × StateN sv_CFG (CPFact sv.val) :=
-  runDataflow (A := CPFact sv.val) sv_CFG
-    ((cpDFA sv.val simpleCFG).nodeTransfer sv_CFG)
-    ((cpDFA sv.val simpleCFG).edgeTransfer sv_CFG)
-    ((cpDFA sv.val simpleCFG).entry sv_CFG)
+instance instlangsem_simple : LangSem NodeID Edge CEK := tipLangSem simpleCFG
 
 /-- The bundled CP analysis result on `simpleCFG`. -/
 def simpleResult :
     letI := tipLangSem simpleCFG
-    Flow.AnalysisResult (cpAnalysis sv.val sv.prop simpleCFG) sv_CFG :=
+    Flow.AnalysisResult (cpAnalysis sv.val sv.prop simpleCFG)
+      (forCFG_of_wf simpleCFG simpleCFG_wf) :=
   cpAnalyzeCFG sv.val sv.prop simpleCFG simpleCFG_wf
 
 theorem cp_correct_reachable :
     letI := tipLangSem simpleCFG
     ∀ {n : NodeID} {σ : CEK},
-      Reachable sv_CFG n σ →
+      Reachable (forCFG_of_wf simpleCFG simpleCFG_wf) n σ →
       cpβ_corr simpleCFG (simpleResult.inFacts n) σ := by
   letI : LangSem NodeID Edge CEK := tipLangSem simpleCFG
   intro n σ hreach
   exact cp_reachable_correct sv.prop simpleCFG simpleCFG_wf hreach
 
 #eval IO.println (CFG.toDot simpleCFG)
-#eval IO.println (CFG.toDotWith (A := CPFact sv.val) simpleCFG sv_CFG res.1 res.2)
+#eval IO.println
+  (CFG.toDotWithFn (A := CPFact sv.val) simpleCFG
+    simpleResult.inFacts simpleResult.outFacts)
+
 end Simple
 
 section Hard
@@ -66,6 +62,8 @@ def loopy : Stmt :=
                    (Assign "z" (BinOp mul (Var "y") (Var "x")))))))))
 
 def loopyCFG : CFG := CFG.ofStmt loopy
+
+instance instlangsem_loop : LangSem NodeID Edge CEK := tipLangSem loopyCFG
 
 private lemma loopyCFG_wf : loopyCFG.WellFormed := by decide
 
@@ -87,4 +85,7 @@ theorem loopy_cp_correct :
   exact cp_reachable_correct loopyVars.prop loopyCFG loopyCFG_wf hreach
 
 #eval IO.println (CFG.toDot loopyCFG)
+#eval IO.println
+  (CFG.toDotWithFn (A := CPFact loopyVars.val) loopyCFG
+    loopyResult.inFacts loopyResult.outFacts)
 end Hard

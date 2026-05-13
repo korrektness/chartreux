@@ -317,15 +317,14 @@ def cpβ_corr (_ : CFG) (ℓ : CPFact vars) (σ : CEK) : Prop :=
   ℓ ⊑ (cpβ σ : CPFact vars)
 
 lemma cpβ_corr_pw {ℓ : CPFact vars} {σ : CEK}
-  (h : ℓ⊑(cpβ σ : CPFact vars)) (i : Fin vars.length) :
+  (h : ℓ ⊑ (cpβ σ : CPFact vars)) (i : Fin vars.length) :
     ℓ i ⊔ cpβ σ i = ℓ i := by
   have := congrFun h i; simpa [Domain.max_app] using this
 
 lemma evalExpr_sound {ρ : CPFact vars} {σ : CEK} {e : Expr} {v : Val}
-    (hcorr : ρ⊑(cpβ σ : CPFact vars))
+    (hcorr : ρ ⊑ (cpβ σ : CPFact vars))
     (heval : EvalExpr σ.E e v) :
     evalExpr vars ρ e ⊔ cpβVal v = evalExpr vars ρ e := by
-  -- "abstract over-approximates concrete", in `⊑`-form.
   induction heval with
   | int =>
     simp [evalExpr, cpβVal, CPVal.join_idem]
