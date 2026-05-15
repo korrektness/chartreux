@@ -1,4 +1,4 @@
-import Flow.TIP.CFG
+import Flow.Tip.Regular.CFG
 import Flow.TIP.Eval
 
 namespace Flow.Eval.Refinement

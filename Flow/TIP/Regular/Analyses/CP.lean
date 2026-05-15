@@ -2,7 +2,7 @@ import Flow.Analysis.Generic
 import Flow.Analysis.Worklist
 import Flow.Analysis.WorklistProofs
 import Flow.TIP.Eval
-import Flow.TIP.CFG
+import Flow.Tip.Regular.CFG
 import Flow.TIP.LangSem
 import Mathlib.Data.List.Nodup
 

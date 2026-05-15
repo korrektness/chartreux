@@ -1,6 +1,6 @@
 import Flow.TIP.Defs
-import Flow.TIP.CFG
-import Flow.TIP.Analyses.CP
+import Flow.Tip.Regular.CFG
+import Flow.TIP.Regular.Analyses.CP
 import Flow.TIP.LangSem
 import Flow.TIP.Utils.DotPrinter
 import Flow.Analysis.WorklistProofs

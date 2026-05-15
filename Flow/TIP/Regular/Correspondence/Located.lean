@@ -1,6 +1,6 @@
-import Flow.TIP.CFG
+import Flow.Tip.Regular.CFG
 import Flow.TIP.Eval
-import Flow.TIP.Correspondence.Refinement
+import Flow.TIP.Regular.Correspondence.Refinement
 
 /-!
 # `LocatedAt` and `KontMatches` — env-aware mutual design
