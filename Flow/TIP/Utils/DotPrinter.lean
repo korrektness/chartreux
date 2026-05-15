@@ -25,28 +25,28 @@ private def escapeDot (s : String) : String :=
     | _    => acc.push c
 
 private def BinOp.toStr : BinOp → String
-  | .add => "+"
-  | .sub => "-"
-  | .mul => "*"
-  | .gt  => ">"
-  | .eq  => "=="
+| .add => "+"
+| .sub => "-"
+| .mul => "*"
+| .gt  => ">"
+| .eq  => "=="
 
 private def Expr.toStr : Expr → String
-  | .Int n      => toString n
-  | .Var x      => x
-  | .BinOp o a b => "(" ++ Expr.toStr a ++ " " ++ BinOp.toStr o ++ " " ++ Expr.toStr b ++ ")"
+| .Int n      => toString n
+| .Var x      => x
+| .BinOp o a b => "(" ++ Expr.toStr a ++ " " ++ BinOp.toStr o ++ " " ++ Expr.toStr b ++ ")"
 
 private def NodeKind.toStr : NodeKind → String
-  | .Assign x e => x ++ " := " ++ Expr.toStr e
-  | .Decl   x e => "var " ++ x ++ " := " ++ Expr.toStr e
-  | .Cond   c   => "if " ++ Expr.toStr c
-  | .Skip       => "skip"
+| .Assign x e => x ++ " := " ++ Expr.toStr e
+| .Decl   x e => "var " ++ x ++ " := " ++ Expr.toStr e
+| .Cond   c   => "if " ++ Expr.toStr c
+| .Skip       => "skip"
 
 /-- DOT attribute fragment for an `EdgeKind`. -/
 private def EdgeKind.attrs : EdgeKind → String
-  | .Normal  => ""
-  | .TBranch => "label=\"T\",color=darkgreen"
-  | .FBranch => "label=\"F\",color=red"
+| .Normal  => ""
+| .TBranch => "label=\"T\",color=darkgreen"
+| .FBranch => "label=\"F\",color=red"
 
 /-! ## Annotator and core printer -/
 

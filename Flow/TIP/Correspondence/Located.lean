@@ -217,7 +217,6 @@ inductive KontMatches (g : CFG) : List Cont → NodeID → State → Prop where
   | binOpRK {n v o E K} :
       KontMatches g K n E →
       KontMatches g (.BinOpRK v o :: K) n E
-
 end
 
 /-! ## Bound lemma -/

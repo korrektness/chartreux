@@ -20,11 +20,3 @@ inductive Stmt where
 | While (c : Expr) (b : Stmt)
 | Seq (s₁ s₂ : Stmt)
 deriving DecidableEq, Repr
-
-structure Fun where
-  name : String
-  params : List String
-  locals : List String
-  body : Stmt
-  ret : Expr
-deriving Repr
