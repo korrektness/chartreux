@@ -19,18 +19,21 @@ Implemented so far :
 ```
 Flow/
   Analysis/ -- generic, language-agnostic framework
+    Generic.lean                       (generic correctness of the algorithm)
     Lattice.lean                       (FiniteHeight, LatticeLike, Domain, StateN)
+    Utils.lean
     Worklist.lean                      (algorithm)
     WorklistProofs.lean                (mono/invariant/soundness/completeness)
-    Generic.lean                       (generic correctness of the algorithm)
-    Utils.lean
-  TIP/  -- concrete language
-    Defs.lean, LangSem.lean, Eval.lean (syntax + cek semantics)
-    CFG.lean                           (cfg Builder and well formedness)
-    Correspondence/
-      Refinement.lean, Located.lean    (cek <-> cfg semantic refinement)
-    Analyses/
-      CP.lean, Collection.lean         (example analyses)
-    Examples/SimpleProgram.lean        (application)
-    Utils/DotPrinter.lean
+  TIP/ -- concrete language and analyses
+    Defs.lean, Eval.lean               (syntax + cek semantics)
+    Big/
+      CFG.lean
+    Examples/ (applications)
+    Regular/
+      CFG.lean, LangSem.lean
+      Analyses/
+        Collection.lean, CP.lean       (example analyses)
+      Correspondence/
+        Located.lean, Refinement.lean   (CEK <-> CFG semantic refinement)
+    Utils/ (dot printers)
 ```
