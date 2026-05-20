@@ -1,4 +1,4 @@
-import Flow.Tip.Regular.CFG
+import Flow.TIP.Regular.CFG
 import Flow.TIP.Eval
 
 namespace Flow.Eval.Refinement
@@ -18,9 +18,9 @@ def NodeBranches (g : CFG) (n : NodeID) (c : Expr) : Prop :=
   g.nodeKind n = some (.Cond c)
 
 def BranchTaken : EdgeKind → Val → Prop
-  | .TBranch, .Int n => n ≠ 0
-  | .FBranch, .Int 0 => True
-  | _,        _       => False
+| .TBranch, .Int n => n ≠ 0
+| .FBranch, .Int 0 => True
+| _,        _       => False
 
 /-! ## `StepN` — the indexed companion of `Step`
 

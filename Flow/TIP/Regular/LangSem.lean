@@ -1,4 +1,4 @@
-import Flow.Tip.Regular.CFG
+import Flow.TIP.Regular.CFG
 import Flow.TIP.Eval
 import Flow.TIP.Regular.Correspondence.Refinement
 import Flow.Analysis.Lattice
@@ -8,10 +8,9 @@ import Flow.Analysis.WorklistProofs
 /-!
 # TIP bridge into the generic framework
 
-Provides the `forCFG` adapter from TIP's `CFG` to the abstract
-`AnalysisCFG NodeID Edge`, and a family of `LangSem NodeID Edge CEK`
-instances (one per TIP `CFG`) that wires TIP's `StepN` / `StepsN` /
-`IsInitial` to the language-agnostic interface.
+Provides the `forCFG` adapter from TIP's `CFG` to the abstract `AnalysisCFG NodeID Edge`,
+and a family of `LangSem NodeID Edge CEK` instances (one per TIP `CFG`) that wires
+TIP's `StepN` / `StepsN` / `IsInitial` to the language-agnostic interface.
 -/
 
 namespace Flow.TIP

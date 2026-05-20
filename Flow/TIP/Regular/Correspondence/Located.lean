@@ -1,4 +1,4 @@
-import Flow.Tip.Regular.CFG
+import Flow.TIP.Regular.CFG
 import Flow.TIP.Eval
 import Flow.TIP.Regular.Correspondence.Refinement
 

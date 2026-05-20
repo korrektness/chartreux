@@ -1,8 +1,8 @@
 import Flow.Analysis.Generic
-import Flow.Tip.Regular.CFG
+import Flow.TIP.Regular.CFG
 import Flow.TIP.Eval
 import Flow.TIP.Regular.Correspondence.Refinement
-import Flow.TIP.LangSem
+import Flow.TIP.Regular.LangSem
 
 namespace Flow.Eval.Collection
 
