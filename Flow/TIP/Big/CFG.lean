@@ -1,4 +1,4 @@
-import Flow.Tip.Regular.CFG
+import Flow.TIP.Regular.CFG
 import Flow.Analysis.Lattice
 import Mathlib.Tactic.Lemma
 import Mathlib.Data.List.Nodup

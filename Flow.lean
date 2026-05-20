@@ -7,6 +7,10 @@ import Flow.TIP.Regular.Correspondence.Located
 import Flow.TIP.Regular.Analyses.CP
 import Flow.TIP.Regular.Analyses.Collection
 
+import Flow.TIP.Big.CFG
+import Flow.TIP.Big.Correspondence.Refinement
+import Flow.TIP.Big.LangSem
+
 import Flow.Analysis.Lattice
 import Flow.Analysis.Worklist
 import Flow.Analysis.WorklistProofs
