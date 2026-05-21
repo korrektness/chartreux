@@ -111,14 +111,6 @@ theorem StepsN.trans {g : CFG}
   | skipBridge h h_mid h_end hk hedge _ ih =>
     exact .skipBridge h h_mid h' hk hedge (ih hr)
 
-/-! ## `step_decorate` — every `Step` lifts from a `LocatedAt` to a `StepN`
-
-See `Flow/Eval/Located.lean` for `LocatedAt` / `KontMatches`. -/
-
-/-- A CEK state that is structurally "initial": empty environment and
-    empty continuation stack. The component `σ.C` is unconstrained so the
-    predicate is independent of any source program. -/
-def IsInitial (_ : CFG) (σ : CEK) : Prop :=
-  σ.E = State.empty ∧ σ.K = []
+def IsInitial (_ : CFG) (σ : CEK) : Prop := σ.IsInitial
 
 end Flow.Eval.Refinement

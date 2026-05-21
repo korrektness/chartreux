@@ -85,7 +85,7 @@ def tipLStutter (_cfg : CFG) (_G : AnalysisCFG NodeID Edge)
 def tipLangSem (cfg : CFG) : LangSem NodeID Edge CEK where
   LStep G e σ σ'      := tipLStep cfg G e σ σ'
   LStutter G n σ σ'   := tipLStutter cfg G n σ σ'
-  IsInitial _G σ      := σ.E = State.empty ∧ σ.K = []
+  IsInitial _G σ      := σ.IsInitial
   LStep_edge_mem := by
     intro _G _e _σ _σ' h; exact h.1
 
