@@ -16,3 +16,13 @@ def simpleBig :=
 def test := BigCFG.ofStmt simpleBig
 
 #eval (IO.println (BigCFG.toDot test))
+
+open Expr Stmt BinOp in
+def whiletest : Stmt :=
+  While (.BinOp gt (.Var "n") (.Int 0)) (
+    Assign "n" (.Int 1)
+  )
+
+def wtest := BigCFG.ofStmt whiletest
+
+#eval (IO.println (wtest.toDot))

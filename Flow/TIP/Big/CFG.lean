@@ -31,138 +31,126 @@ end BigCFG
 
 structure BigCFGBuilder where
   cfg : BigCFG
-  nextID : BigNodeID
 
 namespace BigCFGBuilder
 def empty : BigCFGBuilder := {
   cfg := ⟨[], [], 0, 0⟩,
-  nextID := 0
 }
 
-def addNode (b : BigCFGBuilder) (k : BigNodeKind) : (BigCFGBuilder × BigNodeID) := ({
-  cfg := { b.cfg with nodes := b.cfg.nodes ++ [k] }
-  nextID := b.nextID + 1
-}, b.nextID)
+-- builder monad
+abbrev BuilderM := StateM BigCFGBuilder
 
-def addEdge (b : BigCFGBuilder) (s d : BigNodeID) (k : EdgeKind) : BigCFGBuilder := {
-  b with cfg := { b.cfg with edges := b.cfg.edges ++ [⟨s, d, k⟩] }
-}
+def freshNode (k : BigNodeKind) : BuilderM BigNodeID := do
+  let b ← get
+  set { b with cfg := { b.cfg with nodes := b.cfg.nodes ++ [k]} }
+  return b.cfg.nodes.length
 
-/-- Well-formedness: `nextID` matches the node list length. -/
-def BuilderWF (b : BigCFGBuilder) : Prop :=
-  b.nextID = b.cfg.nodes.length
+def emitEdge (s d : BigNodeID) (k : EdgeKind) : BuilderM Unit :=
+  modify fun b => { b with cfg := { b.cfg with edges := b.cfg.edges ++ [⟨s, d, k⟩] } }
 
-namespace BuilderWF
+def buildExpr : Expr → BuilderM (BigNodeID × BigNodeID)
+| .Var x => do
+    let en ← freshNode (.EEntry (.Var x))
+    let ex <- freshNode (.EExit)
+    emitEdge en ex .Normal
+    return (en, ex)
+| .Int n => do
+    let en ← freshNode (.EEntry (.Int n))
+    let ex <- freshNode (.EExit)
+    emitEdge en ex .Normal
+    return (en, ex)
+| .BinOp o e₁ e₂ => do
+    let en   ← freshNode (.EEntry (.BinOp o e₁ e₂))
+    let (en₁, ex₁) ← buildExpr e₁
+    let (en₂, ex₂) ← buildExpr e₂
+    let ex   ← freshNode .EExit
+    emitEdge en  en₁ .Normal
+    emitEdge ex₁ en₂ .Normal
+    emitEdge ex₂ ex  .Normal
+    return (en, ex)
 
-@[simp] lemma empty : BuilderWF BigCFGBuilder.empty := by simp [BuilderWF, BigCFGBuilder.empty]
+def assignGraph (x : String) (e : Expr) : BuilderM (BigNodeID × BigNodeID) := do
+  let en ← freshNode (.SEntry (.Assign x e))
+  let (een, eex) ← buildExpr e
+  let ex ← freshNode .SExit
+  emitEdge en een .Normal
+  emitEdge eex ex .Normal
+  return (en, ex)
 
-lemma addNode {b} (h : BuilderWF b) (k : BigNodeKind) :
-    BuilderWF (b.addNode k).fst := by
-  simpa [BuilderWF, BigCFGBuilder.addNode] using h
+def declGraph (x : String) (e : Expr) : BuilderM (BigNodeID × BigNodeID) := do
+  let en ← freshNode (.SEntry (.Decl x e))
+  let (een, eex) ← buildExpr e
+  let ex ← freshNode .SExit
+  emitEdge en een .Normal
+  emitEdge eex ex .Normal
+  return (en, ex)
 
-lemma addEdge {b} (h : BuilderWF b) (s d : BigNodeID) (ek : EdgeKind) :
-    BuilderWF (b.addEdge s d ek) := by
-  simpa [BuilderWF, BigCFGBuilder.addEdge] using h
-
-end BuilderWF
-end BigCFGBuilder
-
-namespace BigCFGBuilder
-
-def assignGraph (b : BigCFGBuilder) (x : String) (e : Expr) : BigCFGBuilder :=
-  ((((((b.addNode (.SEntry (.Assign x e))).fst.addNode (.EEntry e)).fst.addNode
-    .EExit).fst.addNode .SExit).fst.addEdge b.nextID (b.nextID + 1) .Normal).addEdge
-    (b.nextID + 1) (b.nextID + 2) .Normal).addEdge (b.nextID + 2) (b.nextID + 3) .Normal
-
-def declGraph (b : BigCFGBuilder) (x : String) (e : Expr) : BigCFGBuilder :=
-  ((((((b.addNode (.SEntry (.Decl x e))).fst.addNode (.EEntry e)).fst.addNode
-    .EExit).fst.addNode .SExit).fst.addEdge b.nextID (b.nextID + 1) .Normal).addEdge
-    (b.nextID + 1) (b.nextID + 2) .Normal).addEdge (b.nextID + 2) (b.nextID + 3) .Normal
-
-def ifPrelude (b : BigCFGBuilder) (c : Expr) (t f : Stmt) : BigCFGBuilder :=
-  let b₀ := (((b.addNode (.SEntry (.If c t f))).fst.addNode (.EEntry c)).fst.addNode .EExit).fst
-  (b₀.addEdge b.nextID (b.nextID + 1) .Normal).addEdge (b.nextID + 1) (b.nextID + 2) .Normal
-
-def whilePrelude (b : BigCFGBuilder) (c : Expr) (body : Stmt) : BigCFGBuilder :=
-  let b₀ := (((b.addNode (.SEntry (.While c body))).fst.addNode (.EEntry c)).fst.addNode .EExit).fst
-  (b₀.addEdge b.nextID (b.nextID + 1) .Normal).addEdge (b.nextID + 1) (b.nextID + 2) .Normal
-
-/-- Witness that `⟨b, s⟩ -> b'` for the BigCFG builder -/
-inductive BuildSpec : BigCFGBuilder → Stmt → BigCFGBuilder → BigNodeID → BigNodeID → Prop where
-| skip (b : BigCFGBuilder) :
-    BuildSpec b .Skip (b.addNode (.SEntry .Skip)).fst b.nextID b.nextID
-| assign (b : BigCFGBuilder) (x : String) (e : Expr) :
-    -- SEntry -> EEntry(e) -> EExit -> SExit
-    BuildSpec b (.Assign x e) (assignGraph b x e)
-      b.nextID (b.nextID + 3)
-| decl (b : BigCFGBuilder) (x : String) (e : Expr) :
-    BuildSpec b (.Decl x e) (declGraph b x e)
-      b.nextID (b.nextID + 3)
-| seq {b b₁ b₂ : BigCFGBuilder} {s₁ s₂ : Stmt} {en₁ ex₁ en₂ ex₂ : BigNodeID} :
-    BuildSpec b s₁ b₁ en₁ ex₁ →
-    BuildSpec b₁ s₂ b₂ en₂ ex₂ →
-    BuildSpec b (.Seq s₁ s₂) (b₂.addEdge ex₁ en₂ .Normal) en₁ ex₂
-| if_ {b b₁ b₂ : BigCFGBuilder} {c : Expr} {t f : Stmt} {en_t ex_t en_f ex_f : BigNodeID} :
-    BuildSpec (ifPrelude b c t f) t b₁ en_t ex_t →
-    BuildSpec b₁ f b₂ en_f ex_f →
-    BuildSpec b (.If c t f)
-      (let b₃ := (b₂.addNode .SExit).fst
-        let nenc := b.nextID + 2
-        let nexit := b₂.nextID
-        (((b₃.addEdge nenc en_t .TBranch).addEdge nenc en_f .FBranch).addEdge
-            ex_t nexit .Normal).addEdge ex_f nexit .Normal)
-      b.nextID b₂.nextID
-| while_ {b b₁ : BigCFGBuilder} {c : Expr} {body : Stmt} {en_b ex_b : BigNodeID} :
-    BuildSpec (whilePrelude b c body) body b₁ en_b ex_b →
-    BuildSpec b (.While c body)
-      (let b₂ := (b₁.addNode .SExit).fst
-        let nenc := b.nextID + 2
-        let nex := b₁.nextID
-        ((b₂.addEdge nenc en_b .TBranch).addEdge ex_b nenc .Normal).addEdge nenc nex .FBranch)
-      b.nextID b₁.nextID
-
-/-! Builder: produce a paired witness for builds -/
-def buildGraphSpec (b : BigCFGBuilder) (s : Stmt) :
-    Σ' (b' : BigCFGBuilder) (en ex : BigNodeID), BuildSpec b s b' en ex :=
-  match s with
-  | .Skip => ⟨(b.addNode (.SEntry .Skip)).fst, b.nextID, b.nextID, .skip b⟩
-  | .Assign x e =>
-    ⟨assignGraph b x e, b.nextID, b.nextID + 3, .assign b x e⟩
-  | .Decl x e =>
-    ⟨declGraph b x e, b.nextID, b.nextID + 3, .decl b x e⟩
-  | .Seq s₁ s₂ =>
-    let r₁ := buildGraphSpec b s₁
-    let r₂ := buildGraphSpec r₁.1 s₂
-    ⟨r₂.1.addEdge r₁.2.2.1 r₂.2.1 .Normal, r₁.2.1, r₂.2.2.1,
-      .seq r₁.2.2.2 r₂.2.2.2⟩
-  | .If c t f =>
-    let b₀ := ifPrelude b c t f
-    let r_t := buildGraphSpec b₀ t
-    let r_f := buildGraphSpec r_t.1 f
-    let b₃  := (r_f.1.addNode .SExit).fst
-    let nenc := b.nextID + 2
-    let nexit := r_f.1.nextID
-    ⟨(((b₃.addEdge nenc r_t.2.1 .TBranch).addEdge nenc r_f.2.1 .FBranch).addEdge
-      r_t.2.2.1 nexit .Normal).addEdge r_f.2.2.1 nexit .Normal,
-    b.nextID, nexit, .if_ r_t.2.2.2 r_f.2.2.2⟩
-  | .While c body =>
-    let b₀ := whilePrelude b c body
-    let r_b := buildGraphSpec b₀ body
-    let b₂ := (r_b.1.addNode .SExit).fst
-    let nenc := b.nextID + 2
-    let nex := r_b.1.nextID
-    ⟨((b₂.addEdge nenc r_b.2.1 .TBranch).addEdge r_b.2.2.1 nenc .Normal).addEdge
-        nenc nex .FBranch,
-      b.nextID, nex, .while_ r_b.2.2.2⟩
-
-def buildGraphTuple (b : BigCFGBuilder) (s : Stmt) : BigCFGBuilder × (BigNodeID × BigNodeID) :=
-  let r := buildGraphSpec b s
-  (r.1, (r.2.1, r.2.2.1))
+def buildStmt : Stmt → BuilderM (BigNodeID × BigNodeID)
+| .Skip => do
+    let en <- freshNode (.SEntry .Skip)
+    return (en, en)
+| .Assign x e => do
+    let en ← freshNode (.SEntry (.Assign x e))
+    let (een, eex) ← buildExpr e
+    let ex ← freshNode .SExit
+    emitEdge en een .Normal
+    emitEdge eex ex .Normal
+    return (en, ex)
+| .Decl x e => do
+    let en ← freshNode (.SEntry (.Decl x e))
+    let (een, eex) ← buildExpr e
+    let ex ← freshNode .SExit
+    emitEdge en een .Normal
+    emitEdge eex ex .Normal
+    return (en, ex)
+| .Seq s₁ s₂ => do
+    let (en₁, ex₁) <- buildStmt s₁
+    let (en₂, ex₂) <- buildStmt s₂
+    emitEdge ex₁ en₂ .Normal
+    return (en₁, ex₂)
+| .If c tb fb => do
+    let en           <-  freshNode (.SEntry (.If c tb fb))
+    let (cen, cex)   <- buildExpr c
+    let (en_t, ex_t) <- buildStmt tb
+    let (en_f, ex_f) <- buildStmt fb
+    let nexit        <- freshNode .SExit
+    emitEdge en cen .Normal
+    emitEdge cex en_t .TBranch
+    emitEdge cex en_f .FBranch
+    emitEdge ex_t nexit .Normal
+    emitEdge ex_f nexit .Normal
+    return (en, nexit)
+| .While c b => do
+    let en           <- freshNode (.SEntry (.While c b))
+    let (cen, cex)   <- buildExpr c
+    let (en_b, ex_b) <- buildStmt b
+    let nexit        <- freshNode .SExit
+    emitEdge en cen .Normal
+    emitEdge cex en_b .TBranch
+    emitEdge ex_b cen .Normal
+    emitEdge cex nexit .FBranch
+    return (en, nexit)
 
 end BigCFGBuilder
 
-/-! High-level convenience -/
+namespace BigCFG
+
+def WellFormed (g : BigCFG) : Prop :=
+  g.entry < g.nodes.length ∧
+  (∀ e ∈ g.edges, e.src < g.nodes.length) ∧
+  (∀ e ∈ g.edges, e.dst < g.nodes.length) ∧
+  (∀ e ∈ g.edges, e.dst ≠ g.entry)
+
+instance (g : BigCFG) : Decidable g.WellFormed := by
+  unfold WellFormed; infer_instance
+
 /-- Build a BigCFG from a `Stmt` using the empty builder. -/
-def BigCFG.ofStmt (s : Stmt) : BigCFG :=
-  let r := BigCFGBuilder.empty.buildGraphTuple s
-  { r.1.cfg with entry := r.2.1, exit := r.2.2 }
+def ofStmt (s : Stmt) : BigCFG :=
+  let ((en, ex), b) := (BigCFGBuilder.buildStmt s).run BigCFGBuilder.empty
+  { b.cfg with entry := en, exit := ex }
+
+def ofStmt_WF (s : Stmt) : (BigCFG.ofStmt s).WellFormed := by
+  -- TODO: well-formedness
+  sorry
+
+end BigCFG
