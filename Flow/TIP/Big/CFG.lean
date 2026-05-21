@@ -41,7 +41,7 @@ def empty : BigCFGBuilder := {
 abbrev BuilderM := StateM BigCFGBuilder
 
 def freshNode (k : BigNodeKind) : BuilderM BigNodeID := do
-  let b ← get
+  let b <- get
   set { b with cfg := { b.cfg with nodes := b.cfg.nodes ++ [k]} }
   return b.cfg.nodes.length
 
@@ -50,37 +50,37 @@ def emitEdge (s d : BigNodeID) (k : EdgeKind) : BuilderM Unit :=
 
 def buildExpr : Expr → BuilderM (BigNodeID × BigNodeID)
 | .Var x => do
-    let en ← freshNode (.EEntry (.Var x))
+    let en <- freshNode (.EEntry (.Var x))
     let ex <- freshNode (.EExit)
     emitEdge en ex .Normal
     return (en, ex)
 | .Int n => do
-    let en ← freshNode (.EEntry (.Int n))
+    let en <- freshNode (.EEntry (.Int n))
     let ex <- freshNode (.EExit)
     emitEdge en ex .Normal
     return (en, ex)
 | .BinOp o e₁ e₂ => do
-    let en   ← freshNode (.EEntry (.BinOp o e₁ e₂))
-    let (en₁, ex₁) ← buildExpr e₁
-    let (en₂, ex₂) ← buildExpr e₂
-    let ex   ← freshNode .EExit
+    let en   <- freshNode (.EEntry (.BinOp o e₁ e₂))
+    let (en₁, ex₁) <- buildExpr e₁
+    let (en₂, ex₂) <- buildExpr e₂
+    let ex   <- freshNode .EExit
     emitEdge en  en₁ .Normal
     emitEdge ex₁ en₂ .Normal
     emitEdge ex₂ ex  .Normal
     return (en, ex)
 
 def assignGraph (x : String) (e : Expr) : BuilderM (BigNodeID × BigNodeID) := do
-  let en ← freshNode (.SEntry (.Assign x e))
-  let (een, eex) ← buildExpr e
-  let ex ← freshNode .SExit
+  let en <- freshNode (.SEntry (.Assign x e))
+  let (een, eex) <- buildExpr e
+  let ex <- freshNode .SExit
   emitEdge en een .Normal
   emitEdge eex ex .Normal
   return (en, ex)
 
 def declGraph (x : String) (e : Expr) : BuilderM (BigNodeID × BigNodeID) := do
-  let en ← freshNode (.SEntry (.Decl x e))
-  let (een, eex) ← buildExpr e
-  let ex ← freshNode .SExit
+  let en <- freshNode (.SEntry (.Decl x e))
+  let (een, eex) <- buildExpr e
+  let ex <- freshNode .SExit
   emitEdge en een .Normal
   emitEdge eex ex .Normal
   return (en, ex)
@@ -90,16 +90,16 @@ def buildStmt : Stmt → BuilderM (BigNodeID × BigNodeID)
     let en <- freshNode (.SEntry .Skip)
     return (en, en)
 | .Assign x e => do
-    let en ← freshNode (.SEntry (.Assign x e))
-    let (een, eex) ← buildExpr e
-    let ex ← freshNode .SExit
+    let en <- freshNode (.SEntry (.Assign x e))
+    let (een, eex) <- buildExpr e
+    let ex <- freshNode .SExit
     emitEdge en een .Normal
     emitEdge eex ex .Normal
     return (en, ex)
 | .Decl x e => do
-    let en ← freshNode (.SEntry (.Decl x e))
-    let (een, eex) ← buildExpr e
-    let ex ← freshNode .SExit
+    let en <- freshNode (.SEntry (.Decl x e))
+    let (een, eex) <- buildExpr e
+    let ex <- freshNode .SExit
     emitEdge en een .Normal
     emitEdge eex ex .Normal
     return (en, ex)

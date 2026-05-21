@@ -213,7 +213,7 @@ private lemma four_join_eq (a b c d : CPVal)
   calc
     (a ⊔ b) ⊔ (c ⊔ d)
         = ((a ⊔ c) ⊔ (b ⊔ d)) := by
-          rw [la, ← la b, lc b c, la, ← la]
+          rw [la, <- la b, lc b c, la, <- la]
     _   = a ⊔ b := by rw [hac, hbd]
 
 private lemma cpTransfer_mono (vars : List String) (g : CFG) (n : NodeID) :
@@ -408,10 +408,10 @@ private lemma cp_preserve_assign_case (vars : List String) (hnd : vars.Nodup)
           have : σ'.E (vars.get j) = some (.Int m) := by
             rw [heq, hgetx]; unfold State.updated; simp
           rw [this]
-        rw [hβ, ← h, htr_i]
+        rw [hβ, <- h, htr_i]
         have hev := evalExpr_sound hcorr heval
         simpa [cpβVal] using hev
-    · have htr_j : ℓ' j = ℓ j := by rw [← h]; exact htr_off j hji
+    · have htr_j : ℓ' j = ℓ j := by rw [<- h]; exact htr_off j hji
       have hgetj_ne : vars.get j ≠ x := by
         intro hgj
         have : vars.get j = vars.get i := by rw [hgj, hgetx]

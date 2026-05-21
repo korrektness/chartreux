@@ -119,7 +119,7 @@ private lemma foldl_join_eT_mono
     calc (acc1 ⊔ edgeTransfer e.val (outF1 e_mem)) ⊔ (acc2 ⊔ edgeTransfer e.val (outF2 e_mem))
         = ((acc1 ⊔ edgeTransfer e.val (outF1 e_mem)) ⊔ acc2) ⊔
             edgeTransfer e.val (outF2 e_mem) := by
-            rw [← ll.join_assoc]
+            rw [<- ll.join_assoc]
       _ = (acc1 ⊔ (edgeTransfer e.val (outF1 e_mem) ⊔ acc2)) ⊔
             edgeTransfer e.val (outF2 e_mem) := by
             rw [ll.join_assoc acc1]
@@ -128,7 +128,7 @@ private lemma foldl_join_eT_mono
             rw [ll.join_comm (edgeTransfer e.val (outF1 e_mem)) acc2]
       _ = ((acc1 ⊔ acc2) ⊔ edgeTransfer e.val (outF1 e_mem)) ⊔
             edgeTransfer e.val (outF2 e_mem) := by
-            rw [← ll.join_assoc acc1 acc2]
+            rw [<- ll.join_assoc acc1 acc2]
       _ = (acc1 ⊔ edgeTransfer e.val (outF1 e_mem)) ⊔
             edgeTransfer e.val (outF2 e_mem) := by rw [hacc]
       _ = acc1 ⊔ (edgeTransfer e.val (outF1 e_mem) ⊔
@@ -330,7 +330,7 @@ private lemma foldl_join_absorb
   | hd :: tl, acc, h => by
     simp only [List.foldl_cons]
     apply foldl_join_absorb f x tl
-    rw [ll.join_assoc, ll.join_comm (f hd) x, ← ll.join_assoc, h]
+    rw [ll.join_assoc, ll.join_comm (f hd) x, <- ll.join_assoc, h]
 
 private lemma foldl_ge_of_mem
     [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]

@@ -285,7 +285,7 @@ lemma le_update_join {g : AnalysisCFG Node Edge} [FiniteHeight A]
   intro m; simp only [StateN.update]
   split
   · rename_i h; subst h
-    rw [ll.join_assoc, ll.join_comm v, ← ll.join_assoc, ll.join_idem]
+    rw [ll.join_assoc, ll.join_comm v, <- ll.join_assoc, ll.join_idem]
   · exact ll.join_idem _
 
 end StateN
