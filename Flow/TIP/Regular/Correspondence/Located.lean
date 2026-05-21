@@ -195,10 +195,7 @@ end
 
 private lemma nodeKind_lt {g : CFG} {n : NodeID} {k : NodeKind}
     (h : g.nodeKind n = some k) : n < g.nodes.length := by
-  unfold CFG.nodeKind at h
-  false_or_by_contra
-  rename_i hge
-  grind
+  unfold CFG.nodeKind at h; grind
 
 /-- Bound for `LocatedAt` proved via the *mutual* recursor of
     `LocatedAt`/`KontMatches`. Since the bound only depends on
