@@ -89,26 +89,26 @@ inductive Steps : CEK -> CEK -> Prop where
 | step {σ σ' σ''} : Step σ σ' -> Steps σ' σ'' -> Steps σ σ''
 
 /-- bigstep semantics for TIP -/
-inductive BigStep : Stmt → State → State → Prop where
+inductive BigStep : Stmt -> State -> State -> Prop where
   | skip {E} : BigStep .Skip E E
   | assign {E x e v} :
-      EvalExpr E e v → BigStep (.Assign x e) E (E.updated x v)
+      EvalExpr E e v -> BigStep (.Assign x e) E (E.updated x v)
   | decl {E x e v} :
-      EvalExpr E e v → BigStep (.Decl x e) E (E.updated x v)
+      EvalExpr E e v -> BigStep (.Decl x e) E (E.updated x v)
   | seq {E E₁ E' s₁ s₂} :
-      BigStep s₁ E E₁ → BigStep s₂ E₁ E' → BigStep (.Seq s₁ s₂) E E'
+      BigStep s₁ E E₁ -> BigStep s₂ E₁ E' -> BigStep (.Seq s₁ s₂) E E'
   | ifT {E E' c t f n} :
-      EvalExpr E c (.Int n) → n ≠ 0 →
-      BigStep t E E' → BigStep (.If c t f) E E'
+      EvalExpr E c (.Int n) -> n ≠ 0 ->
+      BigStep t E E' -> BigStep (.If c t f) E E'
   | ifF {E E' c t f} :
-      EvalExpr E c (.Int 0) →
-      BigStep f E E' → BigStep (.If c t f) E E'
+      EvalExpr E c (.Int 0) ->
+      BigStep f E E' -> BigStep (.If c t f) E E'
   | whileT {E E₁ E' c b n} :
-      EvalExpr E c (.Int n) → n ≠ 0 →
-      BigStep b E E₁ → BigStep (.While c b) E₁ E' →
+      EvalExpr E c (.Int n) -> n ≠ 0 ->
+      BigStep b E E₁ -> BigStep (.While c b) E₁ E' ->
       BigStep (.While c b) E E'
   | whileF {E c b} :
-      EvalExpr E c (.Int 0) → BigStep (.While c b) E E
+      EvalExpr E c (.Int 0) -> BigStep (.While c b) E E
 
 def Steps.trans {σ σ' σ''} (hl : Steps σ σ') (hr : Steps σ' σ'') :
     Steps σ σ'' := by

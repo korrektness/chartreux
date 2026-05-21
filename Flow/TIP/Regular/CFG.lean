@@ -92,7 +92,7 @@ end BuilderWF
 /-! ## `BuildSpec` -/
 
 /-- Witness that `⟨b, s⟩ -> b'` -/
-inductive BuildSpec : CFGBuilder → Stmt → CFGBuilder → NodeID → NodeID → Prop where
+inductive BuildSpec : CFGBuilder -> Stmt -> CFGBuilder -> NodeID -> NodeID -> Prop where
 | skip (b : CFGBuilder) :
     BuildSpec b .Skip (b.addNode .Skip).fst b.nextID b.nextID
 | assign (b : CFGBuilder) (x : String) (e : Expr) :
@@ -107,13 +107,13 @@ inductive BuildSpec : CFGBuilder → Stmt → CFGBuilder → NodeID → NodeID �
       b.nextID (b.nextID + 1)
 | seq {b b₁ b₂ : CFGBuilder} {s₁ s₂ : Stmt}
     {en₁ ex₁ en₂ ex₂ : NodeID} :
-    BuildSpec b s₁ b₁ en₁ ex₁ →
-    BuildSpec b₁ s₂ b₂ en₂ ex₂ →
+    BuildSpec b s₁ b₁ en₁ ex₁ ->
+    BuildSpec b₁ s₂ b₂ en₂ ex₂ ->
     BuildSpec b (.Seq s₁ s₂) (b₂.addEdge ex₁ en₂ .Normal) en₁ ex₂
 | if_ {b b₁ b₂ : CFGBuilder} {c : Expr} {t f : Stmt}
     {en_t ex_t en_f ex_f : NodeID} :
-    BuildSpec (b.addNode (.Cond c)).fst t b₁ en_t ex_t →
-    BuildSpec b₁ f b₂ en_f ex_f →
+    BuildSpec (b.addNode (.Cond c)).fst t b₁ en_t ex_t ->
+    BuildSpec b₁ f b₂ en_f ex_f ->
     BuildSpec b (.If c t f)
       (let b₃ := (b₂.addNode .Skip).fst
         let nenc := b.nextID
@@ -123,7 +123,7 @@ inductive BuildSpec : CFGBuilder → Stmt → CFGBuilder → NodeID → NodeID �
       b.nextID b₂.nextID
 | while_ {b b₁ : CFGBuilder} {c : Expr} {body : Stmt}
     {en_b ex_b : NodeID} :
-    BuildSpec (b.addNode (.Cond c)).fst body b₁ en_b ex_b →
+    BuildSpec (b.addNode (.Cond c)).fst body b₁ en_b ex_b ->
     BuildSpec b (.While c body)
       (let b₂ := (b₁.addNode .Skip).fst
         let nenc := b.nextID

@@ -2,62 +2,34 @@ import Flow.TIP.Regular.CFG
 import Flow.TIP.Eval
 import Flow.TIP.Regular.Correspondence.Refinement
 
-/-!
-# `LocatedAt` and `KontMatches` — env-aware mutual design
-
-`LocatedAt g n σ` says: the CEK state `σ` sits at node `n` of CFG `g`.
-`KontMatches g K n E` says: the continuation stack `K`, when entered at
-node `n` under environment `E`, will pop into a CEK state that is itself
-a `LocatedAt` of `g` (at some downstream node).
-
-The two predicates are **mutually inductive and environment-aware**.
-This is the design committed after the gap analysis (gap 1): every
-`inl s` constructor that involves expression evaluation pins
-`EvalExpr σ.E e v` for the surrounding rhs/guard, so that the CEK
-small-step transitions that *enter* expression evaluation
-(`Step.Assign` / `Step.Decl` / `Step.IfC` / `Step.WhileC`) can construct
-the post-state's `LocatedAt` (an `of_inr_*` shape carrying the
-"expression-evaluation invariant" — a/k/a option (a)) without needing a
-witness produced out of thin air.
-
-`KontMatches` frame constructors that pop into an `inl s` post-state
-embed the *full recursive* `LocatedAt g m σ_post`. Frames where the
-post-pop env mutates (`assignK`, `declK`) are universally quantified
-over the writeback value `v`, since `v` is determined at `AssignD` /
-`DeclD` time and not when the frame is constructed.
-
-Convention: stacks are *outside-in*; the head of `K` is the innermost
-frame.
--/
-
 namespace Flow.Eval.Located
 
 open CFGBuilder
 open Flow.Eval.Refinement
 
-/-! ## Helpers for the expression-evaluation invariant (option (a)) -/
+/-! ## Helpers for the expression-evaluation invariant -/
 
 /-- A list of continuation frames that are entirely sub-expression
     `BinOp{L,R}K` frames — i.e. no statement-level frame appears. -/
-inductive OnlyBinopFrames : List Cont → Prop where
+inductive OnlyBinopFrames : List Cont -> Prop where
   | nil : OnlyBinopFrames []
   | binOpL {o : BinOp} {e₂ : Expr} {K : List Cont} :
-      OnlyBinopFrames K → OnlyBinopFrames (.BinOpLK o e₂ :: K)
+      OnlyBinopFrames K -> OnlyBinopFrames (.BinOpLK o e₂ :: K)
   | binOpR {v : Val} {o : BinOp} {K : List Cont} :
-      OnlyBinopFrames K → OnlyBinopFrames (.BinOpRK v o :: K)
+      OnlyBinopFrames K -> OnlyBinopFrames (.BinOpRK v o :: K)
 
 /-- `EvalCont E K v_in v_out`: a list of `BinOp{L,R}K` frames `K`,
     fed an inner value `v_in`, produces outer value `v_out` under `E`. -/
-inductive EvalCont (E : State) : List Cont → Val → Val → Prop where
+inductive EvalCont (E : State) : List Cont -> Val -> Val -> Prop where
   | nil {v : Val} : EvalCont E [] v v
   | binOpL {o : BinOp} {e₂ : Expr} {K : List Cont}
       {n₁ n₂ : Int} {v_out : Val} :
-      EvalExpr E e₂ (.Int n₂) →
-      EvalCont E K (.Int (applyOp o n₁ n₂)) v_out →
+      EvalExpr E e₂ (.Int n₂) ->
+      EvalCont E K (.Int (applyOp o n₁ n₂)) v_out ->
       EvalCont E (.BinOpLK o e₂ :: K) (.Int n₁) v_out
   | binOpR {n₁ : Int} {o : BinOp} {K : List Cont}
       {n₂ : Int} {v_out : Val} :
-      EvalCont E K (.Int (applyOp o n₁ n₂)) v_out →
+      EvalCont E K (.Int (applyOp o n₁ n₂)) v_out ->
       EvalCont E (.BinOpRK (.Int n₁) o :: K) (.Int n₂) v_out
 
 /-- `Pending E e K_b v`: starting from `⟨inr e, E, K_b ++ rest⟩`, the
@@ -70,11 +42,11 @@ def Pending (E : State) (e : Expr) (K_b : List Cont) (v : Val) : Prop :=
 mutual
 
 /-- `LocatedAt g n σ`: the CEK state `σ` sits at node `n` of `g`. -/
-inductive LocatedAt (g : CFG) : NodeID → CEK → Prop where
+inductive LocatedAt (g : CFG) : NodeID -> CEK -> Prop where
   /-- About to execute `Skip`. -/
   | at_skip {n E K} :
-      g.nodeKind n = some .Skip →
-      KontMatches g K n E →
+      g.nodeKind n = some .Skip ->
+      KontMatches g K n E ->
       LocatedAt g n ⟨.inl .Skip, E, K⟩
   /-- About to execute `Assign x e`. The totality witness
       `EvalExpr E e v` is required so that `Step.Assign` can construct
@@ -82,71 +54,71 @@ inductive LocatedAt (g : CFG) : NodeID → CEK → Prop where
       `KontMatches g K m (E.updated x v)` is embedded directly so that
       `v` is shared between the expression evaluation and the frame. -/
   | at_assign {n m x e v E K} :
-      g.nodeKind n = some (.Assign x e) →
-      EvalExpr E e v →
-      g.hasEdge n m .Normal →
-      g.nodeKind m = some .Skip →
-      KontMatches g K m (E.updated x v) →
+      g.nodeKind n = some (.Assign x e) ->
+      EvalExpr E e v ->
+      g.hasEdge n m .Normal ->
+      g.nodeKind m = some .Skip ->
+      KontMatches g K m (E.updated x v) ->
       LocatedAt g n ⟨.inl (.Assign x e), E, K⟩
   /-- About to execute `Decl x e`. -/
   | at_decl {n m x e v E K} :
-      g.nodeKind n = some (.Decl x e) →
-      EvalExpr E e v →
-      g.hasEdge n m .Normal →
-      g.nodeKind m = some .Skip →
-      KontMatches g K m (E.updated x v) →
+      g.nodeKind n = some (.Decl x e) ->
+      EvalExpr E e v ->
+      g.hasEdge n m .Normal ->
+      g.nodeKind m = some .Skip ->
+      KontMatches g K m (E.updated x v) ->
       LocatedAt g n ⟨.inl (.Decl x e), E, K⟩
   /-- About to execute `If c t f`. -/
   | at_if {n c t f v E K} :
-      g.nodeKind n = some (.Cond c) →
-      EvalExpr E c v →
-      KontMatches g (.IfK t f :: K) n E →
+      g.nodeKind n = some (.Cond c) ->
+      EvalExpr E c v ->
+      KontMatches g (.IfK t f :: K) n E ->
       LocatedAt g n ⟨.inl (.If c t f), E, K⟩
   /-- About to execute `While c b`. -/
   | at_while {n c b v E K} :
-      g.nodeKind n = some (.Cond c) →
-      EvalExpr E c v →
-      KontMatches g (.WhileK c b :: K) n E →
+      g.nodeKind n = some (.Cond c) ->
+      EvalExpr E c v ->
+      KontMatches g (.WhileK c b :: K) n E ->
       LocatedAt g n ⟨.inl (.While c b), E, K⟩
   /-- About to execute `Seq s₁ s₂`. -/
   | at_seq {n s₁ s₂ E K} :
-      LocatedAt g n ⟨.inl s₁, E, .SeqK s₂ :: K⟩ →
+      LocatedAt g n ⟨.inl s₁, E, .SeqK s₂ :: K⟩ ->
       LocatedAt g n ⟨.inl (.Seq s₁ s₂), E, K⟩
   /-- Mid-expression evaluation, surrounding frame is `AssignK x`. -/
   | of_inr_assign {n m x e_orig e v_orig E K_b K_out} :
-      g.nodeKind n = some (.Assign x e_orig) →
-      OnlyBinopFrames K_b →
-      EvalExpr E e_orig v_orig →
-      Pending E e K_b v_orig →
-      g.hasEdge n m .Normal →
-      g.nodeKind m = some .Skip →
-      KontMatches g K_out m (E.updated x v_orig) →
+      g.nodeKind n = some (.Assign x e_orig) ->
+      OnlyBinopFrames K_b ->
+      EvalExpr E e_orig v_orig ->
+      Pending E e K_b v_orig ->
+      g.hasEdge n m .Normal ->
+      g.nodeKind m = some .Skip ->
+      KontMatches g K_out m (E.updated x v_orig) ->
       LocatedAt g n ⟨.inr e, E, K_b ++ .AssignK x :: K_out⟩
   /-- Mid-expression evaluation, surrounding frame is `DeclK x`. -/
   | of_inr_decl {n m x e_orig e v_orig E K_b K_out} :
-      g.nodeKind n = some (.Decl x e_orig) →
-      OnlyBinopFrames K_b →
-      EvalExpr E e_orig v_orig →
-      Pending E e K_b v_orig →
-      g.hasEdge n m .Normal →
-      g.nodeKind m = some .Skip →
-      KontMatches g K_out m (E.updated x v_orig) →
+      g.nodeKind n = some (.Decl x e_orig) ->
+      OnlyBinopFrames K_b ->
+      EvalExpr E e_orig v_orig ->
+      Pending E e K_b v_orig ->
+      g.hasEdge n m .Normal ->
+      g.nodeKind m = some .Skip ->
+      KontMatches g K_out m (E.updated x v_orig) ->
       LocatedAt g n ⟨.inr e, E, K_b ++ .DeclK x :: K_out⟩
   /-- Mid-expression evaluation, surrounding frame is `IfK t f`. -/
   | of_inr_if {n c_orig t f e v_orig E K_b K_out} :
-      g.nodeKind n = some (.Cond c_orig) →
-      OnlyBinopFrames K_b →
-      EvalExpr E c_orig v_orig →
-      Pending E e K_b v_orig →
-      KontMatches g (.IfK t f :: K_out) n E →
+      g.nodeKind n = some (.Cond c_orig) ->
+      OnlyBinopFrames K_b ->
+      EvalExpr E c_orig v_orig ->
+      Pending E e K_b v_orig ->
+      KontMatches g (.IfK t f :: K_out) n E ->
       LocatedAt g n ⟨.inr e, E, K_b ++ .IfK t f :: K_out⟩
   /-- Mid-expression evaluation, surrounding frame is `WhileK c b`. -/
   | of_inr_while {n c_orig b e v_orig E K_b K_out} :
-      g.nodeKind n = some (.Cond c_orig) →
-      OnlyBinopFrames K_b →
-      EvalExpr E c_orig v_orig →
-      Pending E e K_b v_orig →
-      KontMatches g (.WhileK c_orig b :: K_out) n E →
+      g.nodeKind n = some (.Cond c_orig) ->
+      OnlyBinopFrames K_b ->
+      EvalExpr E c_orig v_orig ->
+      Pending E e K_b v_orig ->
+      KontMatches g (.WhileK c_orig b :: K_out) n E ->
       LocatedAt g n ⟨.inr e, E, K_b ++ .WhileK c_orig b :: K_out⟩
 
 /-- `KontMatches g K n E`: when control reaches node `n` under env `E`
@@ -154,49 +126,49 @@ inductive LocatedAt (g : CFG) : NodeID → CEK → Prop where
 
     Frames whose post-pop state changes the env (`assignK`, `declK`) are
     universally quantified over the writeback value `v`. -/
-inductive KontMatches (g : CFG) : List Cont → NodeID → State → Prop where
+inductive KontMatches (g : CFG) : List Cont -> NodeID -> State -> Prop where
   | nil {n E} : KontMatches g [] n E
   | seqK {n m s₂ E K} :
-      g.hasEdge n m .Normal →
-      LocatedAt g m ⟨.inl s₂, E, K⟩ →
+      g.hasEdge n m .Normal ->
+      LocatedAt g m ⟨.inl s₂, E, K⟩ ->
       KontMatches g (.SeqK s₂ :: K) n E
   | assignK {n m x v E K} :
-      g.hasEdge n m .Normal →
-      g.nodeKind m = some .Skip →
-      KontMatches g K m (E.updated x v) →
+      g.hasEdge n m .Normal ->
+      g.nodeKind m = some .Skip ->
+      KontMatches g K m (E.updated x v) ->
       KontMatches g (.AssignK x :: K) n E
   | declK {n m x v E K} :
-      g.hasEdge n m .Normal →
-      g.nodeKind m = some .Skip →
-      KontMatches g K m (E.updated x v) →
+      g.hasEdge n m .Normal ->
+      g.nodeKind m = some .Skip ->
+      KontMatches g K m (E.updated x v) ->
       KontMatches g (.DeclK x :: K) n E
   | ifKT {n nT t f E K c v} :
-      g.nodeKind n = some (.Cond c) →
-      g.hasEdge n nT .TBranch →
-      LocatedAt g nT ⟨.inl t, E, K⟩ →
-      EvalExpr E c v →
-      v ≠ .Int 0 →
+      g.nodeKind n = some (.Cond c) ->
+      g.hasEdge n nT .TBranch ->
+      LocatedAt g nT ⟨.inl t, E, K⟩ ->
+      EvalExpr E c v ->
+      v ≠ .Int 0 ->
       KontMatches g (.IfK t f :: K) n E
   | ifKF {n nF t f E K c} :
-      g.nodeKind n = some (.Cond c) →
-      g.hasEdge n nF .FBranch →
-      LocatedAt g nF ⟨.inl f, E, K⟩ →
-      EvalExpr E c (.Int 0) →
+      g.nodeKind n = some (.Cond c) ->
+      g.hasEdge n nF .FBranch ->
+      LocatedAt g nF ⟨.inl f, E, K⟩ ->
+      EvalExpr E c (.Int 0) ->
       KontMatches g (.IfK t f :: K) n E
   | whileKT {n nT c b E K v} :
-      g.hasEdge n nT .TBranch →
-      LocatedAt g nT ⟨.inl b, E, .WhileBackK c b :: K⟩ →
-      EvalExpr E c v →
-      v ≠ .Int 0 →
+      g.hasEdge n nT .TBranch ->
+      LocatedAt g nT ⟨.inl b, E, .WhileBackK c b :: K⟩ ->
+      EvalExpr E c v ->
+      v ≠ .Int 0 ->
       KontMatches g (.WhileK c b :: K) n E
   | whileKF {n nF c b E K} :
-      g.hasEdge n nF .FBranch →
-      LocatedAt g nF ⟨.inl .Skip, E, K⟩ →
-      EvalExpr E c (.Int 0) →
+      g.hasEdge n nF .FBranch ->
+      LocatedAt g nF ⟨.inl .Skip, E, K⟩ ->
+      EvalExpr E c (.Int 0) ->
       KontMatches g (.WhileK c b :: K) n E
   | whileBackK {n nc c b E K} :
-      g.hasEdge n nc .Normal →
-      LocatedAt g nc ⟨.inl (.While c b), E, K⟩ →
+      g.hasEdge n nc .Normal ->
+      LocatedAt g nc ⟨.inl (.While c b), E, K⟩ ->
       KontMatches g (.WhileBackK c b :: K) n E
   /-- Skip-bridge: at a `.Skip` node `n` with a `.Normal` edge to a
       `.Skip` node `m`, a kont matched at `m` lifts to a kont matched at
@@ -206,16 +178,16 @@ inductive KontMatches (g : CFG) : List Cont → NodeID → State → Prop where
       `nodeKind = .Skip` premise gives a derivable `m < g.nodes.length`,
       enabling structural induction over chains of bridges. -/
   | skipBridge {n m E K} :
-      g.nodeKind n = some .Skip →
-      g.nodeKind m = some .Skip →
-      g.hasEdge n m .Normal →
-      KontMatches g K m E →
+      g.nodeKind n = some .Skip ->
+      g.nodeKind m = some .Skip ->
+      g.hasEdge n m .Normal ->
+      KontMatches g K m E ->
       KontMatches g K n E
   | binOpLK {n o e₂ E K} :
-      KontMatches g K n E →
+      KontMatches g K n E ->
       KontMatches g (.BinOpLK o e₂ :: K) n E
   | binOpRK {n v o E K} :
-      KontMatches g K n E →
+      KontMatches g K n E ->
       KontMatches g (.BinOpRK v o :: K) n E
 end
 
@@ -295,8 +267,8 @@ private lemma stepsN_seqMid_chain
   suffices h : ∀ (n' : NodeID) (E' : State) (K_full : List Cont)
       (_ : KontMatches g K_full n' E')
       (s₂' : Stmt) (K' : List Cont),
-      K_full = .SeqK s₂' :: K' →
-      g.nodeKind n' = some .Skip →
+      K_full = .SeqK s₂' :: K' ->
+      g.nodeKind n' = some .Skip ->
       ∀ (h_n' : n' < g.nodes.length),
         ∃ (m : NodeID) (h_m : m < g.nodes.length),
           StepsN g h_n' ⟨.inl .Skip, E', .SeqK s₂' :: K'⟩ h_m
@@ -355,8 +327,8 @@ private lemma stepsN_whileD_chain
   suffices h : ∀ (n' : NodeID) (E' : State) (K_full : List Cont)
       (_ : KontMatches g K_full n' E')
       (c' : Expr) (b' : Stmt) (K' : List Cont),
-      K_full = .WhileBackK c' b' :: K' →
-      g.nodeKind n' = some .Skip →
+      K_full = .WhileBackK c' b' :: K' ->
+      g.nodeKind n' = some .Skip ->
       ∀ (h_n' : n' < g.nodes.length),
         ∃ (m : NodeID) (h_m : m < g.nodes.length),
           StepsN g h_n' ⟨.inl .Skip, E', .WhileBackK c' b' :: K'⟩ h_m
@@ -413,7 +385,7 @@ theorem step_decorate {g : CFG} {n : NodeID} {σ σ' : CEK}
   have hn : n < g.nodes.length := hloc.bound
   cases hstep with
   | @Decl x e E K =>
-    -- ⟨inl (Decl x e), E, K⟩ → ⟨inr e, E, DeclK x :: K⟩
+    -- ⟨inl (Decl x e), E, K⟩ -> ⟨inr e, E, DeclK x :: K⟩
     cases hloc with
     | at_decl hk hev hedge hskip hkm =>
       refine ⟨n, hn, hn, ?_, ?_⟩
@@ -428,7 +400,7 @@ theorem step_decorate {g : CFG} {n : NodeID} {σ σ' : CEK}
       · exact .of_inr_assign (K_b := []) (e_orig := e) (v_orig := _)
           hk .nil hev ⟨_, hev, .nil⟩ hedge hskip hkm
   | @DeclD nv E x K =>
-    -- ⟨inr (Int nv), E, DeclK x :: K⟩ → ⟨inl Skip, E.updated x (Int nv), K⟩
+    -- ⟨inr (Int nv), E, DeclK x :: K⟩ -> ⟨inl Skip, E.updated x (Int nv), K⟩
     -- Generalise the rigid `DeclK x :: K` in `hloc`'s index so dependent
     -- elimination of `cases hloc` unifies against a plain variable `K_full`.
     -- The list-shape obligation `K_b = []` is then discharged via
@@ -481,7 +453,7 @@ theorem step_decorate {g : CFG} {n : NodeID} {σ σ' : CEK}
     | @of_inr_while _ _ _ _ _ _ _ _ _ hbf _ _ _ =>
       cases hbf <;> simp at hKeq
   | @Var E x nv K hxv =>
-    -- ⟨inr (Var x), E, K⟩ → ⟨inr (Int nv), E, K⟩, env unchanged
+    -- ⟨inr (Var x), E, K⟩ -> ⟨inr (Int nv), E, K⟩, env unchanged
     cases hloc with
     | of_inr_assign hk hbf hev_orig hp hedge hskip hkm =>
       refine ⟨n, hn, hn, ?_, ?_⟩
@@ -517,7 +489,7 @@ theorem step_decorate {g : CFG} {n : NodeID} {σ σ' : CEK}
         cases hev with
         | var hxv' => rw [hxv] at hxv'; cases hxv'; exact ⟨_, .int, hcont⟩
   | @BinOpL o e₁ e₂ E K =>
-    -- ⟨inr (BinOp o e₁ e₂), E, K⟩ → ⟨inr e₁, E, BinOpLK o e₂ :: K⟩
+    -- ⟨inr (BinOp o e₁ e₂), E, K⟩ -> ⟨inr e₁, E, BinOpLK o e₂ :: K⟩
     cases hloc with
     | of_inr_assign hk hbf hev_orig hp hedge hskip hkm =>
       refine ⟨n, hn, hn, ?_, ?_⟩
@@ -556,7 +528,7 @@ theorem step_decorate {g : CFG} {n : NodeID} {σ σ' : CEK}
           refine .of_inr_while hk (.binOpL hbf) hev_orig
             ⟨.Int n₁, hev1, .binOpL hev2 hcont⟩ hkm
   | @BinOpR n₁ E o e₂ K =>
-    -- ⟨inr (Int n₁), E, BinOpLK o e₂ :: K⟩ → ⟨inr e₂, E, BinOpRK (Int n₁) o :: K⟩
+    -- ⟨inr (Int n₁), E, BinOpLK o e₂ :: K⟩ -> ⟨inr e₂, E, BinOpRK (Int n₁) o :: K⟩
     -- σ.K = BinOpLK o e₂ :: K. In `of_inr_*`, σ.K = K_b ++ frame :: K_out where
     -- frame ≠ BinOpLK; with `OnlyBinopFrames K_b`, this forces
     -- K_b = .BinOpLK o e₂ :: K_b'.
@@ -631,7 +603,7 @@ theorem step_decorate {g : CFG} {n : NodeID} {σ σ' : CEK}
                 hk (.binOpR hbf') hev_orig ?_ hkm
               exact ⟨.Int n₂, hev2, .binOpR hcont'⟩
   | @BinOpD n₂ E n₁ o K =>
-    -- ⟨inr (Int n₂), E, BinOpRK (Int n₁) o :: K⟩ → ⟨inr (Int (applyOp o n₁ n₂)), E, K⟩
+    -- ⟨inr (Int n₂), E, BinOpRK (Int n₁) o :: K⟩ -> ⟨inr (Int (applyOp o n₁ n₂)), E, K⟩
     -- K_b head = BinOpRK ⇒ peel; new K_b' is the tail.
     generalize hKeq : (Cont.BinOpRK (Val.Int n₁) o :: K : List Cont) = K_full at hloc
     cases hloc with
@@ -850,7 +822,7 @@ theorem step_decorate {g : CFG} {n : NodeID} {σ σ' : CEK}
     | @of_inr_if _ _ _ _ _ _ _ _ _ _ hbf _ _ _ =>
       cases hbf <;> simp at hKeq
   | @WhileD E c b K =>
-    -- ⟨inl Skip, E, WhileBackK c b :: K⟩ → ⟨inl (While c b), E, K⟩
+    -- ⟨inl Skip, E, WhileBackK c b :: K⟩ -> ⟨inl (While c b), E, K⟩
     cases hloc with
     | at_skip hk hkm =>
       obtain ⟨m, h_m, hsteps, hloc'⟩ := stepsN_whileD_chain hn hk hkm

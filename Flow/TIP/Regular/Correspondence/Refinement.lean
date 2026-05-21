@@ -17,7 +17,7 @@ def NodeNonMutating (g : CFG) (n : NodeID) : Prop :=
 def NodeBranches (g : CFG) (n : NodeID) (c : Expr) : Prop :=
   g.nodeKind n = some (.Cond c)
 
-def BranchTaken : EdgeKind → Val → Prop
+def BranchTaken : EdgeKind -> Val -> Prop
 | .TBranch, .Int n => n ≠ 0
 | .FBranch, .Int 0 => True
 | _,        _       => False
@@ -26,39 +26,39 @@ def BranchTaken : EdgeKind → Val → Prop
 
 `StepN` packages a CEK step with pointer to valid CFG nodes. -/
 inductive StepN (g : CFG) :
-    {n : Nat} → n < g.nodes.length → CEK →
-    {n' : Nat} → n' < g.nodes.length → CEK → Prop where
+    {n : Nat} -> n < g.nodes.length -> CEK ->
+    {n' : Nat} -> n' < g.nodes.length -> CEK -> Prop where
 -- no change
 | stutter {n : Nat} (h : n < g.nodes.length) {σ σ' : CEK} :
-    Step σ σ' →
-    σ'.E = σ.E →
+    Step σ σ' ->
+    σ'.E = σ.E ->
     StepN g h σ h σ'
 -- change in environment
 | mutate {n n' : Nat} (h : n < g.nodes.length) (h' : n' < g.nodes.length)
     {σ σ' : CEK} (x : String) (e : Expr) (v : Val) :
-    Step σ σ' →
-    NodeAssigns g n x e →
+    Step σ σ' ->
+    NodeAssigns g n x e ->
     EvalExpr σ.E e v ->
-    (∃ k, g.hasEdge n n' k) →
-    σ'.E = σ.E.updated x v →
+    (∃ k, g.hasEdge n n' k) ->
+    σ'.E = σ.E.updated x v ->
     StepN g h σ h' σ'
 -- cond step
 | branch {n n' : Nat} (h : n < g.nodes.length) (h' : n' < g.nodes.length)
     {σ σ' : CEK} (c : Expr) (k : EdgeKind) (v : Val) :
-    Step σ σ' →
-    NodeBranches g n c →
-    g.hasEdge n n' k →
-    EvalExpr σ.E c v →
-    BranchTaken k v →
-    σ'.E = σ.E →
+    Step σ σ' ->
+    NodeBranches g n c ->
+    g.hasEdge n n' k ->
+    EvalExpr σ.E c v ->
+    BranchTaken k v ->
+    σ'.E = σ.E ->
     StepN g h σ h' σ'
 -- skip
 | advance {n n' : Nat} (h : n < g.nodes.length) (h' : n' < g.nodes.length)
     {σ σ' : CEK} :
-    Step σ σ' →
-    g.nodeKind n = some .Skip →
-    g.hasEdge n n' .Normal →
-    σ'.E = σ.E →
+    Step σ σ' ->
+    g.nodeKind n = some .Skip ->
+    g.hasEdge n n' .Normal ->
+    σ'.E = σ.E ->
     StepN g h σ h' σ'
 
 /-- projection: a decorated step is, in particular, a step. -/
@@ -73,22 +73,22 @@ theorem StepN.toStep {g : CFG}
 
 /-- Reflexive/transitive closure of Steps -/
 inductive StepsN (g : CFG) :
-    {n : Nat} → n < g.nodes.length → CEK →
-    {n' : Nat} → n' < g.nodes.length → CEK → Prop where
+    {n : Nat} -> n < g.nodes.length -> CEK ->
+    {n' : Nat} -> n' < g.nodes.length -> CEK -> Prop where
   | refl {n : Nat} (h : n < g.nodes.length) (σ : CEK) :
       StepsN g h σ h σ
   | step {n n₁ n' : Nat}
       (h : n < g.nodes.length) (h₁ : n₁ < g.nodes.length)
       (h' : n' < g.nodes.length) {σ σ₁ σ' : CEK} :
-      StepN g h σ h₁ σ₁ → StepsN g h₁ σ₁ h' σ' →
+      StepN g h σ h₁ σ₁ -> StepsN g h₁ σ₁ h' σ' ->
       StepsN g h σ h' σ'
   -- step-to-normal
   | skipBridge {n n₁ n' : Nat}
       (h : n < g.nodes.length) (h₁ : n₁ < g.nodes.length)
       (h' : n' < g.nodes.length) {σ σ' : CEK} :
-      g.nodeKind n = some .Skip →
-      g.hasEdge n n₁ .Normal →
-      StepsN g h₁ σ h' σ' →
+      g.nodeKind n = some .Skip ->
+      g.hasEdge n n₁ .Normal ->
+      StepsN g h₁ σ h' σ' ->
       StepsN g h σ h' σ'
 
 /-- Lift a single `StepN` to a `StepsN`. -/

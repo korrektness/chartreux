@@ -48,7 +48,7 @@ def freshNode (k : BigNodeKind) : BuilderM BigNodeID := do
 def emitEdge (s d : BigNodeID) (k : EdgeKind) : BuilderM Unit :=
   modify fun b => { b with cfg := { b.cfg with edges := b.cfg.edges ++ [⟨s, d, k⟩] } }
 
-def buildExpr : Expr → BuilderM (BigNodeID × BigNodeID)
+def buildExpr : Expr -> BuilderM (BigNodeID × BigNodeID)
 | .Var x => do
     let en <- freshNode (.EEntry (.Var x))
     let ex <- freshNode (.EExit)
@@ -85,7 +85,7 @@ def declGraph (x : String) (e : Expr) : BuilderM (BigNodeID × BigNodeID) := do
   emitEdge eex ex .Normal
   return (en, ex)
 
-def buildStmt : Stmt → BuilderM (BigNodeID × BigNodeID)
+def buildStmt : Stmt -> BuilderM (BigNodeID × BigNodeID)
 | .Skip => do
     let en <- freshNode (.SEntry .Skip)
     return (en, en)

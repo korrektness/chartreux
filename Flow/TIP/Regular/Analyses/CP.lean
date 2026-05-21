@@ -37,7 +37,7 @@ namespace CPVal
 instance : Bot CPVal where
   bot := CPVal.bot
 
-def join : CPVal → CPVal → CPVal
+def join : CPVal -> CPVal -> CPVal
   | .bot,        v        => v
   | v,           .bot     => v
   | .top,        _        => .top
@@ -47,7 +47,7 @@ def join : CPVal → CPVal → CPVal
 instance : Max CPVal where
   max := join
 
-def height : CPVal → Nat
+def height : CPVal -> Nat
   | .bot     => 0
   | .const _ => 1
   | .top     => 2
@@ -141,7 +141,7 @@ abbrev CPFact (vars : List String) : Type := Domain vars.length CPVal
 
 /-! ## Transfer functions -/
 
-def evalExpr (vars : List String) (ρ : CPFact vars) : Expr → CPVal
+def evalExpr (vars : List String) (ρ : CPFact vars) : Expr -> CPVal
   | .Int n     => .const n
   | .Var x     =>
       match varIdx vars x with
@@ -155,7 +155,7 @@ def evalExpr (vars : List String) (ρ : CPFact vars) : Expr → CPVal
       | _,         _         => .top
 
 def cpTransfer (vars : List String) (g : CFG) (n : NodeID) :
-    CPFact vars → CPFact vars := fun ρ =>
+    CPFact vars -> CPFact vars := fun ρ =>
   match g.nodeKind n with
   | some (.Assign x e) | some (.Decl x e) =>
       match varIdx vars x with
@@ -166,7 +166,7 @@ def cpTransfer (vars : List String) (g : CFG) (n : NodeID) :
   | _ => ρ
 
 /-- Edge transfer for forward CP is the identity. -/
-def cpEdgeTransfer (vars : List String) : Edge → CPFact vars → CPFact vars :=
+def cpEdgeTransfer (vars : List String) : Edge -> CPFact vars -> CPFact vars :=
   fun _ a => a
 
 /-- The default initial fact: every tracked variable is `⊥`. -/
@@ -310,7 +310,7 @@ def cpβ (σ : CEK) : CPFact vars := fun i =>
   | some (.Int v) => .const v
   | none          => .bot
 
-def cpβVal : Val → CPVal
+def cpβVal : Val -> CPVal
   | .Int n => .const n
 
 def cpβ_corr (_ : CFG) (ℓ : CPFact vars) (σ : CEK) : Prop :=
@@ -395,7 +395,7 @@ private lemma cp_preserve_assign_case (vars : List String) (hnd : vars.Nodup)
     have htr_i : cpTransfer vars cfg n ℓ i = evalExpr vars ℓ e := by
       unfold cpTransfer
       rcases hkind with hh | hh <;> rw [hh] <;> simp [hxi]
-    have htr_off : ∀ j, j ≠ i → cpTransfer vars cfg n ℓ j = ℓ j := by
+    have htr_off : ∀ j, j ≠ i -> cpTransfer vars cfg n ℓ j = ℓ j := by
       intro j hji
       unfold cpTransfer
       rcases hkind with hh | hh <;> rw [hh] <;> simp [hxi, hji]
@@ -551,7 +551,7 @@ theorem cp_reachable_correct
     (cfg : CFG) (hwf : cfg.WellFormed) :
     letI := tipLangSem cfg
     ∀ {n : NodeID} {σ : CEK},
-      Flow.Analysis.Generic.Reachable (forCFG_of_wf cfg hwf) n σ →
+      Flow.Analysis.Generic.Reachable (forCFG_of_wf cfg hwf) n σ ->
       cpβ_corr cfg ((cpAnalyzeCFG vars hnd cfg hwf).inFacts n) σ := by
   letI : LangSem NodeID Edge CEK := tipLangSem cfg
   intro n σ hreach

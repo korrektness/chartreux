@@ -72,21 +72,21 @@ theorem BigStepN.toStep {g : BigCFG}
   | advance _ _ hstep _ _ => exact hstep
 
 inductive BigStepsN (g : BigCFG) :
-    {n : Nat} → n < g.nodes.length → CEK →
-    {n' : Nat} → n' < g.nodes.length → CEK → Prop where
+    {n : Nat} -> n < g.nodes.length -> CEK ->
+    {n' : Nat} -> n' < g.nodes.length -> CEK -> Prop where
   | refl {n : Nat} (h : n < g.nodes.length) (σ : CEK) :
       BigStepsN g h σ h σ
   | step {n n₁ n' : Nat}
       (h : n < g.nodes.length) (h₁ : n₁ < g.nodes.length)
       (h' : n' < g.nodes.length) {σ σ₁ σ' : CEK} :
-      BigStepN g h σ h₁ σ₁ → BigStepsN g h₁ σ₁ h' σ' →
+      BigStepN g h σ h₁ σ₁ -> BigStepsN g h₁ σ₁ h' σ' ->
       BigStepsN g h σ h' σ'
   -- cfg steps without cek being stepped.
   | skipBridge {n n₁ n' : Nat}
       (h : n < g.nodes.length) (h₁ : n₁ < g.nodes.length)
       (h' : n' < g.nodes.length) {σ σ' : CEK} :
-      g.hasEdge n n₁ .Normal →
-      BigStepsN g h₁ σ h' σ' →
+      g.hasEdge n n₁ .Normal ->
+      BigStepsN g h₁ σ h' σ' ->
       BigStepsN g h σ h' σ'
 
 def BigStepsN.single {g : BigCFG} {n n' : Nat}

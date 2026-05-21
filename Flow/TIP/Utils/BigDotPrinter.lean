@@ -13,14 +13,14 @@ private def escapeDot (s : String) : String :=
     | '\n' => acc ++ "\\l"
     | _    => acc.push c
 
-private def BinOp.toStr : BinOp → String
+private def BinOp.toStr : BinOp -> String
 | .add => "+"
 | .sub => "-"
 | .mul => "*"
 | .gt  => ">"
 | .eq  => "=="
 
-private def Expr.toStr : Expr → String
+private def Expr.toStr : Expr -> String
 | .Int n      => toString n
 | .Var x      => x
 | .BinOp o a b => "(" ++ Expr.toStr a ++ " " ++ BinOp.toStr o ++ " " ++ Expr.toStr b ++ ")"
@@ -33,13 +33,13 @@ private def Stmt.toStr : Stmt -> String
 | .While c _  => "while " ++ Expr.toStr c
 | .If c _ _   => "if " ++ Expr.toStr c
 
-private def BigNodeKind.toStr : BigNodeKind → String
+private def BigNodeKind.toStr : BigNodeKind -> String
 | .SEntry s => "sen: " ++ Stmt.toStr s
 | .SExit    => "sex"
 | .EEntry e => "een: " ++ Expr.toStr e
 | .EExit    => "eex"
 
-private def EdgeKind.attrs : EdgeKind → String
+private def EdgeKind.attrs : EdgeKind -> String
 | .Normal  => ""
 | .TBranch => "label=\"T\",color=darkgreen"
 | .FBranch => "label=\"F\",color=red"
@@ -79,7 +79,7 @@ private def renderBigNodeWithAnnotation (entry exit : BigNodeID)
   "  n" ++ toString id ++ " [" ++ attrs ++ "];"
 
 /-- Type for an annotation function: maps node IDs to optional IN/OUT pairs. -/
-private def Annotator := BigNodeID → Option (String × String)
+private def Annotator := BigNodeID -> Option (String × String)
 
 private def toDotCoreWithAnnotator (g : BigCFG) (ann : Annotator) : String :=
   let nodeLines : List String := g.nodes.zipIdx.map (fun (k, i) =>
@@ -99,7 +99,7 @@ def toDot (g : BigCFG) : String :=
     the IN/OUT facts produced by an analysis. The annotator function maps
     each node ID to optional IN/OUT pairs. -/
 def toDotWithFn {A : Type} [ToString A]
-    (g : BigCFG) (inF outF : BigNodeID → A) : String :=
+    (g : BigCFG) (inF outF : BigNodeID -> A) : String :=
   Flow.Utils.BigDotPrinter.toDotCoreWithAnnotator g
     (fun n => some (toString (inF n), toString (outF n)))
 

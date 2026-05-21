@@ -24,26 +24,26 @@ private def escapeDot (s : String) : String :=
     | '\n' => acc ++ "\\l"
     | _    => acc.push c
 
-private def BinOp.toStr : BinOp → String
+private def BinOp.toStr : BinOp -> String
 | .add => "+"
 | .sub => "-"
 | .mul => "*"
 | .gt  => ">"
 | .eq  => "=="
 
-private def Expr.toStr : Expr → String
+private def Expr.toStr : Expr -> String
 | .Int n      => toString n
 | .Var x      => x
 | .BinOp o a b => "(" ++ Expr.toStr a ++ " " ++ BinOp.toStr o ++ " " ++ Expr.toStr b ++ ")"
 
-private def NodeKind.toStr : NodeKind → String
+private def NodeKind.toStr : NodeKind -> String
 | .Assign x e => x ++ " := " ++ Expr.toStr e
 | .Decl   x e => "var " ++ x ++ " := " ++ Expr.toStr e
 | .Cond   c   => "if " ++ Expr.toStr c
 | .Skip       => "skip"
 
 /-- DOT attribute fragment for an `EdgeKind`. -/
-private def EdgeKind.attrs : EdgeKind → String
+private def EdgeKind.attrs : EdgeKind -> String
 | .Normal  => ""
 | .TBranch => "label=\"T\",color=darkgreen"
 | .FBranch => "label=\"F\",color=red"
@@ -53,7 +53,7 @@ private def EdgeKind.attrs : EdgeKind → String
 /-- An optional per-node annotation: given a `NodeID`, returns
     `some (in, out)` strings to overlay on the node label, or `none` to
     leave the label bare. -/
-abbrev Annotator := NodeID → Option (String × String)
+abbrev Annotator := NodeID -> Option (String × String)
 
 private def renderNode (entry exit : NodeID) (annot : Annotator)
     (id : NodeID) (k : NodeKind) : String :=
@@ -121,10 +121,10 @@ def toDotWith {A : Type} [ToString A]
     (inSt outSt : StateN ag A) : String :=
   Flow.Utils.DotPrinter.toDotCore g (annotatorOfStates ag inSt outSt)
 
-/-- Variant of `toDotWith` that takes plain `NodeID → A` annotators
+/-- Variant of `toDotWith` that takes plain `NodeID -> A` annotators
     (e.g. the bundled `AnalysisResult.inFacts` / `outFacts`). -/
 def toDotWithFn {A : Type} [ToString A]
-    (g : CFG) (inF outF : NodeID → A) : String :=
+    (g : CFG) (inF outF : NodeID -> A) : String :=
   Flow.Utils.DotPrinter.toDotCore g
     (fun n => some (toString (inF n), toString (outF n)))
 

@@ -89,7 +89,7 @@ def tipLangSem (cfg : CFG) : LangSem NodeID Edge CEK where
   LStep_edge_mem := by
     intro _G _e _σ _σ' h; exact h.1
 
-/-! ## Bridge: TIP's `StepsN` → generic `LSteps` -/
+/-! ## Bridge: TIP's `StepsN` -> generic `LSteps` -/
 
 /-- For a CFG `cfg` and its adapter `G = forCFG cfg _`, every
     `StepsN cfg h σ h' σ'` lifts to a generic `LSteps G n σ n' σ'`

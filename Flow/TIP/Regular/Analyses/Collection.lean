@@ -10,7 +10,7 @@ open Flow.Analysis Flow.Analysis.Generic
 open Flow.Eval.Refinement
 open Flow.TIP (tipLStep tipLStutter tipLangSem)
 
-abbrev SetState := State → Prop
+abbrev SetState := State -> Prop
 
 def transfer (cfg : CFG) (n : NodeID) (R : SetState) : SetState :=
   match cfg.nodeKind n with
@@ -63,7 +63,7 @@ def CollectingSem (cfg : CFG) :
       change σ'.E = σ.E at hstut
       simpa [Corr, hstut] using hR }
 
-def absorbs (R R' : SetState) : Prop := ∀ σ, R σ → R' σ
+def absorbs (R R' : SetState) : Prop := ∀ σ, R σ -> R' σ
 
 theorem mono_absorb
     {cfg : CFG} {G : AnalysisCFG NodeID Edge} {R R' : SetState} {σ : CEK}

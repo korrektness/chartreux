@@ -35,7 +35,7 @@ def simpleResult :
 theorem cp_correct_reachable :
     letI := tipLangSem simpleCFG
     ∀ {n : NodeID} {σ : CEK},
-      Reachable (forCFG_of_wf simpleCFG simpleCFG_wf) n σ →
+      Reachable (forCFG_of_wf simpleCFG simpleCFG_wf) n σ ->
       cpβ_corr simpleCFG (simpleResult.inFacts n) σ := by
   letI : LangSem NodeID Edge CEK := tipLangSem simpleCFG
   intro n σ hreach
@@ -78,7 +78,7 @@ def loopyResult :
 theorem loopy_cp_correct :
     letI := tipLangSem loopyCFG
     ∀ {n : NodeID} {σ : CEK},
-      Reachable (forCFG_of_wf loopyCFG loopyCFG_wf) n σ →
+      Reachable (forCFG_of_wf loopyCFG loopyCFG_wf) n σ ->
       cpβ_corr loopyCFG (loopyResult.inFacts n) σ := by
   letI : LangSem NodeID Edge CEK := tipLangSem loopyCFG
   intro n σ hreach
