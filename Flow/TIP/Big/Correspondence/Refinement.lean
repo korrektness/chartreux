@@ -39,7 +39,7 @@ inductive BigStepN (g : BigCFG) :
   | mutate {n n' : Nat} (h : n < g.nodes.length) (h' : n' < g.nodes.length)
       {σ σ' : CEK} (x : String) (e : Expr) (v : Val) :
       Step σ σ' ->
-      BigNodeWritesback g n x e ->
+      BigNodeWritesback g n' x e ->
       EvalExpr σ.E e v ->
       g.hasEdge n n' .Normal ->
       σ'.E = σ.E.updated x v ->
