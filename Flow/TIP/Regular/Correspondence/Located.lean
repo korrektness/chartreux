@@ -1006,7 +1006,7 @@ intermediate builders' CFGs. -/
 namespace LocatedAt
 
 theorem of_buildSpec
-    {g : CFG} {b s b' en ex} (hwf : BuilderWF b)
+    {g : CFG} {b s b' en ex} (hwf : BuilderInv b)
     (hbs : BuildSpec b s b' en ex) (hsub : SubCFG b'.cfg g)
     {E E' : State} (hbig : BigStep s E E')
     {K_out : List Cont}
@@ -1016,7 +1016,7 @@ theorem of_buildSpec
   | skip b' =>
     cases hbig
     refine at_skip ?_ hkm
-    unfold BuilderWF at hwf
+    unfold BuilderInv at hwf
     have := SubCFG.nodeKind (n := b'.nextID) hsub (by {
       simp [hwf]
     })
@@ -1027,14 +1027,14 @@ theorem of_buildSpec
     refine at_assign ?_ heval ?_ ?_ hkm
     · have := BuildSpec.assign_kind_at_entry x e hwf
       have := SubCFG.nodeKind (n := b'.nextID) hsub (by {
-        unfold BuilderWF at hwf
+        unfold BuilderInv at hwf
         simp [CFGBuilder.addNode, hwf]
       })
       grind
     · exact SubCFG.hasEdge hsub (BuildSpec.assign_normal_edge x e)
     · have := BuildSpec.assign_skip_kind_at_exit x e hwf
       have := SubCFG.nodeKind (n := b'.nextID + 1) hsub (by {
-        unfold BuilderWF at hwf
+        unfold BuilderInv at hwf
         simp [CFGBuilder.addNode, hwf]
       })
       grind
@@ -1044,14 +1044,14 @@ theorem of_buildSpec
     refine at_decl ?_ heval ?_ ?_ hkm
     · have := BuildSpec.decl_kind_at_entry x e hwf
       have := SubCFG.nodeKind (n := b'.nextID) hsub (by {
-        unfold BuilderWF at hwf
+        unfold BuilderInv at hwf
         simp [CFGBuilder.addNode, hwf]
       })
       grind
     · exact SubCFG.hasEdge hsub (BuildSpec.assign_normal_edge x e)
     · have := BuildSpec.decl_skip_kind_at_exit x e hwf
       have := SubCFG.nodeKind (n := b'.nextID + 1) hsub (by {
-        unfold BuilderWF at hwf
+        unfold BuilderInv at hwf
         simp [CFGBuilder.addNode, hwf]
       })
       grind
@@ -1073,13 +1073,13 @@ theorem of_buildSpec
   | @if_ b₁ b₂ b₃ c t f ent ext enf exf h₁ h₂ ih₁ ih₂ =>
     -- Common: builder well-formedness for the sub-builds and the
     -- ambient-`g` `nodeKind`/edge witnesses.
-    have hwf_cond : BuilderWF (b₁.addNode (.Cond c)).fst := BuilderWF.addNode hwf _
-    have hwf_b₂ : BuilderWF b₂ := BuildSpec.preserves_WF h₁ hwf_cond
-    have hwf_b₃ : BuilderWF b₃ := BuildSpec.preserves_WF h₂ hwf_b₂
+    have hwf_cond : BuilderInv (b₁.addNode (.Cond c)).fst := BuilderInv.addNode hwf _
+    have hwf_b₂ : BuilderInv b₂ := BuildSpec.preserves_WF h₁ hwf_cond
+    have hwf_b₃ : BuilderInv b₃ := BuildSpec.preserves_WF h₂ hwf_b₂
     -- nodeKind for the Cond node, lifted through each builder up to `g`.
     have hcond0 :
         ((b₁.addNode (.Cond c)).fst).cfg.nodeKind b₁.nextID = some (.Cond c) := by
-      unfold BuilderWF at hwf
+      unfold BuilderInv at hwf
       simp [CFG.nodeKind, CFGBuilder.addNode, hwf]
     have hb₁ : b₁.nextID < ((b₁.addNode (.Cond c)).fst).cfg.nodes.length :=
       nodeKind_lt hcond0
@@ -1114,7 +1114,7 @@ theorem of_buildSpec
     -- nodeKind = Skip for the merge node `b₃.nextID` in `g`.
     have hMerge_addNode :
         (b₃.addNode NodeKind.Skip).fst.cfg.nodeKind b₃.nextID = some .Skip := by
-      unfold BuilderWF at hwf_b₃
+      unfold BuilderInv at hwf_b₃
       simp [CFG.nodeKind, CFGBuilder.addNode, hwf_b₃]
     have hMerge_F :
         (let b₃_1 := (b₃.addNode NodeKind.Skip).fst;
@@ -1201,11 +1201,11 @@ theorem of_buildSpec
       refine ih₂ hwf_b₂ hsub_b₃_g hbig ?_
       exact .skipBridge hExf_g hMerge_g hExf_merge_g hkm
   | @while_ b₁ b₂ c body en_b ex_b h_b ih_b =>
-    have hwf_cond : BuilderWF (b₁.addNode (.Cond c)).fst := BuilderWF.addNode hwf _
-    have hwf_b₂ : BuilderWF b₂ := BuildSpec.preserves_WF h_b hwf_cond
+    have hwf_cond : BuilderInv (b₁.addNode (.Cond c)).fst := BuilderInv.addNode hwf _
+    have hwf_b₂ : BuilderInv b₂ := BuildSpec.preserves_WF h_b hwf_cond
     have hcond0 :
         ((b₁.addNode (.Cond c)).fst).cfg.nodeKind b₁.nextID = some (.Cond c) := by
-      unfold BuilderWF at hwf
+      unfold BuilderInv at hwf
       simp [CFG.nodeKind, CFGBuilder.addNode, hwf]
     have hb₁ : b₁.nextID < ((b₁.addNode (.Cond c)).fst).cfg.nodes.length :=
       nodeKind_lt hcond0
@@ -1232,7 +1232,7 @@ theorem of_buildSpec
     -- nodeKind .Skip for the loop's F-target `b₂.nextID` in `g`.
     have hSkip_addNode :
         (b₂.addNode NodeKind.Skip).fst.cfg.nodeKind b₂.nextID = some .Skip := by
-      unfold BuilderWF at hwf_b₂
+      unfold BuilderInv at hwf_b₂
       simp [CFG.nodeKind, CFGBuilder.addNode, hwf_b₂]
     have hSkip_F :
         (let b₂_1 := (b₂.addNode NodeKind.Skip).fst;
