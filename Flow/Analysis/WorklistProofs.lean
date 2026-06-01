@@ -378,9 +378,9 @@ theorem postFixpoint_of_isForwardPostFixpoint
     (hno_entry_edge : ∀ e ∈ g.edges, g.dstOf e ≠ g.entry) :
     Generic.PostFixpoint
       ({ L := A
-       , nodeTransfer := fun _ n a => nodeTransfer n a
-       , edgeTransfer := fun _ e a => edgeTransfer e a
-       , entry := fun _ => entryInit } : Generic.DFA Node Edge)
+       , nodeTransfer := nodeTransfer
+       , edgeTransfer := edgeTransfer
+       , entry := entryInit } : Generic.DFA Node Edge)
       (fun a b => b ⊑ a) g
       (fun n =>
         if h : n ∈ g.nodes then
@@ -446,11 +446,10 @@ structure Analysis (Node Edge State : Type)
       letI := botL; letI := maxL; letI := fhL; letI := llL
       ℓ' ⊑ ℓ -> absorbs ℓ ℓ'
   mono_absorb :
-    ∀ {g : AnalysisCFG Node Edge} {ℓ ℓ' : dfa.L} {σ : State},
-      absorbs ℓ ℓ' -> semantics.Corr g ℓ σ -> semantics.Corr g ℓ' σ
+    ∀ {ℓ ℓ' : dfa.L} {σ : State},
+      absorbs ℓ ℓ' -> semantics.Corr ℓ σ -> semantics.Corr ℓ' σ
   transferMono :
-    ∀ g : AnalysisCFG Node Edge,
-      TransferMono (dfa.nodeTransfer g) (dfa.edgeTransfer g)
+      TransferMono dfa.nodeTransfer dfa.edgeTransfer
 
 structure AnalysisResult {Node Edge State : Type}
     [DecidableEq Node] [DecidableEq Edge] [LangSem Node Edge State]
@@ -458,7 +457,7 @@ structure AnalysisResult {Node Edge State : Type}
   inFacts : Node -> a.dfa.L
   outFacts : Node -> a.dfa.L
   isPostFix : Generic.PostFixpoint a.dfa a.absorbs g inFacts
-  inFacts_entry : a.absorbs (a.dfa.entry g) (inFacts g.entry)
+  inFacts_entry : a.absorbs a.dfa.entry (inFacts g.entry)
 
 def analyze {Node Edge State : Type}
     [DecidableEq Node] [DecidableEq Edge] [LangSem Node Edge State]
@@ -471,10 +470,10 @@ def analyze {Node Edge State : Type}
   letI := a.decEqL
   letI := a.fhL
   letI := a.llL
-  letI := a.transferMono g
-  let entryInit := a.dfa.entry g
-  let nT : Node -> a.dfa.L -> a.dfa.L := a.dfa.nodeTransfer g
-  let eT : Edge -> a.dfa.L -> a.dfa.L := a.dfa.edgeTransfer g
+  letI := a.transferMono
+  let entryInit := a.dfa.entry
+  let nT : Node -> a.dfa.L -> a.dfa.L := a.dfa.nodeTransfer
+  let eT : Edge -> a.dfa.L -> a.dfa.L := a.dfa.edgeTransfer
   let res := runDataflow g nT eT entryInit
   let inFacts : Node -> a.dfa.L := fun n =>
     if hn : n ∈ g.nodes then expectedIn g eT entryInit res.2 ⟨n, hn⟩
@@ -490,8 +489,8 @@ def analyze {Node Edge State : Type}
     exact a.le_absorbs _ _ <|
       postFixpoint_of_isForwardPostFixpoint g nT eT entryInit res.2 hpost
         hno_entry_edge e he
-  have hentry : a.absorbs (a.dfa.entry g) (inFacts g.entry) := by
-    change a.absorbs (a.dfa.entry g)
+  have hentry : a.absorbs a.dfa.entry (inFacts g.entry) := by
+    change a.absorbs a.dfa.entry
       (if hn : g.entry ∈ g.nodes then
          expectedIn g eT entryInit res.2 ⟨g.entry, hn⟩
        else ⊥)
