@@ -25,9 +25,9 @@ def transfer (cfg : CFG) (n : NodeID) (R : SetState) : SetState :=
 /-- The collecting-semantics DFA, parameterised by the underlying TIP CFG. -/
 def Collecting (cfg : CFG) : DFA NodeID Edge where
   L            := SetState
-  nodeTransfer := fun _G n => transfer cfg n
-  edgeTransfer := fun _G _e R => R
-  entry        := fun _G _ => True
+  nodeTransfer := transfer cfg
+  edgeTransfer := fun _ R => R
+  entry        := fun _ => True
 
 @[simp] theorem Collecting_transferAlong (cfg : CFG)
     (G : AnalysisCFG NodeID Edge) (e : Edge) (R : SetState) :
