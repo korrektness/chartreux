@@ -211,7 +211,7 @@ omit [Bot A] in
 private lemma gmap_height_update_eq [FiniteHeight A]
     {g : AnalysisCFG Node Edge}
     (nodes : List (NodeOf g)) (outF : StateN g A) (node : NodeOf g) (newOut : A) :
-    Eq (nodes.map (fun x => FiniteHeight.height (StateN.update outF node newOut x)))
+    (nodes.map (fun x => FiniteHeight.height (StateN.update outF node newOut x))) =
        (nodes.map (fun x => if x = node then FiniteHeight.height newOut
         else FiniteHeight.height (outF x))) := by
   congr 1; ext x; simp [StateN.update]; split <;> rfl

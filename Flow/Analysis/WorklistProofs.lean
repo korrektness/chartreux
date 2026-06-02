@@ -17,9 +17,9 @@ private lemma newIn_eq_expectedIn
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A) (n : NodeOf g)
     (newIn : A)
-    (hdef : Eq newIn (if _ : n.val = g.entry then entryInit
+    (hdef : newIn = (if _ : n.val = g.entry then entryInit
         else joinPredEdges g edgeTransfer outF n)) :
-    Eq newIn (expectedIn g edgeTransfer entryInit outF n) := by
+    newIn = (expectedIn g edgeTransfer entryInit outF n) := by
   rw [hdef]; simp only [expectedIn]; exact ite_decEq_irrel _ _ _ _
 
 private lemma foldl_join_eT_update
@@ -28,10 +28,11 @@ private lemma foldl_join_eT_update
     (edgeTransfer : Edge -> A -> A) (outF : StateN g A)
     (n : NodeOf g) (v : A) (m : NodeOf g) (edges : List {e // e ∈ g.inEdges m.val})
     (hnoedge : ∀ e ∈ edges, g.srcOf e.val ≠ n.val) (init : A) :
-    Eq (edges.foldl (fun acc ⟨e, he⟩ =>
-        acc ⊔ edgeTransfer e ((outF.update n v) ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) init)
-       (edges.foldl (fun acc ⟨e, he⟩ =>
-        acc ⊔ edgeTransfer e (outF ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) init) := by
+    (edges.foldl (fun acc ⟨e, he⟩ =>
+      acc ⊔ edgeTransfer e ((outF.update n v) ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) init)
+    =
+    (edges.foldl (fun acc ⟨e, he⟩ =>
+      acc ⊔ edgeTransfer e (outF ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) init) := by
   induction edges generalizing init with
   | nil => rfl
   | cons e es ih =>
@@ -49,8 +50,8 @@ private lemma joinPredEdges_update_non_pred
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A) (outF : StateN g A)
     (n : NodeOf g) (v : A) (m : NodeOf g)
     (hnoedge : ∀ e ∈ g.inEdges m.val, g.srcOf e ≠ n.val) :
-    Eq (joinPredEdges g edgeTransfer (outF.update n v) m)
-       (joinPredEdges g edgeTransfer outF m) := by
+    (joinPredEdges g edgeTransfer (outF.update n v) m) =
+      (joinPredEdges g edgeTransfer outF m) := by
   unfold joinPredEdges
   exact foldl_join_eT_update g edgeTransfer outF n v m (g.inEdges m.val).attach
     (fun e _ => hnoedge e.val e.property) ⊥
@@ -70,7 +71,7 @@ private lemma expectedIn_update_non_pred
     [Bot A] [Max A]
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A) (outF : StateN g A)
     (entryInit : A) (n : NodeOf g) (v : A) (m : NodeOf g) (h : m ∉ g.succOf n) :
-    Eq (expectedIn g edgeTransfer entryInit (outF.update n v) m)
+    (expectedIn g edgeTransfer entryInit (outF.update n v) m) =
        (expectedIn g edgeTransfer entryInit outF m) := by
   simp only [expectedIn]
   split
@@ -102,38 +103,20 @@ private lemma foldl_join_eT_mono
     (outF1 outF2 : StateN g A) (hle : StateN.le outF1 outF2)
     (m : NodeOf g) (edges : List {e // e ∈ g.inEdges m.val})
     (acc1 acc2 : A) (hacc : acc1 ⊔ acc2 = acc1) :
-    Eq ((edges.foldl (fun acc ⟨e, he⟩ =>
-          acc ⊔ edgeTransfer e (outF1 ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) acc1) ⊔
-        (edges.foldl (fun acc ⟨e, he⟩ =>
-          acc ⊔ edgeTransfer e (outF2 ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) acc2))
-       (edges.foldl (fun acc ⟨e, he⟩ =>
-          acc ⊔ edgeTransfer e (outF1 ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) acc1) := by
+    ((edges.foldl (fun acc ⟨e, he⟩ =>
+        acc ⊔ edgeTransfer e (outF1 ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) acc1) ⊔
+      (edges.foldl (fun acc ⟨e, he⟩ =>
+        acc ⊔ edgeTransfer e (outF2 ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) acc2))
+    =
+    (edges.foldl (fun acc ⟨e, he⟩ =>
+      acc ⊔ edgeTransfer e (outF1 ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) acc1) := by
   induction edges generalizing acc1 acc2 with
   | nil => exact hacc
   | cons e es ih =>
     simp only [List.foldl_cons]
     apply ih
     let e_mem : NodeOf g := ⟨g.srcOf e.val, g.inEdges_src_mem m.val e.val e.property⟩
-    have h_eT : (edgeTransfer e.val (outF1 e_mem)) ⊔ (edgeTransfer e.val (outF2 e_mem))
-              = edgeTransfer e.val (outF1 e_mem) := edge_mono e.val _ _ (hle e_mem)
-    calc (acc1 ⊔ edgeTransfer e.val (outF1 e_mem)) ⊔ (acc2 ⊔ edgeTransfer e.val (outF2 e_mem))
-        = ((acc1 ⊔ edgeTransfer e.val (outF1 e_mem)) ⊔ acc2) ⊔
-            edgeTransfer e.val (outF2 e_mem) := by
-            rw [<- ll.join_assoc]
-      _ = (acc1 ⊔ (edgeTransfer e.val (outF1 e_mem) ⊔ acc2)) ⊔
-            edgeTransfer e.val (outF2 e_mem) := by
-            rw [ll.join_assoc acc1]
-      _ = (acc1 ⊔ (acc2 ⊔ edgeTransfer e.val (outF1 e_mem))) ⊔
-            edgeTransfer e.val (outF2 e_mem) := by
-            rw [ll.join_comm (edgeTransfer e.val (outF1 e_mem)) acc2]
-      _ = ((acc1 ⊔ acc2) ⊔ edgeTransfer e.val (outF1 e_mem)) ⊔
-            edgeTransfer e.val (outF2 e_mem) := by
-            rw [<- ll.join_assoc acc1 acc2]
-      _ = (acc1 ⊔ edgeTransfer e.val (outF1 e_mem)) ⊔
-            edgeTransfer e.val (outF2 e_mem) := by rw [hacc]
-      _ = acc1 ⊔ (edgeTransfer e.val (outF1 e_mem) ⊔
-            edgeTransfer e.val (outF2 e_mem)) := by rw [ll.join_assoc]
-      _ = acc1 ⊔ edgeTransfer e.val (outF1 e_mem) := by rw [h_eT]
+    grind [edge_mono e.val _ _ (hle e_mem), ll.join_assoc, ll.join_comm]
 
 private lemma joinPredEdges_mono
     [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]

@@ -34,8 +34,9 @@ def joinPredEdges [Bot A] [Max A]
 /-- main forward worklist algorithm. -/
 def worklistForward
     [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
-    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
-    (entryInit : A) (outF : StateN g A := fun _ => ⊥)
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A)
+    (edgeTransfer : Edge -> A -> A) (entryInit : A)
+    (outF : StateN g A := fun _ => ⊥)
     (wl : List (NodeOf g) := g.nodes_mem) : StateN g A :=
   match wl with
   | [] => outF
