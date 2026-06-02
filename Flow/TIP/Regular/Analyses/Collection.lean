@@ -33,14 +33,14 @@ def Collecting (cfg : CFG) : DFA NodeID Edge where
     (G : AnalysisCFG NodeID Edge) (e : Edge) (R : SetState) :
     (Collecting cfg).transferAlong G e R = transfer cfg (G.srcOf e) R := rfl
 
-def Corr (_cfg : CFG) (_G : AnalysisCFG NodeID Edge) (R : SetState) (σ : CEK) : Prop :=
+def Corr (R : SetState) (σ : CEK) : Prop :=
   R σ.E
 
 def CollectingSem (cfg : CFG) :
     letI := tipLangSem cfg
     DFASemantics (State := CEK) (Collecting cfg) :=
   letI : LangSem NodeID Edge CEK := tipLangSem cfg
-  { Corr := Corr cfg
+  { Corr := Corr
     preserve_entry := by intro _ _ _; trivial
     preserve_step := by
       intro G e σ σ' R hstep hR
@@ -65,9 +65,8 @@ def CollectingSem (cfg : CFG) :
 
 def absorbs (R R' : SetState) : Prop := ∀ σ, R σ -> R' σ
 
-theorem mono_absorb
-    {cfg : CFG} {G : AnalysisCFG NodeID Edge} {R R' : SetState} {σ : CEK}
-    (h : absorbs R R') (hR : Corr cfg G R σ) : Corr cfg G R' σ :=
+theorem mono_absorb {R R' : SetState} {σ : CEK}
+    (h : absorbs R R') (hR : Corr R σ) : Corr R' σ :=
   h _ hR
 
 end Flow.Eval.Collection
