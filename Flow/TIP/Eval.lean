@@ -4,6 +4,7 @@ def State := String -> Option Val
 def State.updated (σ : State) (x : String) (v : Val) : State :=
   fun y => if x = y then v else σ y
 def State.empty : State := fun _ => none
+def State.isInit (σ : State) : Prop := σ = State.empty
 
 def applyOp : BinOp -> Int -> Int -> Int
 | .add, n₁, n₂ => (n₁ + n₂)

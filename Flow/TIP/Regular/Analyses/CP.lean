@@ -304,25 +304,25 @@ lemma not_mem_of_varIdx_none {x : String}
         rcases hfi : vars.finIdxOf? x with _ | ⟨j, hj⟩ <;> grind
       exact absurd this hk
 
-def cpβ (σ : CEK) : CPFact vars := fun i =>
-  match σ.E (vars.get i) with
+def cpβ (σ : State) : CPFact vars := fun i =>
+  match σ (vars.get i) with
   | some (.Int v) => .const v
   | none          => .bot
 
 def cpβVal : Val -> CPVal
   | .Int n => .const n
 
-def cpβ_corr (ℓ : CPFact vars) (σ : CEK) : Prop :=
+def cpβ_corr (ℓ : CPFact vars) (σ : State) : Prop :=
   ℓ ⊑ (cpβ σ : CPFact vars)
 
-lemma cpβ_corr_pw {ℓ : CPFact vars} {σ : CEK}
+lemma cpβ_corr_pw {ℓ : CPFact vars} {σ : State}
   (h : ℓ ⊑ (cpβ σ : CPFact vars)) (i : Fin vars.length) :
     ℓ i ⊔ cpβ σ i = ℓ i := by
   have := congrFun h i; simpa [Domain.max_app] using this
 
-lemma evalExpr_sound {ρ : CPFact vars} {σ : CEK} {e : Expr} {v : Val}
+lemma evalExpr_sound {ρ : CPFact vars} {σ : State} {e : Expr} {v : Val}
     (hcorr : ρ ⊑ (cpβ σ : CPFact vars))
-    (heval : EvalExpr σ.E e v) :
+    (heval : EvalExpr σ e v) :
     evalExpr vars ρ e ⊔ cpβVal v = evalExpr vars ρ e := by
   induction heval with
   | int =>
@@ -365,11 +365,11 @@ def cpDFA (vars : List String) (cfg : CFG) : DFA NodeID Edge where
 /-- Internal lemma: the env-update + Assign/Decl case of `preserve_step`.
     Shared between Assign and Decl since they have the same shape. -/
 private lemma cp_preserve_assign_case (vars : List String) (hnd : vars.Nodup)
-    (cfg : CFG) (n : NodeID) (ℓ : CPFact vars) (σ σ' : CEK)
+    (cfg : CFG) (n : NodeID) (ℓ : CPFact vars) (σ σ' : State)
     (x : String) (e : Expr) (v : Val)
     (hkind : cfg.nodeKind n = some (.Assign x e) ∨ cfg.nodeKind n = some (.Decl x e))
-    (heval : EvalExpr σ.E e v)
-    (heq : σ'.E = σ.E.updated x v)
+    (heval : EvalExpr σ e v)
+    (heq : σ' = σ.updated x v)
     (hcorr : cpβ_corr ℓ σ) :
     cpβ_corr (cpTransfer vars cfg n ℓ) σ' := by
   simp only [cpβ_corr]
@@ -382,7 +382,7 @@ private lemma cp_preserve_assign_case (vars : List String) (hnd : vars.Nodup)
     have hne : vars.get j ≠ x := fun h => hx_notin (h ▸ List.get_mem ..)
     have hβ : cpβ σ' j = cpβ σ j := by
       unfold cpβ
-      have : σ'.E (vars.get j) = σ.E (vars.get j) := by
+      have : σ' (vars.get j) = σ (vars.get j) := by
         simp [heq, State.updated]; grind
       rw [this]
     have htr : cpTransfer vars cfg n ℓ j = ℓ j := by
@@ -404,7 +404,7 @@ private lemma cp_preserve_assign_case (vars : List String) (hnd : vars.Nodup)
       | Int m =>
         have hβ : cpβ σ' j = .const m := by
           unfold cpβ
-          have : σ'.E (vars.get j) = some (.Int m) := by
+          have : σ' (vars.get j) = some (.Int m) := by
             rw [heq, hgetx]; unfold State.updated; simp
           rw [this]
         rw [hβ, <- h, htr_i]
@@ -420,7 +420,7 @@ private lemma cp_preserve_assign_case (vars : List String) (hnd : vars.Nodup)
         exact hji hji_eq
       have hβ : cpβ σ' j = cpβ σ j := by
         unfold cpβ
-        have : σ'.E (vars.get j) = σ.E (vars.get j) := by
+        have : σ' (vars.get j) = σ (vars.get j) := by
           rw [heq]; unfold State.updated
           exact if_neg (fun hxj => hgetj_ne hxj.symm)
         rw [this]
@@ -430,31 +430,28 @@ private lemma cp_preserve_assign_case (vars : List String) (hnd : vars.Nodup)
     Whenever the source node's `cpTransfer` is the identity (Cond,
     Skip, etc.) and the env doesn't change, correctness is preserved. -/
 private lemma cp_preserve_branch_case (vars : List String) (cfg : CFG)
-    (n : NodeID) (ℓ : CPFact vars) (σ σ' : CEK)
-    (htr_id : cpTransfer vars cfg n ℓ = ℓ) (hE : σ'.E = σ.E)
+    (n : NodeID) (ℓ : CPFact vars) (σ : State)
+    (htr_id : cpTransfer vars cfg n ℓ = ℓ)
     (hcorr : cpβ_corr ℓ σ) :
-    cpβ_corr (cpTransfer vars cfg n ℓ) σ' := by
-  simp only [cpβ_corr]
-  have hβeq : (cpβ σ' : CPFact vars) = cpβ σ := by
-    funext i; unfold cpβ; rw [hE]
-  rw [htr_id, hβeq]; exact hcorr
+    cpβ_corr (cpTransfer vars cfg n ℓ) σ := by grind [cpβ_corr]
 
 /-- The CP `DFASemantics` for a fixed TIP CFG. The three preservation
     fields directly consume the abstract `LangSem` transitions. -/
 def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
-    letI := tipLangSem cfg
-    DFASemantics (State := CEK) (cpDFA vars cfg) :=
-  letI : LangSem NodeID Edge CEK := tipLangSem cfg
+    letI : LangSem NodeID Edge State := tipLangSem cfg
+    DFASemantics (State := State) (cpDFA vars cfg) :=
+  letI : LangSem NodeID Edge State := tipLangSem cfg
   { Corr := cpβ_corr
+    isInit := State.isInit
     preserve_entry := by
-      intro _G σ hinit
-      obtain ⟨hE, _⟩ := hinit
-      change cpEntryInit vars ⊑ (cpβ σ : CPFact vars)
+      intro σ hinit
+      cases hinit
+      change cpEntryInit vars ⊑ cpβ State.empty 
       funext i
-      simp only [Domain.max_app, cpEntryInit, cpβ, hE, State.empty,
-                 CPVal.join_idem]
+      simp [Domain.max_app, cpEntryInit, cpβ, State.empty]
+
     preserve_step := by
-      intro G e σ σ' ℓ hstep hcorr
+      intro _G e σ σ' ℓ hstep hcorr
       -- Unpack the abstract `LStep` into TIP-specific witnesses.
       obtain ⟨_hmem, hsrc, _hdst, hcase⟩ := hstep
       simp only [cpDFA_transferAlong, hsrc]
@@ -466,15 +463,15 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
       · -- Cond is identity for `cpTransfer`.
         have htr_id : cpTransfer vars cfg e.src ℓ = ℓ := by
           funext j; unfold cpTransfer; rw [hbr]
-        exact cp_preserve_branch_case vars cfg e.src ℓ σ σ' htr_id hE hcorr
+        simpa [hE] using cp_preserve_branch_case vars cfg e.src ℓ σ htr_id hcorr
       · -- Skip is identity for `cpTransfer`.
         have htr_id : cpTransfer vars cfg e.src ℓ = ℓ := by
           funext j; unfold cpTransfer; rw [hskip]
-        exact cp_preserve_branch_case vars cfg e.src ℓ σ σ' htr_id hE hcorr
+        simpa [hE] using cp_preserve_branch_case vars cfg e.src ℓ σ htr_id hcorr
     preserve_stutter := by
       intro _G _n σ σ' ℓ hstut hcorr
       -- `LStutter` boils down to `σ'.E = σ.E`.
-      change σ'.E = σ.E at hstut
+      change σ' = σ at hstut
       simp only [cpβ_corr] at *
       have hβ : (cpβ σ' : CPFact vars) = cpβ σ := by
         funext i; unfold cpβ; rw [hstut]
@@ -483,7 +480,7 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
 def cpAbsorbs (ℓ ℓ' : CPFact vars) : Prop := ℓ' ⊑ ℓ
 
 theorem mono_absorb_cp
-    {ℓ ℓ' : CPFact vars} {σ : CEK} (h : cpAbsorbs ℓ ℓ')
+    {ℓ ℓ' : CPFact vars} {σ : State} (h : cpAbsorbs ℓ ℓ')
     (hcorr : cpβ_corr ℓ σ) : cpβ_corr ℓ' σ := by
   simp only [cpβ_corr] at *
   simp only [cpAbsorbs] at h
@@ -507,8 +504,8 @@ end Corr
     the variable list, a `Nodup` proof, and the underlying TIP CFG. -/
 def cpAnalysis (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
     letI := tipLangSem cfg
-    Flow.Analysis NodeID Edge CEK :=
-  letI : LangSem NodeID Edge CEK := tipLangSem cfg
+    Flow.Analysis NodeID Edge State :=
+  letI : LangSem NodeID Edge State := tipLangSem cfg
   { dfa          := cpDFA vars cfg
     botL         := (inferInstance : Bot (CPFact vars))
     maxL         := (inferInstance : Max (CPFact vars))
@@ -529,7 +526,7 @@ def cpAnalyzeCFG (vars : List String) (hnd : vars.Nodup)
     (cfg : CFG) (hwf : cfg.WellFormed) :
     letI := tipLangSem cfg
     Flow.AnalysisResult (cpAnalysis vars hnd cfg) (forCFG_of_wf cfg hwf) :=
-  letI : LangSem NodeID Edge CEK := tipLangSem cfg
+  letI : LangSem NodeID Edge State := tipLangSem cfg 
   let G := forCFG_of_wf cfg hwf
   have hentry_mem : G.entry ∈ G.nodes := by
     simpa [G, forCFG_of_wf, forCFG, List.mem_range] using hwf.1
@@ -544,10 +541,10 @@ theorem cp_reachable_correct
     {vars : List String} (hnd : vars.Nodup)
     (cfg : CFG) (hwf : cfg.WellFormed) :
     letI := tipLangSem cfg
-    ∀ {n : NodeID} {σ : CEK},
-      Flow.Analysis.Generic.Reachable (forCFG_of_wf cfg hwf) n σ ->
+    ∀ {n : NodeID} {σ : State},
+      Flow.Analysis.Generic.Reachable (forCFG_of_wf cfg hwf) n σ State.isInit ->
       cpβ_corr ((cpAnalyzeCFG vars hnd cfg hwf).inFacts n) σ := by
-  letI : LangSem NodeID Edge CEK := tipLangSem cfg
+  letI : LangSem NodeID Edge State := tipLangSem cfg
   intro n σ hreach
   let A := cpAnalysis vars hnd cfg
   let R := cpAnalyzeCFG vars hnd cfg hwf
