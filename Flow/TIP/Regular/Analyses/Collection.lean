@@ -33,15 +33,16 @@ def Collecting (cfg : CFG) : DFA NodeID Edge where
     (G : AnalysisCFG NodeID Edge) (e : Edge) (R : SetState) :
     (Collecting cfg).transferAlong G e R = transfer cfg (G.srcOf e) R := rfl
 
-def Corr (R : SetState) (σ : CEK) : Prop :=
-  R σ.E
+def Corr (R : SetState) (σ : State) : Prop :=
+  R σ
 
 def CollectingSem (cfg : CFG) :
     letI := tipLangSem cfg
-    DFASemantics (State := CEK) (Collecting cfg) :=
-  letI : LangSem NodeID Edge CEK := tipLangSem cfg
+    DFASemantics (State := State) (Collecting cfg) :=
+  letI : LangSem NodeID Edge State := tipLangSem cfg 
   { Corr := Corr
-    preserve_entry := by intro _ _ _; trivial
+    isInit := State.isInit
+    preserve_entry := by intros σ hσ; cases hσ; simp [Corr, Collecting] 
     preserve_step := by
       intro G e σ σ' R hstep hR
       obtain ⟨_hmem, hsrc, _hdst, hcase⟩ := hstep
@@ -49,23 +50,23 @@ def CollectingSem (cfg : CFG) :
       rcases hcase with ⟨x, e', v, hassign, heval, hE⟩
                        | ⟨c, _v, hbr, _heval, _hbt, hE⟩
                        | ⟨hskip, _hkind, hE⟩
-      · change (transfer cfg e.src R) σ'.E
+      · change (transfer cfg e.src R) σ'
         rcases hassign with hh | hh
-        · simp only [transfer, hh]; exact ⟨σ.E, v, hR, heval, hE⟩
-        · simp only [transfer, hh]; exact ⟨σ.E, v, hR, heval, hE⟩
-      · change (transfer cfg e.src R) σ'.E
+        · simp only [transfer, hh]; exact ⟨σ, v, hR, heval, hE⟩
+        · simp only [transfer, hh]; exact ⟨σ, v, hR, heval, hE⟩
+      · change (transfer cfg e.src R) σ'
         simp [NodeBranches] at hbr
         simp only [transfer, hbr, hE]; exact hR
-      · change (transfer cfg e.src R) σ'.E
+      · change (transfer cfg e.src R) σ'
         simp only [transfer, hskip, hE]; exact hR
     preserve_stutter := by
       intro _G _n σ σ' R hstut hR
-      change σ'.E = σ.E at hstut
+      change σ' = σ at hstut
       simpa [Corr, hstut] using hR }
 
 def absorbs (R R' : SetState) : Prop := ∀ σ, R σ -> R' σ
 
-theorem mono_absorb {R R' : SetState} {σ : CEK}
+theorem mono_absorb {R R' : SetState} {σ : State}
     (h : absorbs R R') (hR : Corr R σ) : Corr R' σ :=
   h _ hR
 

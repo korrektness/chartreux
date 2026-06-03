@@ -64,30 +64,27 @@ semantics by the original `cfg : CFG` and synthesise a `LangSem`
     keep the witnesses each client analysis needs (kind + env
     relation), not the full `Step` derivation. -/
 def tipLStep (cfg : CFG) (G : AnalysisCFG NodeID Edge)
-    (e : Edge) (σ σ' : CEK) : Prop :=
+    (e : Edge) (σ σ' : State) : Prop :=
   e ∈ G.edges ∧ G.srcOf e = e.src ∧ G.dstOf e = e.dst ∧
   ((∃ x e' v,
-      NodeAssigns cfg e.src x e' ∧ EvalExpr σ.E e' v ∧
-      σ'.E = σ.E.updated x v) ∨
+      NodeAssigns cfg e.src x e' ∧ EvalExpr σ e' v ∧
+      σ'= σ.updated x v) ∨
    (∃ c v,
-      NodeBranches cfg e.src c ∧ EvalExpr σ.E c v ∧
-      BranchTaken e.kind v ∧ σ'.E = σ.E) ∨
-   (cfg.nodeKind e.src = some .Skip ∧ e.kind = .Normal ∧ σ'.E = σ.E))
+      NodeBranches cfg e.src c ∧ EvalExpr σ c v ∧
+      BranchTaken e.kind v ∧ σ'= σ) ∨
+   (cfg.nodeKind e.src = some .Skip ∧ e.kind = .Normal ∧ σ'= σ))
 
 /-- A non-edge-consuming TIP transition: a CEK step that does not
     advance the program counter (TIP's `StepN.stutter`). We only
     keep the env-preservation witness. -/
-def tipLStutter (_cfg : CFG) (_G : AnalysisCFG NodeID Edge)
-    (_n : NodeID) (σ σ' : CEK) : Prop :=
-  σ'.E = σ.E
+def tipLStutter (σ σ' : State) : Prop :=
+  σ' = σ
 
 /-- A `LangSem` instance for a fixed TIP CFG. -/
-def tipLangSem (cfg : CFG) : LangSem NodeID Edge CEK where
-  LStep G e σ σ'      := tipLStep cfg G e σ σ'
-  LStutter G n σ σ'   := tipLStutter cfg G n σ σ'
-  IsInitial _G σ      := σ.IsInitial
-  LStep_edge_mem := by
-    intro _G _e _σ _σ' h; exact h.1
+def tipLangSem (cfg : CFG) : LangSem NodeID Edge State where
+  LStep G e σ σ'    := tipLStep cfg G e σ σ'
+  LStutter G n σ σ' := tipLStutter σ σ'
+  LStep_edge_mem    := by grind [tipLStep]
 
 /-! ## Bridge: TIP's `StepsN` -> generic `LSteps` -/
 
@@ -102,15 +99,15 @@ theorem stepsN_to_lsteps {cfg : CFG} {G : AnalysisCFG NodeID Edge}
     (hsrc : ∀ e, G.srcOf e = e.src) (hdst : ∀ e, G.dstOf e = e.dst)
     {n n' : Nat} {h : n < cfg.nodes.length} {h' : n' < cfg.nodes.length}
     {σ σ' : CEK} (hsteps : StepsN cfg h σ h' σ') :
-    letI : LangSem NodeID Edge CEK := tipLangSem cfg
-    LSteps G n σ n' σ' := by
-  letI : LangSem NodeID Edge CEK := tipLangSem cfg
+    letI : LangSem NodeID Edge State := tipLangSem cfg
+    LSteps G n σ.E n' σ'.E := by
+  letI : LangSem NodeID Edge State := tipLangSem cfg
   induction hsteps with
   | refl _ _ => exact LSteps.refl _ _
   | @step n n₁ n' _hn _hn₁ _hn' _σ _σ₁ _σ' hsn _hssn ih =>
     cases hsn with
     | stutter _hn _hstep hE =>
-      exact LSteps.stut (show tipLStutter cfg G n _ _ from hE) ih
+      exact LSteps.stut (show tipLStutter _ _ from hE) ih
     | mutate _hn _hn' x e' v _hstep hassign heval _hedge hE =>
       obtain ⟨k, hedge_cfg⟩ := _hedge
       let edge : Edge := ⟨n, n₁, k⟩
@@ -142,7 +139,7 @@ theorem stepsN_to_lsteps {cfg : CFG} {G : AnalysisCFG NodeID Edge}
   | @skipBridge n n₁ n' _hn _hn₁ _hn' σ _σ' hskip hedge _hssn ih =>
     let edge : Edge := ⟨n, n₁, .Normal⟩
     have hmem_G : edge ∈ G.edges := hedges ▸ hedge
-    have hLStep : tipLStep cfg G edge σ σ :=
+    have hLStep : tipLStep cfg G edge σ.E σ.E :=
       ⟨hmem_G, hsrc edge, hdst edge,
         Or.inr (Or.inr ⟨hskip, rfl, rfl⟩)⟩
     refine LSteps.step (g := G) (e := edge) hLStep ?_ (hsrc edge)

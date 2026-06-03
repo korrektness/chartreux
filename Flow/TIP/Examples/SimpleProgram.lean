@@ -23,7 +23,7 @@ private lemma simpleCFG_wf : simpleCFG.WellFormed := by decide
 
 def sv : { l : List String // l.Nodup } := simpleCFG.vars
 
-instance instlangsem_simple : LangSem NodeID Edge CEK := tipLangSem simpleCFG
+instance instlangsem_simple : LangSem NodeID Edge State := tipLangSem simpleCFG
 
 /-- The bundled CP analysis result on `simpleCFG`. -/
 def simpleResult :
@@ -34,10 +34,10 @@ def simpleResult :
 
 theorem cp_correct_reachable :
     letI := tipLangSem simpleCFG
-    ∀ {n : NodeID} {σ : CEK},
-      Reachable (forCFG_of_wf simpleCFG simpleCFG_wf) n σ ->
-      cpβ_corr simpleCFG (simpleResult.inFacts n) σ := by
-  letI : LangSem NodeID Edge CEK := tipLangSem simpleCFG
+    ∀ {n : NodeID} {σ : State},
+      Reachable (forCFG_of_wf simpleCFG simpleCFG_wf) n σ State.isInit ->
+      cpβ_corr (simpleResult.inFacts n) σ := by
+  letI : LangSem NodeID Edge State := tipLangSem simpleCFG
   intro n σ hreach
   exact cp_reachable_correct sv.prop simpleCFG simpleCFG_wf hreach
 
@@ -63,7 +63,7 @@ def loopy : Stmt :=
 
 def loopyCFG : CFG := CFG.ofStmt loopy
 
-instance instlangsem_loop : LangSem NodeID Edge CEK := tipLangSem loopyCFG
+instance instlangsem_loop : LangSem NodeID Edge State := tipLangSem loopyCFG
 
 private lemma loopyCFG_wf : loopyCFG.WellFormed := by decide
 
@@ -77,10 +77,10 @@ def loopyResult :
 
 theorem loopy_cp_correct :
     letI := tipLangSem loopyCFG
-    ∀ {n : NodeID} {σ : CEK},
-      Reachable (forCFG_of_wf loopyCFG loopyCFG_wf) n σ ->
-      cpβ_corr loopyCFG (loopyResult.inFacts n) σ := by
-  letI : LangSem NodeID Edge CEK := tipLangSem loopyCFG
+    ∀ {n : NodeID} {σ : State},
+      Reachable (forCFG_of_wf loopyCFG loopyCFG_wf) n σ State.isInit ->
+      cpβ_corr (loopyResult.inFacts n) σ := by
+  letI : LangSem NodeID Edge State := tipLangSem loopyCFG
   intro n σ hreach
   exact cp_reachable_correct loopyVars.prop loopyCFG loopyCFG_wf hreach
 

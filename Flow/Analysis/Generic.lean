@@ -25,7 +25,6 @@ class LangSem (Node Edge State : Type)
     [DecidableEq Node] [DecidableEq Edge] where
   LStep : AnalysisCFG Node Edge -> Edge -> State -> State -> Prop
   LStutter : AnalysisCFG Node Edge -> Node -> State -> State -> Prop
-  IsInitial : AnalysisCFG Node Edge -> State -> Prop
   LStep_edge_mem :
     ∀ {g : AnalysisCFG Node Edge} {e : Edge} {σ σ' : State},
       LStep g e σ σ' -> e ∈ g.edges
@@ -68,9 +67,9 @@ end LSteps
 
 structure DFASemantics [LangSem Node Edge State] (A : DFA Node Edge) where
   Corr : A.L -> State -> Prop
+  isInit : State -> Prop
   preserve_entry :
-    ∀ {g : AnalysisCFG Node Edge} {σ : State},
-      LangSem.IsInitial g σ -> Corr A.entry σ
+    ∀ {σ : State}, isInit σ -> Corr A.entry σ
   preserve_step :
     ∀ {g : AnalysisCFG Node Edge} {e : Edge} {σ σ' : State} {ℓ : A.L},
       LangSem.LStep g e σ σ' -> Corr ℓ σ -> Corr (A.transferAlong g e ℓ) σ'
@@ -130,9 +129,9 @@ theorem steps_preserves_corr
 
 /-- State `σ` is `Reachable` if there's an initial state `σ₀` such that a
     chain of steps exists from `σ₀` to `σ`. -/
-def Reachable [LangSem Node Edge State]
-    (g : AnalysisCFG Node Edge) (n : Node) (σ : State) : Prop :=
-  ∃ σ₀ : State, LangSem.IsInitial g σ₀ ∧ LSteps g g.entry σ₀ n σ
+def Reachable [LangSem Node Edge State] (g : AnalysisCFG Node Edge)
+    (n : Node) (σ : State) (isInit : State -> Prop) : Prop :=
+  ∃ σ₀ : State, isInit σ₀ ∧ LSteps g g.entry σ₀ n σ
 
 /-- If state σ' is `Reachable`, then the analysis result at the node
     corresponding to it is correct.
@@ -148,7 +147,7 @@ theorem reachable_corr
     (hpf : PostFixpoint A absorbs g rd)
     (hentry : absorbs A.entry (rd g.entry))
     {n : Node} {σ : State}
-    (hreach : Reachable g n σ) :
+    (hreach : Reachable g n σ S.isInit) :
     S.Corr (rd n) σ := by
   obtain ⟨σ₀, hinit, hsteps⟩ := hreach
   have h_entry : S.Corr A.entry σ₀ := S.preserve_entry hinit
