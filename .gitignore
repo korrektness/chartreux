@@ -3,3 +3,4 @@
 /lean_packages/*
 !/lean_packages/manifest.json
 **/.DS_Store
+.mcp.json
