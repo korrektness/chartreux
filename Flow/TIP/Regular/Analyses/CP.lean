@@ -529,7 +529,7 @@ def cpAnalyzeCFG (vars : List String) (hnd : vars.Nodup)
   letI : LangSem NodeID Edge State := tipLangSem cfg 
   let G := forCFG_of_wf cfg hwf
   have hentry_mem : G.entry ∈ G.nodes := by
-    simpa [G, forCFG_of_wf, forCFG, List.mem_range] using hwf.1
+    exact List.mem_range.mpr hwf.1
   have hno_entry : ∀ e ∈ G.edges, G.dstOf e ≠ G.entry := by
     intro e he; exact hwf.2.2.2 e he
   Flow.analyze (cpAnalysis vars hnd cfg) G hentry_mem hno_entry

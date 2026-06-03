@@ -537,25 +537,6 @@ end CFGBuilder
 
 /-! ## High-level CFG conveniences -/
 
-private theorem List.mem_eraseDups {α} [BEq α] [LawfulBEq α] :
-    ∀ (l : List α) (a : α), a ∈ l.eraseDups ↔ a ∈ l
-  | [], _ => by simp [List.eraseDups]
-  | h :: t, a => by
-    rw [List.eraseDups_cons]
-    simp only [List.mem_cons]
-    rw [List.mem_eraseDups (t.filter _) a, List.mem_filter]
-    constructor
-    · rintro (rfl | ⟨ha, _⟩)
-      · exact Or.inl rfl
-      · exact Or.inr ha
-    · rintro (rfl | ha)
-      · exact Or.inl rfl
-      · by_cases heq : a = h
-        · exact Or.inl heq
-        · refine Or.inr ⟨ha, ?_⟩
-          simp [heq]
-termination_by l _ => l.length
-decreasing_by grind [List.length_filter_le]
 
 private theorem List.eraseDups_nodup {α} [BEq α] [LawfulBEq α] :
     ∀ l : List α, l.eraseDups.Nodup
