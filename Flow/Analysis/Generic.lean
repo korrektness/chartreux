@@ -30,8 +30,8 @@ class LangSem (Node Edge State : Type)
       LStep g e σ σ' -> e ∈ g.edges
 
 /-- RTC of `LStep` along stutter edges. -/
-inductive LSteps [LangSem Node Edge State]
-    (g : AnalysisCFG Node Edge) : Node -> State -> Node -> State -> Prop where
+inductive LSteps [LangSem Node Edge State] (g : AnalysisCFG Node Edge) :
+    Node -> State -> Node -> State -> Prop where
   | refl  (n : Node) (σ : State) : LSteps g n σ n σ
   | step  {e : Edge} {n n'' : Node} {σ σ' σ'' : State} :
       LangSem.LStep g e σ σ' ->
@@ -109,8 +109,7 @@ theorem steps_preserves_corr
     [LangSem Node Edge State]
     {A : DFA Node Edge} (S : DFASemantics A)
     {absorbs : A.L -> A.L -> Prop}
-    (mono_absorb :
-      ∀ {ℓ ℓ' : A.L} {σ : State},
+    (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State},
         absorbs ℓ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
     {g : AnalysisCFG Node Edge} {rd : Node -> A.L}
     (hpf : PostFixpoint A absorbs g rd)

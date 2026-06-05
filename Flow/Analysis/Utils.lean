@@ -1,4 +1,5 @@
 import Mathlib.Tactic.Lemma
+import Mathlib.Data.List.Nodup
 
 namespace Utils
 
@@ -26,5 +27,17 @@ lemma sum_map_update_lt {B : Type} [DecidableEq B]
       refine Nat.add_lt_add_of_lt_of_le hlt ?_
       exact sum_map_update_le t f n nv (by grind)
     case neg => grind
+
+theorem List.eraseDups_nodup {α} [BEq α] [LawfulBEq α] :
+    ∀ l : List α, l.eraseDups.Nodup
+  | [] => by exact List.nodup_nil
+  | h :: t => by
+    rw [List.eraseDups_cons]
+    refine List.Nodup.cons ?_ (List.eraseDups_nodup _)
+    intro hmem
+    rw [List.mem_eraseDups, List.mem_filter] at hmem
+    grind
+termination_by l => l.length
+decreasing_by grind [List.length_filter_le]
 
 end Utils

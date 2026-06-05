@@ -288,28 +288,8 @@ private lemma stepsN_seqMid_chain
       ih s₂' K' h_eq hk_m_skip h_m_bound
     refine ⟨m, h_m, ?_, hloc_m⟩
     exact .skipBridge h_n' h_m_bound h_m hk_n' hedge hsteps_inner
-  | nil =>
-    intro s₂' K' h_eq _ _; cases h_eq
-  | assignK _ _ _ _ =>
-    intro s₂' K' h_eq _ _; cases h_eq
-  | declK _ _ _ _ =>
-    intro s₂' K' h_eq _ _; cases h_eq
-  | ifKT _ _ _ _ _ _ =>
-    intro s₂' K' h_eq _ _; cases h_eq
-  | ifKF _ _ _ _ _ =>
-    intro s₂' K' h_eq _ _; cases h_eq
-  | whileKT _ _ _ _ _ =>
-    intro s₂' K' h_eq _ _; cases h_eq
-  | whileKF _ _ _ _ =>
-    intro s₂' K' h_eq _ _; cases h_eq
-  | whileBackK _ _ _ =>
-    intro s₂' K' h_eq _ _; cases h_eq
-  | binOpLK _ _ =>
-    intro s₂' K' h_eq _ _; cases h_eq
-  | binOpRK _ _ =>
-    intro s₂' K' h_eq _ _; cases h_eq
-  | _ => trivial
-
+  | _ => grind
+    
 /-- Mirror of `stepsN_seqMid_chain` for the `WhileD` step: peel a
     chain of bridges ending in a `whileBackK` frame. -/
 private lemma stepsN_whileD_chain
@@ -348,27 +328,7 @@ private lemma stepsN_whileD_chain
       ih c' b' K' h_eq hk_m_skip h_m_bound
     refine ⟨m, h_m, ?_, hloc_m⟩
     exact .skipBridge h_n' h_m_bound h_m hk_n' hedge hsteps_inner
-  | nil =>
-    intro c' b' K' h_eq _ _; cases h_eq
-  | seqK _ _ _ =>
-    intro c' b' K' h_eq _ _; cases h_eq
-  | assignK _ _ _ _ =>
-    intro c' b' K' h_eq _ _; cases h_eq
-  | declK _ _ _ _ =>
-    intro c' b' K' h_eq _ _; cases h_eq
-  | ifKT _ _ _ _ _ _ =>
-    intro c' b' K' h_eq _ _; cases h_eq
-  | ifKF _ _ _ _ _ =>
-    intro c' b' K' h_eq _ _; cases h_eq
-  | whileKT _ _ _ _ _ =>
-    intro c' b' K' h_eq _ _; cases h_eq
-  | whileKF _ _ _ _ =>
-    intro c' b' K' h_eq _ _; cases h_eq
-  | binOpLK _ _ =>
-    intro c' b' K' h_eq _ _; cases h_eq
-  | binOpRK _ _ =>
-    intro c' b' K' h_eq _ _; cases h_eq
-  | _ => trivial
+  | _ => grind
 
 /-- The main `step_decorate` theorem: every `Step σ σ'` from a state
     `LocatedAt g n σ` lifts to a decorated `StepsN` (a chain of `StepN`s,
@@ -417,7 +377,7 @@ theorem step_decorate {g : CFG} {n : NodeID} {σ σ' : CEK}
           rw [hv] at this
           exact this
         · exact .at_skip hskip (hv ▸ hkm)
-      | binOpL _ => simp at hKeq
+      | binOpL _
       | binOpR _ => simp at hKeq
     | @of_inr_assign _ _ _ _ _ _ _ _ _ _ hbf _ _ _ _ _ =>
       cases hbf <;> simp at hKeq

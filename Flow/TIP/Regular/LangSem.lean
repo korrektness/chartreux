@@ -83,7 +83,7 @@ def tipLStutter (σ σ' : State) : Prop :=
 /-- A `LangSem` instance for a fixed TIP CFG. -/
 def tipLangSem (cfg : CFG) : LangSem NodeID Edge State where
   LStep G e σ σ'    := tipLStep cfg G e σ σ'
-  LStutter G n σ σ' := tipLStutter σ σ'
+  LStutter _ _ σ σ' := tipLStutter σ σ'
   LStep_edge_mem    := by grind [tipLStep]
 
 /-! ## Bridge: TIP's `StepsN` -> generic `LSteps` -/

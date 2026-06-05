@@ -1,4 +1,5 @@
 import Flow.TIP.Defs
+import Flow.Analysis.Utils
 import Mathlib.Tactic.Lemma
 import Mathlib.Data.List.Nodup
 
@@ -92,7 +93,8 @@ end BuilderInv
 /-! ## `BuildSpec` -/
 
 /-- Witness that `⟨b, s⟩ -> b'` -/
-inductive BuildSpec : CFGBuilder -> Stmt -> CFGBuilder -> NodeID -> NodeID -> Prop where
+inductive BuildSpec :
+    CFGBuilder -> Stmt -> CFGBuilder -> NodeID -> NodeID -> Prop where
 | skip (b : CFGBuilder) :
     BuildSpec b .Skip (b.addNode .Skip).fst b.nextID b.nextID
 | assign (b : CFGBuilder) (x : String) (e : Expr) :
@@ -128,7 +130,8 @@ inductive BuildSpec : CFGBuilder -> Stmt -> CFGBuilder -> NodeID -> NodeID -> Pr
       (let b₂ := (b₁.addNode .Skip).fst
         let nenc := b.nextID
         let nex := b₁.nextID
-        ((b₂.addEdge nenc en_b .TBranch).addEdge ex_b nenc .Normal).addEdge nenc nex .FBranch)
+        ((b₂.addEdge nenc en_b .TBranch).addEdge ex_b nenc .Normal).addEdge
+          nenc nex .FBranch)
       b.nextID b₁.nextID
 
 namespace BuildSpec
@@ -154,11 +157,10 @@ namespace BuildSpec
 theorem preserves_WF {b s b' en ex} (hbs : BuildSpec b s b' en ex)
     (hwf : BuilderInv b) : BuilderInv b' := by
   induction hbs with
-  | skip b => exact BuilderInv.addNode hwf _
-  | assign b x e =>
-    exact BuilderInv.addEdge (BuilderInv.addNode (BuilderInv.addNode hwf _) _) _ _ _
+  | skip b
+  | assign b x e
   | decl b x e =>
-    exact BuilderInv.addEdge (BuilderInv.addNode (BuilderInv.addNode hwf _) _) _ _ _
+    grind [BuilderInv.addEdge, BuilderInv.addNode]
   | seq _ _ ih₁ ih₂ =>
     have h₁ := ih₁ hwf
     have h₂ := ih₂ h₁
@@ -265,14 +267,16 @@ theorem entry_lt {b s b' en ex} (hbs : BuildSpec b s b' en ex)
   | @seq b b₁ b₂ s₁ s₂ en₁ ex₁ en₂ ex₂ _ _ ih₁ _ =>
     have := ih₁ hwf
     obtain ⟨es, h⟩ := edges_sublist (s := s₂) (by assumption)
-    have hle : b₁.cfg.nodes.length ≤ b₂.cfg.nodes.length := nodes_length_le (by assumption)
+    have hle : b₁.cfg.nodes.length ≤ b₂.cfg.nodes.length :=
+      nodes_length_le (by assumption)
     grind [addEdge_nodes]
   | @if_ b b₁ b₂ c t f en_t ex_t en_f ex_f _ _ ih_t _ =>
     -- en = b.nextID = b.cfg.nodes.length; b' adds Cond, t, f, Skip, edges
     simp [addEdge_nodes, addNode_nodes, BuilderInv] at hwf ⊢
     have hle₁ : (b.addNode (.Cond c)).fst.cfg.nodes.length ≤ b₁.cfg.nodes.length :=
       nodes_length_le (by assumption)
-    have hle₂ : b₁.cfg.nodes.length ≤ b₂.cfg.nodes.length := nodes_length_le (by assumption)
+    have hle₂ : b₁.cfg.nodes.length ≤ b₂.cfg.nodes.length :=
+      nodes_length_le (by assumption)
     simp [addNode_nodes] at hle₁
     grind
   | @while_ b b₁ c body en_b ex_b _ _ =>
@@ -296,8 +300,8 @@ theorem exit_lt {b s b' en ex} (hbs : BuildSpec b s b' en ex)
     grind [addEdge_nodes]
   | @if_ b b₁ b₂ c t f en_t ex_t en_f ex_f _ _ _ _ =>
     -- ex = b₂.nextID = b₂.cfg.nodes.length (BuilderInv b₂)
-    simp only [BuilderInv, addEdge_nodes, addNode_nodes, List.length_append, List.length_cons,
-      List.length_nil, Nat.zero_add] at hwf ⊢
+    simp only [BuilderInv, addEdge_nodes, addNode_nodes, List.length_append,
+      List.length_cons, List.length_nil, Nat.zero_add] at hwf ⊢
     have h_cond : BuilderInv (b.addNode (.Cond c)).fst := BuilderInv.addNode hwf _
     have h_t : BuilderInv b₁ := preserves_WF (by assumption) h_cond
     have h_f : BuilderInv b₂ := preserves_WF (by assumption) h_t
@@ -305,8 +309,8 @@ theorem exit_lt {b s b' en ex} (hbs : BuildSpec b s b' en ex)
     grind
   | @while_ b b₁ c body en_b ex_b hbs_b _ =>
     -- ex = b₁.nextID = b₁.cfg.nodes.length
-    simp only [BuilderInv, addEdge_nodes, addNode_nodes, List.length_append, List.length_cons,
-      List.length_nil, Nat.zero_add] at hwf ⊢
+    simp only [BuilderInv, addEdge_nodes, addNode_nodes, List.length_append,
+      List.length_cons, List.length_nil, Nat.zero_add] at hwf ⊢
     have h_cond : BuilderInv (b.addNode (.Cond c)).fst := BuilderInv.addNode hwf _
     have h_b : BuilderInv b₁ := preserves_WF hbs_b h_cond
     rw [BuilderInv] at h_b
@@ -326,7 +330,8 @@ theorem if_edges {b b₁ b₂ : CFGBuilder} {c : Expr} {t f : Stmt}
     (_hbs_f : BuildSpec b₁ f b₂ en_f ex_f) :
     let b₃ := (b₂.addNode .Skip).fst
     let g  := ((((b₃.addEdge b.nextID en_t .TBranch).addEdge
-      b.nextID en_f .FBranch).addEdge ex_t b₂.nextID .Normal).addEdge ex_f b₂.nextID .Normal).cfg
+      b.nextID en_f .FBranch).addEdge ex_t b₂.nextID .Normal).addEdge
+        ex_f b₂.nextID .Normal).cfg
     g.hasEdge b.nextID en_t .TBranch ∧
     g.hasEdge b.nextID en_f .FBranch ∧
     g.hasEdge ex_t b₂.nextID .Normal ∧
@@ -535,21 +540,6 @@ def buildGraphTuple (b : CFGBuilder) (s : Stmt) : CFGBuilder × (NodeID × NodeI
 
 end CFGBuilder
 
-/-! ## High-level CFG conveniences -/
-
-
-private theorem List.eraseDups_nodup {α} [BEq α] [LawfulBEq α] :
-    ∀ l : List α, l.eraseDups.Nodup
-  | [] => by exact List.nodup_nil
-  | h :: t => by
-    rw [List.eraseDups_cons]
-    refine List.Nodup.cons ?_ (List.eraseDups_nodup _)
-    intro hmem
-    rw [List.mem_eraseDups, List.mem_filter] at hmem
-    grind
-termination_by l => l.length
-decreasing_by grind [List.length_filter_le]
-
 namespace CFG
 
 def WellFormed (g : CFG) : Prop :=
@@ -574,6 +564,6 @@ def vars (g : CFG) : { l : List String // l.Nodup } :=
     | .Assign x _ => some x
     | .Decl x _   => some x
     | _           => none)
-  ⟨base.eraseDups, List.eraseDups_nodup base⟩
+  ⟨base.eraseDups, Utils.List.eraseDups_nodup base⟩
 
 end CFG
