@@ -22,6 +22,7 @@ open Flow.Analysis Flow.Analysis.Generic Flow.Eval.Refinement
 def inEdges (g : CFG) (n : NodeID) : List Edge :=
   g.edges.filter (fun e => e.dst = n)
 
+@[reducible]
 def forCFG (g : CFG)
     (hsrc : ∀ e ∈ g.edges, e.src < g.nodes.length)
     (hdst : ∀ e ∈ g.edges, e.dst < g.nodes.length) :
@@ -46,6 +47,7 @@ def forCFG (g : CFG)
     intro e he
     exact List.mem_range.mpr (hdst e he)
 
+@[reducible]
 def forCFG_of_wf (g : CFG) (h : g.WellFormed) : AnalysisCFG NodeID Edge :=
   forCFG g h.2.1 h.2.2.1
 
@@ -81,6 +83,7 @@ def tipLStutter (σ σ' : State) : Prop :=
   σ' = σ
 
 /-- A `LangSem` instance for a fixed TIP CFG. -/
+@[reducible]
 def tipLangSem (cfg : CFG) : LangSem NodeID Edge State where
   LStep G e σ σ'    := tipLStep cfg G e σ σ'
   LStutter _ _ σ σ' := tipLStutter σ σ'
