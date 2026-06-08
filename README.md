@@ -37,3 +37,26 @@ Flow/
         Located.lean, Refinement.lean   (CEK <-> CFG semantic refinement)
     Utils/ (dot printers)
 ```
+
+## Contributing
+
+You can add the following script to your `.git/hooks` folder, to check the CI for warnings before committing.
+
+```sh
+#!/bin/sh
+
+set -u
+
+# build project
+lake build --fail-level=warning
+
+if [ $? -ne 0 ]
+then
+  cat <<\EOF
+    [[ PRE-COMMIT ]] Build failed.
+EOF
+  
+  exit 1
+fi
+```
+
