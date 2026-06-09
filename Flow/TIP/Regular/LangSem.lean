@@ -33,8 +33,6 @@ def forCFG (g : CFG)
   exit  := g.exit
   srcOf e := e.src
   dstOf e := e.dst
-  succ := g.succ
-  pred := g.pred
   inEdges n := inEdges g n
   inEdges_src_mem := by
     intro n e he

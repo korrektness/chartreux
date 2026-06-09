@@ -33,10 +33,6 @@ structure CFG where
 namespace CFG
 def nodeKind (g : CFG) (n : NodeID) : Option NodeKind :=
   g.nodes[n]?
-def succ (g : CFG) (n : NodeID) : List NodeID :=
-  g.edges.filterMap (fun ⟨src, dst, _⟩ => if src = n then dst else none)
-def pred (g : CFG) (n : NodeID) : List NodeID :=
-  g.edges.filterMap (fun ⟨src, dst, _⟩ => if dst = n then src else none)
 def hasEdge (g : CFG) (src dst : NodeID) (k : EdgeKind) : Prop :=
   ⟨src, dst, k⟩ ∈ g.edges
 end CFG

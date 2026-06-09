@@ -7,7 +7,7 @@ section Basics
 infix:90 " ⊑ " => fun x y => x ⊔ y = x
 
 /-- a function is monotone if it maintains ordering of inputs. -/
-def mono_f {A : Type} [Max A] (f : A -> A) : Prop :=
+def mono_f (f : A -> A) : Prop :=
   ∀ x y, x ⊑ y -> f x ⊑ f y
 
 /-- encoding of the finite height requirement on lattices to ensure termination
@@ -173,8 +173,6 @@ class AnalysisCFG (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
   exit  : Node
   srcOf : Edge -> Node
   dstOf : Edge -> Node
-  succ  : Node -> List Node
-  pred  : Node -> List Node
   inEdges : Node -> List Edge
   inEdges_src_mem :
     ∀ n e, e ∈ inEdges n -> srcOf e ∈ nodes
