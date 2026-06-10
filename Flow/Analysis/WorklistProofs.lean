@@ -227,8 +227,9 @@ theorem worklistForward_sound_postfixpoint
     · subst hm
       simp [StateN.update]
       grind [ll.join_comm, ll.join_assoc, ll.join_idem]
-    · have ho_m : StateN.update o n (o n ⊔ nodeTransfer n.val (expectedIn g edgeTransfer entryInit o n)) m
-        = o m := by dsimp [StateN.update]; exact if_neg hm
+    · have ho_m : StateN.update o n
+        (o n ⊔ nodeTransfer n.val (expectedIn g edgeTransfer entryInit o n)) m = o m :=
+        by dsimp [StateN.update]; exact if_neg hm
       rw [ho_m]
       grind [List.mem_cons.mp]
 
@@ -273,9 +274,11 @@ theorem worklistForward_sound_fixpoint
   have hpostT : IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit
       (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit res n)) :=
     T_postfix_of_postfix g nodeTransfer edgeTransfer entryInit res hpostres
-  have hbase : StateN.le out0 (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit res n)) :=
-    fun n => by simp only [ll.join_comm]; exact hbot n _
-  have hleast : StateN.le res (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit res n)) :=
+  have hbase : StateN.le out0
+    (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit res n)) :=
+      fun n => by apply hbot
+  have hleast : StateN.le res
+    (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit res n)) :=
     worklistForward_complete_least_postfixpoint g nodeTransfer edgeTransfer entryInit out0
       wl0 _ hpostT hbase
   grind [hleast n, hpostres n, ll.join_comm]
@@ -312,7 +315,8 @@ private lemma joinPredEdges_ge_edge
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
     (outF : StateN g A) (n : NodeOf g)
     (e : Edge) (he : e ∈ g.inEdges n.val) :
-    edgeTransfer e (outF ⟨g.srcOf e, g.inEdges_src_mem n.val e he⟩) ⊑ (joinPredEdges g edgeTransfer outF n) := by
+    edgeTransfer e (outF ⟨g.srcOf e, g.inEdges_src_mem n.val e he⟩)
+      ⊑ (joinPredEdges g edgeTransfer outF n) := by
   unfold joinPredEdges
   let f : {x // x ∈ g.inEdges n.val} -> A := fun ⟨x, hx⟩ =>
     edgeTransfer x (outF ⟨g.srcOf x, g.inEdges_src_mem n.val x hx⟩)
@@ -366,8 +370,8 @@ theorem postFixpoint_of_isForwardPostFixpoint
                     (expectedIn g edgeTransfer entryInit outF m_src) ⊑ outF m_src := hpost m_src
   have h_edge : edgeTransfer e
                   (nodeTransfer (g.srcOf e)
-                    (expectedIn g edgeTransfer entryInit outF m_src)) ⊑ edgeTransfer e (outF m_src) :=
-    tm.edge_mono e _ _ h_node
+                    (expectedIn g edgeTransfer entryInit outF m_src)) ⊑ edgeTransfer e (outF m_src)
+    := tm.edge_mono e _ _ h_node
   have h_outF_eq : outF ⟨g.srcOf e, g.inEdges_src_mem m_dst.val e he_in⟩ = outF m_src := rfl
   have h_join_ge :
       edgeTransfer e (outF m_src) ⊑ joinPredEdges g edgeTransfer outF m_dst := by
