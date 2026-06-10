@@ -1,6 +1,7 @@
 import Flow.TIP.Defs
 import Flow.TIP.Regular.CFG
 import Flow.Analysis.Lattice
+import Flow.Analysis.CFG
 
 /-! # DOT (Graphviz) printer for `CFG`
 

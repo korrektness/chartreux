@@ -1,4 +1,5 @@
 import Flow.Analysis.Lattice
+import Flow.Analysis.CFG
 
 namespace Flow.Analysis.Generic
 
