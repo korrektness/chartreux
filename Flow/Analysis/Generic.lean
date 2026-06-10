@@ -10,7 +10,7 @@ structure DFA (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
   edgeTransfer : Edge -> L -> L
   entry        : L
 
-def DFA.transferAlong {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
+def DFA.transferAlong
     (A : DFA Node Edge) (g : AnalysisCFG Node Edge)
     (e : Edge) (ℓ : A.L) : A.L :=
   A.edgeTransfer e (A.nodeTransfer (g.srcOf e) ℓ)
@@ -23,17 +23,14 @@ def DFA.transferAlong {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
 -/
 class LangSem (Node Edge State : Type)
     [DecidableEq Node] [DecidableEq Edge] where
-  LStep : AnalysisCFG Node Edge -> Edge -> State -> State -> Prop
+  LStep (g : AnalysisCFG Node Edge) : EdgeOf g -> State -> State -> Prop
   LStutter : AnalysisCFG Node Edge -> Node -> State -> State -> Prop
-  LStep_edge_mem :
-    ∀ {g : AnalysisCFG Node Edge} {e : Edge} {σ σ' : State},
-      LStep g e σ σ' -> e ∈ g.edges
 
 /-- RTC of `LStep` along stutter edges. -/
 inductive LSteps [LangSem Node Edge State] (g : AnalysisCFG Node Edge) :
     Node -> State -> Node -> State -> Prop where
   | refl  (n : Node) (σ : State) : LSteps g n σ n σ
-  | step  {e : Edge} {n n'' : Node} {σ σ' σ'' : State} :
+  | step  {e : EdgeOf g} {n n'' : Node} {σ σ' σ'' : State} :
       LangSem.LStep g e σ σ' ->
       LSteps g (g.dstOf e) σ' n'' σ'' ->
       g.srcOf e = n ->
@@ -48,7 +45,7 @@ namespace LSteps
 variable [LangSem Node Edge State]
 
 /-- lift a single `LStep` to a `LSteps`. -/
-theorem single {g : AnalysisCFG Node Edge} {e : Edge}
+theorem single {g : AnalysisCFG Node Edge} {e : EdgeOf g}
     {σ σ' : State} (hstep : LangSem.LStep g e σ σ') :
     LSteps g (g.srcOf e) σ (g.dstOf e) σ' :=
   .step hstep (.refl _ _) rfl
@@ -71,7 +68,7 @@ structure DFASemantics [LangSem Node Edge State] (A : DFA Node Edge) where
   preserve_entry :
     ∀ {σ : State}, isInit σ -> Corr A.entry σ
   preserve_step :
-    ∀ {g : AnalysisCFG Node Edge} {e : Edge} {σ σ' : State} {ℓ : A.L},
+    ∀ {g : AnalysisCFG Node Edge} {e : EdgeOf g} {σ σ' : State} {ℓ : A.L},
       LangSem.LStep g e σ σ' -> Corr ℓ σ -> Corr (A.transferAlong g e ℓ) σ'
   preserve_stutter :
     ∀ {g : AnalysisCFG Node Edge} {n : Node} {σ σ' : State} {ℓ : A.L},
@@ -80,7 +77,7 @@ structure DFASemantics [LangSem Node Edge State] (A : DFA Node Edge) where
 /-- a node-indexed labelling is a post-fixpoint of `A`'s transfer if,
     for every `e`, the fact at `srcOf e` after transfer is absorbed
     by the fact at `dstOf e`. -/
-def PostFixpoint {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
+def PostFixpoint
     (A : DFA Node Edge) (absorbs : A.L -> A.L -> Prop)
     (g : AnalysisCFG Node Edge) (rd : Node -> A.L) : Prop :=
   ∀ e ∈ g.edges, absorbs (A.transferAlong g e (rd (g.srcOf e))) (rd (g.dstOf e))
@@ -98,11 +95,11 @@ theorem step_preserves_corr
         absorbs ℓ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
     {g : AnalysisCFG Node Edge} {rd : Node -> A.L}
     (hpf : PostFixpoint A absorbs g rd)
-    {e : Edge} {σ σ' : State}
+    {e : EdgeOf g} {σ σ' : State}
     (hstep : LangSem.LStep g e σ σ')
     (hcorr : S.Corr (rd (g.srcOf e)) σ) :
     S.Corr (rd (g.dstOf e)) σ' :=
-  mono_absorb (hpf e (LangSem.LStep_edge_mem hstep)) (S.preserve_step hstep hcorr)
+  mono_absorb (hpf e.val e.prop) (S.preserve_step hstep hcorr)
 
 /-- lift of step preservation through the multi-step closure of the step relation. -/
 theorem steps_preserves_corr

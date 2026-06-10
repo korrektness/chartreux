@@ -4,10 +4,10 @@ import Mathlib.Order.Notation
 variable {A : Type} [Max A] [Bot A]
 
 section Basics
-infix:90 " ⊑ " => fun x y => x ⊔ y = x
+infix:90 " ⊑ " => fun x y => x ⊔ y = y
 
 /-- a function is monotone if it maintains ordering of inputs. -/
-def mono_f {A : Type} [Max A] (f : A -> A) : Prop :=
+def mono_f (f : A -> A) : Prop :=
   ∀ x y, x ⊑ y -> f x ⊑ f y
 
 /-- encoding of the finite height requirement on lattices to ensure termination
@@ -16,7 +16,7 @@ class FiniteHeight (A : Type) [Max A] where
   height : A -> Nat
   maxHeight : Nat
   maxHeight_ub : ∀ a, height a ≤ maxHeight
-  height_join : ∀ a b, ¬(a ⊑ b) -> height a < height (a ⊔ b)
+  height_join : ∀ a b, a ⊔ b ≠ a -> height a < height (a ⊔ b)
 
 namespace FiniteHeight
 
@@ -39,10 +39,10 @@ class LatticeLike (A : Type) [Max A] [Bot A] [FiniteHeight A] where
 lemma join_ge_trans [FiniteHeight A] [ll : LatticeLike A]
     (a b c : A) (hab : a ⊑ b) (hbc : b ⊑ c) :
     a ⊑ c := by
-  calc a ⊔ c = (a ⊔ b) ⊔ c := by rw [hab]
-    _ = a ⊔ (b ⊔ c) := ll.join_assoc a b c
-    _ = a ⊔ b := by rw [hbc]
-    _ = a := hab
+  calc a ⊔ c = a ⊔ (b ⊔ c) := by rw [hbc]
+    _ = (a ⊔ b) ⊔ c := (ll.join_assoc a b c).symm
+    _ = b ⊔ c := by rw [hab]
+    _ = c := hbc
 
 variable {n : Nat}
 
@@ -154,7 +154,7 @@ instance [fh : FiniteHeight A] : FiniteHeight (Domain n A) where
 
 /-- If `A` is a `LatticeLike` type, the finite map `Domain n A` is also
     `LatticeLike`. -/
-instance {n : Nat} {A : Type} [Max A] [Bot A] [FiniteHeight A]
+instance {n : Nat} [FiniteHeight A]
     [ll : LatticeLike A] : LatticeLike (Domain n A) where
   join_comm a b := by funext i; exact ll.join_comm (a i) (b i)
   join_assoc a b c := by funext i; exact ll.join_assoc (a i) (b i) (c i)
@@ -170,11 +170,8 @@ class AnalysisCFG (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
   nodes : List Node
   edges : List Edge
   entry : Node
-  exit  : Node
   srcOf : Edge -> Node
   dstOf : Edge -> Node
-  succ  : Node -> List Node
-  pred  : Node -> List Node
   inEdges : Node -> List Edge
   inEdges_src_mem :
     ∀ n e, e ∈ inEdges n -> srcOf e ∈ nodes
@@ -186,6 +183,7 @@ class AnalysisCFG (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
 variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
 
 abbrev NodeOf (g : AnalysisCFG Node Edge) := {n // n ∈ g.nodes}
+abbrev EdgeOf (g : AnalysisCFG Node Edge) := {e // e ∈ g.edges}
 
 namespace AnalysisCFG
 /-- the list of all nodes in `g`, packaged as `NodeOf g`. -/
@@ -232,10 +230,10 @@ private lemma gmap_update_sum_lt [FiniteHeight A]
 instance {g : AnalysisCFG Node Edge} : Max (StateN g A) where
   max f g := fun n => f n ⊔ g n
 
-instance {g : AnalysisCFG Node Edge} [Bot A] : Bot (StateN g A) where
+instance {g : AnalysisCFG Node Edge} : Bot (StateN g A) where
   bot := fun _ => ⊥
 
-def le {g : AnalysisCFG Node Edge} [Max A] (f₁ f₂ : StateN g A) : Prop :=
+def le {g : AnalysisCFG Node Edge} (f₁ f₂ : StateN g A) : Prop :=
   ∀ n, (f₁ n) ⊑ (f₂ n)
 
 omit [Bot A] in
@@ -281,11 +279,11 @@ lemma le_trans {g : AnalysisCFG Node Edge} [FiniteHeight A]
 lemma le_update_join {g : AnalysisCFG Node Edge} [FiniteHeight A]
     [ll : LatticeLike A]
     (outF : StateN g A) (n : NodeOf g) (v : A) :
-    StateN.le (outF.update n (outF n ⊔ v)) outF := by
+    StateN.le outF (outF.update n (outF n ⊔ v)) := by
   intro m; simp only [StateN.update]
   split
   · rename_i h; subst h
-    rw [ll.join_assoc, ll.join_comm v, <- ll.join_assoc, ll.join_idem]
+    rw [<-ll.join_assoc, ll.join_idem]
   · exact ll.join_idem _
 
 end StateN

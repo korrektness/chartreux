@@ -12,16 +12,6 @@ private lemma ite_decEq_irrel {α : Type} {p : Prop}
     @ite α p d1 a b = @ite α p d2 a b := by
   cases d1 <;> cases d2 <;> simp_all
 
-private lemma newIn_eq_expectedIn
-    [Bot A] [Max A]
-    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
-    (entryInit : A) (outF : StateN g A) (n : NodeOf g)
-    (newIn : A)
-    (hdef : newIn = (if _ : n.val = g.entry then entryInit
-        else joinPredEdges g edgeTransfer outF n)) :
-    newIn = (expectedIn g edgeTransfer entryInit outF n) := by
-  rw [hdef]; simp only [expectedIn]; exact ite_decEq_irrel _ _ _ _
-
 private lemma foldl_join_eT_update
     [Bot A] [Max A]
     (g : AnalysisCFG Node Edge)
@@ -94,7 +84,7 @@ def IsForwardPostFixpoint [Bot A] [Max A]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A) : Prop :=
   ∀ n : NodeOf g,
-    (nodeTransfer n.val (expectedIn g edgeTransfer entryInit outF n)) ⊔ (outF n) = (outF n)
+    (nodeTransfer n.val (expectedIn g edgeTransfer entryInit outF n)) ⊑ outF n
 
 private lemma foldl_join_eT_mono
     [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
@@ -102,14 +92,14 @@ private lemma foldl_join_eT_mono
     (edge_mono : ∀ e, mono_f (edgeTransfer e))
     (outF1 outF2 : StateN g A) (hle : StateN.le outF1 outF2)
     (m : NodeOf g) (edges : List {e // e ∈ g.inEdges m.val})
-    (acc1 acc2 : A) (hacc : acc1 ⊔ acc2 = acc1) :
+    (acc1 acc2 : A) (hacc : acc1 ⊑ acc2) :
     ((edges.foldl (fun acc ⟨e, he⟩ =>
         acc ⊔ edgeTransfer e (outF1 ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) acc1) ⊔
       (edges.foldl (fun acc ⟨e, he⟩ =>
         acc ⊔ edgeTransfer e (outF2 ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) acc2))
     =
     (edges.foldl (fun acc ⟨e, he⟩ =>
-      acc ⊔ edgeTransfer e (outF1 ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) acc1) := by
+      acc ⊔ edgeTransfer e (outF2 ⟨g.srcOf e, g.inEdges_src_mem m.val e he⟩)) acc2) := by
   induction edges generalizing acc1 acc2 with
   | nil => exact hacc
   | cons e es ih =>
@@ -152,10 +142,9 @@ private lemma T_postfix_of_postfix
     IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit
       (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit f n)) := by
   intro n
-  rw [ll.join_comm]
   apply tm.node_mono
-  apply expectedIn_mono g nodeTransfer edgeTransfer entryInit f
-    (fun m => nodeTransfer m.val (expectedIn g edgeTransfer entryInit f m))
+  apply expectedIn_mono g nodeTransfer edgeTransfer entryInit
+    (fun m => nodeTransfer m.val (expectedIn g edgeTransfer entryInit f m)) f
   intro m
   simpa [ll.join_comm] using hpost m
 
@@ -166,7 +155,7 @@ theorem worklistForward_mono
     (entryInit : A) (outF : StateN g A) (wl : List (NodeOf g))
     [ll : LatticeLike A] :
     let res := worklistForward g nodeTransfer edgeTransfer entryInit outF wl
-    StateN.le res outF := by
+    StateN.le outF res := by
   induction outF, wl using worklistForward.induct g nodeTransfer edgeTransfer entryInit with
   | case1 o =>
     simp only [worklistForward, StateN.le]
@@ -176,26 +165,27 @@ theorem worklistForward_mono
     exact ih
   | case3 o n r nin nout hnout o' wl' ih =>
     rw [worklistForward, if_neg (by assumption)]
-    exact StateN.le_trans _ _ _ ih
-      (StateN.le_update_join o n _)
+    exact StateN.le_trans _ _ _
+      (StateN.le_update_join o n _) ih
 
 /-- generic invariant propagation combinator for the worklist algorithm.
     if a predicate `P` on `(outF, wl)` holds initially and is preserved by
     both the "unchanged" and "changed" branches, then `P (result, [])` holds. -/
 private theorem worklistForward_invariant
-    [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
+    [Bot A] [Max A] [DecidableEq A] [FiniteHeight A] [ll : LatticeLike A]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A) (wl : List (NodeOf g))
     (P : StateN g A -> List (NodeOf g) -> Prop)
     (hinit : P outF wl)
     (hstep_same : ∀ (o : StateN g A) (n : NodeOf g) (rest : List (NodeOf g)),
       P o (n :: rest) ->
-      let newIn := if n.val = g.entry then entryInit else joinPredEdges g edgeTransfer o n
-      o n ⊔ nodeTransfer n.val newIn = o n ->
+      let newIn := expectedIn g edgeTransfer entryInit o n
+      let newOut := nodeTransfer n.val newIn
+      newOut ⊑ o n ->
       P o rest)
     (hstep_changed : ∀ (o : StateN g A) (n : NodeOf g) (rest : List (NodeOf g)),
       P o (n :: rest) ->
-      let newIn := if n.val = g.entry then entryInit else joinPredEdges g edgeTransfer o n
+      let newIn := expectedIn g edgeTransfer entryInit o n
       let newOut := o n ⊔ nodeTransfer n.val newIn
       ¬(newOut = o n) ->
       P (o.update n newOut) (rest ++ g.succOf n)) :
@@ -206,7 +196,9 @@ private theorem worklistForward_invariant
     exact hinit
   | case2 o n r nin nout hnout ih =>
     rw [worklistForward.eq_2, if_pos (by assumption)]
-    exact ih (hstep_same o n r hinit hnout)
+    apply ih; apply hstep_same
+    · assumption
+    · rw [<-hnout, <-ll.join_assoc, ll.join_comm, <-ll.join_assoc, ll.join_idem, ll.join_comm]
   | case3 o n r nin nout hnout o' wl' ih =>
     rw [worklistForward, if_neg (by assumption)]
     exact ih (hstep_changed o n r hinit hnout)
@@ -218,37 +210,26 @@ theorem worklistForward_sound_postfixpoint
     (entryInit : A) (out0 : StateN g A) (wl0 : List (NodeOf g))
     [ll : LatticeLike A] [TransferMono nodeTransfer edgeTransfer]
     (hinv0 : ∀ m : NodeOf g, m ∉ wl0 ->
-      Eq
-        ((nodeTransfer m.val (expectedIn g edgeTransfer entryInit out0 m)) ⊔ (out0 m))
-        (out0 m)) :
+        nodeTransfer m.val (expectedIn g edgeTransfer entryInit out0 m) ⊑ out0 m) :
     let res := worklistForward g nodeTransfer edgeTransfer entryInit out0 wl0
     IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit res := by
   let P : StateN g A -> List (NodeOf g) -> Prop := fun o wl =>
     ∀ m : NodeOf g, m ∉ wl ->
-      (nodeTransfer m.val (expectedIn g edgeTransfer entryInit o m)) ⊔ (o m) = (o m)
+      nodeTransfer m.val (expectedIn g edgeTransfer entryInit o m) ⊑ o m
   intro res n
   refine worklistForward_invariant g nodeTransfer edgeTransfer entryInit
     out0 wl0 P hinv0 ?_ ?_ _ (by grind)
-  · intros o n rest hP newIn ho m hmem
-    by_cases hm : m = n <;> try grind
-    subst hm
-    have := newIn_eq_expectedIn g edgeTransfer entryInit o m newIn
-      (by simp only [dite_eq_ite, newIn])
-    simpa [ll.join_comm, <- this] using ho
+  · grind
   · intros o n rest hP newIn newOut hneq m hmem
-    let t := (o n ⊔ nodeTransfer n.val
-      (if n.val = g.entry then entryInit else joinPredEdges g edgeTransfer o n))
-    have heexp := expectedIn_update_non_pred _ edgeTransfer o entryInit n t m
-      (by grind)
-    rw [heexp] at *
+    let t := (o n ⊔ nodeTransfer n.val (expectedIn g edgeTransfer entryInit o n))
+    have heexp := expectedIn_update_non_pred g edgeTransfer o entryInit n t m (by grind)
     by_cases hm : m = n
     · subst hm
-      dsimp [newOut]
-      simp [StateN.update, expectedIn, newIn]
+      simp [StateN.update]
       grind [ll.join_comm, ll.join_assoc, ll.join_idem]
-    · have ho_m : StateN.update o n (o n ⊔ nodeTransfer n.val
-        (if n.val = g.entry then entryInit else joinPredEdges g edgeTransfer o n)) m
-        = o m := by dsimp [StateN.update]; exact if_neg hm
+    · have ho_m : StateN.update o n
+        (o n ⊔ nodeTransfer n.val (expectedIn g edgeTransfer entryInit o n)) m = o m :=
+        by dsimp [StateN.update]; exact if_neg hm
       rw [ho_m]
       grind [List.mem_cons.mp]
 
@@ -259,19 +240,18 @@ theorem worklistForward_complete_least_postfixpoint
     (entryInit : A) (outF : StateN g A) (wl : List (NodeOf g))
     [ll : LatticeLike A] [tm : TransferMono nodeTransfer edgeTransfer]
     (post : StateN g A) (hpost : IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit post)
-    (hinv : StateN.le post outF) :
+    (hinv : StateN.le outF post) :
     let res := worklistForward g nodeTransfer edgeTransfer entryInit outF wl
-    StateN.le post res := by
-  let P : StateN g A -> List (NodeOf g) -> Prop := fun o _ => StateN.le post o
+    StateN.le res post := by
+  let P : StateN g A -> List (NodeOf g) -> Prop := fun o _ => StateN.le o post
   apply worklistForward_invariant g nodeTransfer edgeTransfer entryInit outF wl P
     hinv (by grind)
   intros o m rest hP newIn hlub hneq n
   by_cases hmn : m = n
   · subst hmn
     have h_nT_mono := tm.node_mono m.val _ _ (
-      expectedIn_mono g nodeTransfer edgeTransfer entryInit post o hP m
+      expectedIn_mono g nodeTransfer edgeTransfer entryInit o post hP m
     )
-    have := newIn_eq_expectedIn g edgeTransfer entryInit o m newIn rfl
     grind [StateN.update, hP m, hpost m, ll.join_comm, ll.join_assoc]
   · have : ¬(n = m) := by exact Ne.intro fun a ↦ hmn (id (Eq.symm a))
     simp only [StateN.update, this, ↓reduceIte]
@@ -284,7 +264,7 @@ theorem worklistForward_sound_fixpoint
     (entryInit : A) (out0 : StateN g A) (wl0 : List (NodeOf g))
     [ll : LatticeLike A] [tm : TransferMono nodeTransfer edgeTransfer]
     (hinv0 : ∀ m : NodeOf g, m ∉ wl0 ->
-      Eq ((nodeTransfer m.val (expectedIn g edgeTransfer entryInit out0 m)) ⊔ (out0 m)) (out0 m))
+       nodeTransfer m.val (expectedIn g edgeTransfer entryInit out0 m) ⊑ out0 m)
     (hbot : ∀ (n : NodeOf g) v, out0 n ⊔ v = v) :
     let res := worklistForward g nodeTransfer edgeTransfer entryInit out0 wl0
     IsForwardFixpoint g nodeTransfer edgeTransfer entryInit res := by
@@ -294,32 +274,31 @@ theorem worklistForward_sound_fixpoint
   have hpostT : IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit
       (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit res n)) :=
     T_postfix_of_postfix g nodeTransfer edgeTransfer entryInit res hpostres
-  have hbase : StateN.le (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit res n))
-                out0 :=
-    fun n => by simp only [ll.join_comm]; exact hbot n _
-  have hleast : StateN.le (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit res n))
-                res :=
+  have hbase : StateN.le out0
+    (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit res n)) :=
+      fun n => by apply hbot
+  have hleast : StateN.le res
+    (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit res n)) :=
     worklistForward_complete_least_postfixpoint g nodeTransfer edgeTransfer entryInit out0
       wl0 _ hpostT hbase
-  grind [hleast n, hpostres n]
+  grind [hleast n, hpostres n, ll.join_comm]
 
 private lemma foldl_join_absorb
     [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
     {α : Type} (f : α -> A) (x : A) :
-    ∀ (l : List α) (acc : A), acc ⊔ x = acc ->
-      (l.foldl (fun a y => a ⊔ f y) acc) ⊔ x =
-        l.foldl (fun a y => a ⊔ f y) acc
+    ∀ (l : List α) (acc : A), x ⊑ acc ->
+      x ⊑ (l.foldl (fun a y => a ⊔ f y) acc)
   | [], acc, h => by simpa using h
   | hd :: tl, acc, h => by
     simp only [List.foldl_cons]
     apply foldl_join_absorb f x tl
-    rw [ll.join_assoc, ll.join_comm (f hd) x, <- ll.join_assoc, h]
+    rw [<-ll.join_assoc, h]
 
 private lemma foldl_ge_of_mem
     [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
     {α : Type} (f : α -> A)
     (l : List α) (a : α) (ha : a ∈ l) (init : A) :
-    (l.foldl (fun acc x => acc ⊔ f x) init) ⊑ f a := by
+    f a ⊑ (l.foldl (fun acc x => acc ⊔ f x) init) := by
   induction l generalizing init with
   | nil => cases ha
   | cons hd tl ih =>
@@ -328,7 +307,7 @@ private lemma foldl_ge_of_mem
     | inl heq =>
       subst heq
       apply foldl_join_absorb f (f a) tl
-      rw [ll.join_assoc, ll.join_idem]
+      rw [ll.join_comm, ll.join_assoc, ll.join_idem]
     | inr htl => exact ih htl _
 
 private lemma joinPredEdges_ge_edge
@@ -336,8 +315,8 @@ private lemma joinPredEdges_ge_edge
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
     (outF : StateN g A) (n : NodeOf g)
     (e : Edge) (he : e ∈ g.inEdges n.val) :
-    (joinPredEdges g edgeTransfer outF n) ⊑
-      edgeTransfer e (outF ⟨g.srcOf e, g.inEdges_src_mem n.val e he⟩) := by
+    edgeTransfer e (outF ⟨g.srcOf e, g.inEdges_src_mem n.val e he⟩)
+      ⊑ (joinPredEdges g edgeTransfer outF n) := by
   unfold joinPredEdges
   let f : {x // x ∈ g.inEdges n.val} -> A := fun ⟨x, hx⟩ =>
     edgeTransfer x (outF ⟨g.srcOf x, g.inEdges_src_mem n.val x hx⟩)
@@ -352,7 +331,7 @@ namespace Flow.Analysis
 variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
 
 theorem postFixpoint_of_isForwardPostFixpoint
-    {A : Type} [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
+    [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
     (g : AnalysisCFG Node Edge)
     (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     [tm : TransferMono nodeTransfer edgeTransfer]
@@ -364,7 +343,7 @@ theorem postFixpoint_of_isForwardPostFixpoint
        , nodeTransfer := nodeTransfer
        , edgeTransfer := edgeTransfer
        , entry := entryInit } : Generic.DFA Node Edge)
-      (fun a b => b ⊑ a) g
+      (fun a b => a ⊑ b) g
       (fun n =>
         if h : n ∈ g.nodes then
           expectedIn g edgeTransfer entryInit outF ⟨n, h⟩
@@ -375,36 +354,31 @@ theorem postFixpoint_of_isForwardPostFixpoint
   have hsrc_mem : g.srcOf e ∈ g.nodes := g.inEdges_src_mem _ e he_in
   let m_src : NodeOf g := ⟨g.srcOf e, hsrc_mem⟩
   let m_dst : NodeOf g := ⟨g.dstOf e, hdst_mem⟩
-  change (if h : g.dstOf e ∈ g.nodes then expectedIn g edgeTransfer entryInit outF ⟨g.dstOf e, h⟩
-          else ⊥)
-         ⊑ edgeTransfer e (nodeTransfer (g.srcOf e)
+  change edgeTransfer e (nodeTransfer (g.srcOf e)
               (if h : g.srcOf e ∈ g.nodes then
                  expectedIn g edgeTransfer entryInit outF ⟨g.srcOf e, h⟩
                else ⊥))
+        ⊑ (if h : g.dstOf e ∈ g.nodes then expectedIn g edgeTransfer entryInit outF ⟨g.dstOf e, h⟩
+          else ⊥)
   rw [dif_pos hsrc_mem, dif_pos hdst_mem]
   have h_dst_ne : m_dst.val ≠ g.entry := hno_entry_edge e he
   have h_expIn_dst : expectedIn g edgeTransfer entryInit outF m_dst
                   = joinPredEdges g edgeTransfer outF m_dst := by
     simp [expectedIn, h_dst_ne]
   rw [h_expIn_dst]
-  have h_node : outF m_src ⊑
-                  nodeTransfer (g.srcOf e)
-                    (expectedIn g edgeTransfer entryInit outF m_src) := by
-    have h := hpost m_src
-    change outF m_src ⊔ _ = outF m_src
-    rw [ll.join_comm]; exact h
-  have h_edge : edgeTransfer e (outF m_src) ⊑
-                edgeTransfer e
+  have h_node : nodeTransfer (g.srcOf e)
+                    (expectedIn g edgeTransfer entryInit outF m_src) ⊑ outF m_src := hpost m_src
+  have h_edge : edgeTransfer e
                   (nodeTransfer (g.srcOf e)
-                    (expectedIn g edgeTransfer entryInit outF m_src)) :=
-    tm.edge_mono e _ _ h_node
+                    (expectedIn g edgeTransfer entryInit outF m_src)) ⊑ edgeTransfer e (outF m_src)
+    := tm.edge_mono e _ _ h_node
   have h_outF_eq : outF ⟨g.srcOf e, g.inEdges_src_mem m_dst.val e he_in⟩ = outF m_src := rfl
   have h_join_ge :
-      joinPredEdges g edgeTransfer outF m_dst ⊑ edgeTransfer e (outF m_src) := by
+      edgeTransfer e (outF m_src) ⊑ joinPredEdges g edgeTransfer outF m_dst := by
     have h := joinPredEdges_ge_edge g edgeTransfer outF m_dst e he_in
     rw [h_outF_eq] at h
     exact h
-  exact join_ge_trans _ _ _ h_join_ge h_edge
+  exact join_ge_trans _ _ _ h_edge h_join_ge
 
 end Flow.Analysis
 
@@ -427,7 +401,7 @@ structure Analysis (Node Edge State : Type)
   le_absorbs :
     ∀ ℓ ℓ' : dfa.L,
       letI := botL; letI := maxL; letI := fhL; letI := llL
-      ℓ' ⊑ ℓ -> absorbs ℓ ℓ'
+      ℓ ⊑ ℓ' -> absorbs ℓ ℓ'
   mono_absorb :
     ∀ {ℓ ℓ' : dfa.L} {σ : State},
       absorbs ℓ ℓ' -> semantics.Corr ℓ σ -> semantics.Corr ℓ' σ

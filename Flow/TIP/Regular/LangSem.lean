@@ -30,11 +30,8 @@ def forCFG (g : CFG)
   nodes := List.range g.nodes.length
   edges := g.edges
   entry := g.entry
-  exit  := g.exit
   srcOf e := e.src
   dstOf e := e.dst
-  succ := g.succ
-  pred := g.pred
   inEdges n := inEdges g n
   inEdges_src_mem := by
     intro n e he
@@ -65,16 +62,16 @@ semantics by the original `cfg : CFG` and synthesise a `LangSem`
     that advances the program counter along a CFG edge. We only
     keep the witnesses each client analysis needs (kind + env
     relation), not the full `Step` derivation. -/
-def tipLStep (cfg : CFG) (G : AnalysisCFG NodeID Edge)
-    (e : Edge) (σ σ' : State) : Prop :=
-  e ∈ G.edges ∧ G.srcOf e = e.src ∧ G.dstOf e = e.dst ∧
+def tipLStep (cfg : CFG) (g : AnalysisCFG NodeID Edge)
+    (e : EdgeOf g) (σ σ' : State) : Prop :=
+  g.srcOf e = e.val.src ∧ g.dstOf e = e.val.dst ∧
   ((∃ x e' v,
-      NodeAssigns cfg e.src x e' ∧ EvalExpr σ e' v ∧
+      NodeAssigns cfg e.val.src x e' ∧ EvalExpr σ e' v ∧
       σ'= σ.updated x v) ∨
    (∃ c v,
-      NodeBranches cfg e.src c ∧ EvalExpr σ c v ∧
-      BranchTaken e.kind v ∧ σ'= σ) ∨
-   (cfg.nodeKind e.src = some .Skip ∧ e.kind = .Normal ∧ σ'= σ))
+      NodeBranches cfg e.val.src c ∧ EvalExpr σ c v ∧
+      BranchTaken e.val.kind v ∧ σ'= σ) ∨
+   (cfg.nodeKind e.val.src = some .Skip ∧ e.val.kind = .Normal ∧ σ'= σ))
 
 /-- A non-edge-consuming TIP transition: a CEK step that does not
     advance the program counter (TIP's `StepN.stutter`). We only
@@ -87,7 +84,6 @@ def tipLStutter (σ σ' : State) : Prop :=
 def tipLangSem (cfg : CFG) : LangSem NodeID Edge State where
   LStep G e σ σ'    := tipLStep cfg G e σ σ'
   LStutter _ _ σ σ' := tipLStutter σ σ'
-  LStep_edge_mem    := by grind [tipLStep]
 
 /-! ## Bridge: TIP's `StepsN` -> generic `LSteps` -/
 
@@ -97,13 +93,13 @@ def tipLangSem (cfg : CFG) : LangSem NodeID Edge State where
 
     Edge well-formedness for the adapter is assumed so that abstract
     `srcOf`/`dstOf` agree with TIP's `e.src`/`e.dst`. -/
-theorem stepsN_to_lsteps {cfg : CFG} {G : AnalysisCFG NodeID Edge}
-    (hedges : G.edges = cfg.edges)
-    (hsrc : ∀ e, G.srcOf e = e.src) (hdst : ∀ e, G.dstOf e = e.dst)
+theorem stepsN_to_lsteps {cfg : CFG} {g : AnalysisCFG NodeID Edge}
+    (hedges : g.edges = cfg.edges)
+    (hsrc : ∀ e, g.srcOf e = e.src) (hdst : ∀ e, g.dstOf e = e.dst)
     {n n' : Nat} {h : n < cfg.nodes.length} {h' : n' < cfg.nodes.length}
     {σ σ' : CEK} (hsteps : StepsN cfg h σ h' σ') :
     letI : LangSem NodeID Edge State := tipLangSem cfg
-    LSteps G n σ.E n' σ'.E := by
+    LSteps g n σ.E n' σ'.E := by
   letI : LangSem NodeID Edge State := tipLangSem cfg
   induction hsteps with
   | refl _ _ => exact LSteps.refl _ _
@@ -113,40 +109,36 @@ theorem stepsN_to_lsteps {cfg : CFG} {G : AnalysisCFG NodeID Edge}
       exact LSteps.stut (show tipLStutter _ _ from hE) ih
     | mutate _hn _hn' x e' v _hstep hassign heval _hedge hE =>
       obtain ⟨k, hedge_cfg⟩ := _hedge
-      let edge : Edge := ⟨n, n₁, k⟩
-      have hmem_G : edge ∈ G.edges := hedges ▸ hedge_cfg
-      have hLStep : tipLStep cfg G edge _ _ :=
-        ⟨hmem_G, hsrc edge, hdst edge,
+      let edge : EdgeOf g := ⟨⟨n, n₁, k⟩, hedges ▸ hedge_cfg⟩
+      have hLStep : tipLStep cfg g edge _ _ :=
+        ⟨hsrc edge, hdst edge,
           Or.inl ⟨x, e', v, hassign, heval, hE⟩⟩
-      refine LSteps.step (g := G) (e := edge) hLStep ?_ (hsrc edge)
-      have hd : G.dstOf edge = n₁ := hdst edge
+      refine LSteps.step (g := g) (e := edge) hLStep ?_ (hsrc edge)
+      have hd : g.dstOf edge = n₁ := hdst edge
       rw [hd]; exact ih
     | branch _hn _hn' c k v _hstep hbr hedge heval hbt hE =>
-      let edge : Edge := ⟨n, n₁, k⟩
-      have hmem_G : edge ∈ G.edges := hedges ▸ hedge
-      have hLStep : tipLStep cfg G edge _ _ :=
-        ⟨hmem_G, hsrc edge, hdst edge,
+      let edge : EdgeOf g := ⟨⟨n, n₁, k⟩, hedges ▸ hedge⟩
+      have hLStep : tipLStep cfg g edge _ _ :=
+        ⟨hsrc edge, hdst edge,
           Or.inr (Or.inl ⟨c, v, hbr, heval, hbt, hE⟩)⟩
-      refine LSteps.step (g := G) (e := edge) hLStep ?_ (hsrc edge)
-      have hd : G.dstOf edge = n₁ := hdst edge
+      refine LSteps.step (g := g) (e := edge) hLStep ?_ (hsrc edge)
+      have hd : g.dstOf edge = n₁ := hdst edge
       rw [hd]; exact ih
     | advance _hn _hn' _hstep hskip hedge hE =>
-      let edge : Edge := ⟨n, n₁, .Normal⟩
-      have hmem_G : edge ∈ G.edges := hedges ▸ hedge
-      have hLStep : tipLStep cfg G edge _ _ :=
-        ⟨hmem_G, hsrc edge, hdst edge,
+      let edge : EdgeOf g := ⟨⟨n, n₁, .Normal⟩, hedges ▸ hedge⟩
+      have hLStep : tipLStep cfg g edge _ _ :=
+        ⟨hsrc edge, hdst edge,
           Or.inr (Or.inr ⟨hskip, rfl, hE⟩)⟩
-      refine LSteps.step (g := G) (e := edge) hLStep ?_ (hsrc edge)
-      have hd : G.dstOf edge = n₁ := hdst edge
+      refine LSteps.step (g := g) (e := edge) hLStep ?_ (hsrc edge)
+      have hd : g.dstOf edge = n₁ := hdst edge
       rw [hd]; exact ih
   | @skipBridge n n₁ n' _hn _hn₁ _hn' σ _σ' hskip hedge _hssn ih =>
-    let edge : Edge := ⟨n, n₁, .Normal⟩
-    have hmem_G : edge ∈ G.edges := hedges ▸ hedge
-    have hLStep : tipLStep cfg G edge σ.E σ.E :=
-      ⟨hmem_G, hsrc edge, hdst edge,
+    let edge : EdgeOf g := ⟨⟨n, n₁, .Normal⟩, hedges ▸ hedge⟩
+    have hLStep : tipLStep cfg g edge σ.E σ.E :=
+      ⟨hsrc edge, hdst edge,
         Or.inr (Or.inr ⟨hskip, rfl, rfl⟩)⟩
-    refine LSteps.step (g := G) (e := edge) hLStep ?_ (hsrc edge)
-    have hd : G.dstOf edge = n₁ := hdst edge
+    refine LSteps.step (g := g) (e := edge) hLStep ?_ (hsrc edge)
+    have hd : g.dstOf edge = n₁ := hdst edge
     rw [hd]; exact ih
 
 end Flow.TIP
