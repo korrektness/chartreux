@@ -311,15 +311,15 @@ def cpβVal : Val -> CPVal
   | .Int n => .const n
 
 def cpβ_corr (ℓ : CPFact vars) (σ : State) : Prop :=
-  (cpβ σ : CPFact vars) ⊑ ℓ
+  cpβ σ ⊑ ℓ
 
 lemma cpβ_corr_pw {ℓ : CPFact vars} {σ : State}
-  (h : (cpβ σ : CPFact vars) ⊑ ℓ) (i : Fin vars.length) :
+  (h : cpβ σ ⊑ ℓ) (i : Fin vars.length) :
     cpβ σ i ⊑ ℓ i := by
   have := congrFun h i; simpa [Domain.max_app] using this
 
 lemma evalExpr_sound {ρ : CPFact vars} {σ : State} {e : Expr} {v : Val}
-    (hcorr : (cpβ σ : CPFact vars) ⊑ ρ)
+    (hcorr : cpβ σ ⊑ ρ)
     (heval : EvalExpr σ e v) :
     cpβVal v ⊑ evalExpr vars ρ e := by
   induction heval with
