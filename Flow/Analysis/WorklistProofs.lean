@@ -327,7 +327,7 @@ namespace Flow.Analysis
 variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
 
 theorem postFixpoint_of_isForwardPostFixpoint
-    {A : Type} [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
+    [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
     (g : AnalysisCFG Node Edge)
     (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     [tm : TransferMono nodeTransfer edgeTransfer]

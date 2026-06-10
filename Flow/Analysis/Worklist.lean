@@ -12,9 +12,7 @@ variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
 variable {A : Type}
 
 /-- transfer-function monotonicity properties for the dataflow framework. -/
-class TransferMono
-    {A : Type} [Max A]
-    {Node Edge : Type}
+class TransferMono [Max A]
     (nodeTransfer : Node -> A -> A)
     (edgeTransfer : Edge -> A -> A) where
   node_mono : ∀ n, mono_f (nodeTransfer n)

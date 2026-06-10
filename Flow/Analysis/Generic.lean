@@ -10,7 +10,7 @@ structure DFA (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
   edgeTransfer : Edge -> L -> L
   entry        : L
 
-def DFA.transferAlong {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
+def DFA.transferAlong
     (A : DFA Node Edge) (g : AnalysisCFG Node Edge)
     (e : Edge) (ℓ : A.L) : A.L :=
   A.edgeTransfer e (A.nodeTransfer (g.srcOf e) ℓ)
@@ -77,7 +77,7 @@ structure DFASemantics [LangSem Node Edge State] (A : DFA Node Edge) where
 /-- a node-indexed labelling is a post-fixpoint of `A`'s transfer if,
     for every `e`, the fact at `srcOf e` after transfer is absorbed
     by the fact at `dstOf e`. -/
-def PostFixpoint {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
+def PostFixpoint
     (A : DFA Node Edge) (absorbs : A.L -> A.L -> Prop)
     (g : AnalysisCFG Node Edge) (rd : Node -> A.L) : Prop :=
   ∀ e ∈ g.edges, absorbs (A.transferAlong g e (rd (g.srcOf e))) (rd (g.dstOf e))

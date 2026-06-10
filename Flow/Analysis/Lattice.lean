@@ -154,7 +154,7 @@ instance [fh : FiniteHeight A] : FiniteHeight (Domain n A) where
 
 /-- If `A` is a `LatticeLike` type, the finite map `Domain n A` is also
     `LatticeLike`. -/
-instance {n : Nat} {A : Type} [Max A] [Bot A] [FiniteHeight A]
+instance {n : Nat} [FiniteHeight A]
     [ll : LatticeLike A] : LatticeLike (Domain n A) where
   join_comm a b := by funext i; exact ll.join_comm (a i) (b i)
   join_assoc a b c := by funext i; exact ll.join_assoc (a i) (b i) (c i)
@@ -230,10 +230,10 @@ private lemma gmap_update_sum_lt [FiniteHeight A]
 instance {g : AnalysisCFG Node Edge} : Max (StateN g A) where
   max f g := fun n => f n ⊔ g n
 
-instance {g : AnalysisCFG Node Edge} [Bot A] : Bot (StateN g A) where
+instance {g : AnalysisCFG Node Edge} : Bot (StateN g A) where
   bot := fun _ => ⊥
 
-def le {g : AnalysisCFG Node Edge} [Max A] (f₁ f₂ : StateN g A) : Prop :=
+def le {g : AnalysisCFG Node Edge} (f₁ f₂ : StateN g A) : Prop :=
   ∀ n, (f₁ n) ⊑ (f₂ n)
 
 omit [Bot A] in
