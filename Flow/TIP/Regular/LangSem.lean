@@ -30,7 +30,6 @@ def forCFG (g : CFG)
   nodes := List.range g.nodes.length
   edges := g.edges
   entry := g.entry
-  exit  := g.exit
   srcOf e := e.src
   dstOf e := e.dst
   inEdges n := inEdges g n

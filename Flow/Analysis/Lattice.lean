@@ -170,7 +170,6 @@ class AnalysisCFG (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
   nodes : List Node
   edges : List Edge
   entry : Node
-  exit  : Node
   srcOf : Edge -> Node
   dstOf : Edge -> Node
   inEdges : Node -> List Edge
