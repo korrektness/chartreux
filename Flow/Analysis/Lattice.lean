@@ -183,6 +183,7 @@ class AnalysisCFG (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
 variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
 
 abbrev NodeOf (g : AnalysisCFG Node Edge) := {n // n ∈ g.nodes}
+abbrev EdgeOf (g : AnalysisCFG Node Edge) := {e // e ∈ g.edges}
 
 namespace AnalysisCFG
 /-- the list of all nodes in `g`, packaged as `NodeOf g`. -/

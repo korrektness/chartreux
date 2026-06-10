@@ -39,25 +39,25 @@ def Corr (R : SetState) (σ : State) : Prop :=
 def CollectingSem (cfg : CFG) :
     letI := tipLangSem cfg
     DFASemantics (State := State) (Collecting cfg) :=
-  letI : LangSem NodeID Edge State := tipLangSem cfg 
+  letI : LangSem NodeID Edge State := tipLangSem cfg
   { Corr := Corr
     isInit := State.isInit
-    preserve_entry := by intros σ hσ; cases hσ; simp [Corr, Collecting] 
+    preserve_entry := by intros σ hσ; cases hσ; simp [Corr, Collecting]
     preserve_step := by
       intro G e σ σ' R hstep hR
-      obtain ⟨_hmem, hsrc, _hdst, hcase⟩ := hstep
+      obtain ⟨hsrc, _hdst, hcase⟩ := hstep
       simp only [Collecting_transferAlong, hsrc]
       rcases hcase with ⟨x, e', v, hassign, heval, hE⟩
                        | ⟨c, _v, hbr, _heval, _hbt, hE⟩
                        | ⟨hskip, _hkind, hE⟩
-      · change (transfer cfg e.src R) σ'
+      · change (transfer cfg e.val.src R) σ'
         rcases hassign with hh | hh
         · simp only [transfer, hh]; exact ⟨σ, v, hR, heval, hE⟩
         · simp only [transfer, hh]; exact ⟨σ, v, hR, heval, hE⟩
-      · change (transfer cfg e.src R) σ'
+      · change (transfer cfg e.val.src R) σ'
         simp [NodeBranches] at hbr
         simp only [transfer, hbr, hE]; exact hR
-      · change (transfer cfg e.src R) σ'
+      · change (transfer cfg e.val.src R) σ'
         simp only [transfer, hskip, hE]; exact hR
     preserve_stutter := by
       intro _G _n σ σ' R hstut hR

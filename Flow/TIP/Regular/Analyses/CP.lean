@@ -450,21 +450,21 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
     preserve_step := by
       intro _G e σ σ' ℓ hstep hcorr
       -- Unpack the abstract `LStep` into TIP-specific witnesses.
-      obtain ⟨_hmem, hsrc, _hdst, hcase⟩ := hstep
+      obtain ⟨hsrc, _hdst, hcase⟩ := hstep
       simp only [cpDFA_transferAlong, hsrc]
       rcases hcase with ⟨x, e', v, hassign, heval, hEupd⟩
                        | ⟨c, v, hbr, _heval, _hbt, hE⟩
                        | ⟨hskip, _hkind, hE⟩
-      · exact cp_preserve_assign_case vars hnd cfg e.src ℓ σ σ' x e' v
+      · exact cp_preserve_assign_case vars hnd cfg e.val.src ℓ σ σ' x e' v
           hassign heval hEupd hcorr
       · -- Cond is identity for `cpTransfer`.
-        have htr_id : cpTransfer vars cfg e.src ℓ = ℓ := by
+        have htr_id : cpTransfer vars cfg e.val.src ℓ = ℓ := by
           funext j; unfold cpTransfer; rw [hbr]
-        simpa [hE] using cp_preserve_branch_case vars cfg e.src ℓ σ htr_id hcorr
+        simpa [hE] using cp_preserve_branch_case vars cfg e.val.src ℓ σ htr_id hcorr
       · -- Skip is identity for `cpTransfer`.
-        have htr_id : cpTransfer vars cfg e.src ℓ = ℓ := by
+        have htr_id : cpTransfer vars cfg e.val.src ℓ = ℓ := by
           funext j; unfold cpTransfer; rw [hskip]
-        simpa [hE] using cp_preserve_branch_case vars cfg e.src ℓ σ htr_id hcorr
+        simpa [hE] using cp_preserve_branch_case vars cfg e.val.src ℓ σ htr_id hcorr
     preserve_stutter := by
       intro _G _n σ σ' ℓ hstut hcorr
       -- `LStutter` boils down to `σ'.E = σ.E`.
