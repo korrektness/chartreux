@@ -39,7 +39,7 @@ def worklistForward
     [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A)
     (edgeTransfer : Edge -> A -> A) (entryInit : A)
-    (outF : StateN g A := fun _ => ⊥)
+    (outF : StateN g A := StateN.empty)
     (wl : List (NodeOf g) := g.nodes_mem) : StateN g A :=
   match wl with
   | [] => outF

@@ -173,10 +173,10 @@ def cpEdgeTransfer (vars : List String) : Edge -> CPFact vars -> CPFact vars :=
 def cpEntryInit (vars : List String) : CPFact vars := fun _ => CPVal.bot
 
 private lemma const_absorbs_inv {n : Int} {a : CPVal}
-    (h : CPVal.const n ⊔ a = CPVal.const n) : a = .bot ∨ a = .const n := by
+    (h : a ⊑ CPVal.const n) : a = .bot ∨ a = .const n := by
   cases a with
   | bot => exact Or.inl rfl
-  | const m => simp [Max.max, CPVal.join] at h; exact Or.inr (congrArg _ h.symm)
+  | const m => simp [Max.max, CPVal.join] at h; grind
   | top => simp at h
 
 private lemma evalExpr_mono (vars : List String) (ρ₁ ρ₂ : CPFact vars)
@@ -474,13 +474,10 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
         funext i; unfold cpβ; rw [hstut]
       simpa [hβ] using hcorr }
 
-def cpAbsorbs (ℓ ℓ' : CPFact vars) : Prop := ℓ ⊑ ℓ'
-
 theorem mono_absorb_cp
-    {ℓ ℓ' : CPFact vars} {σ : State} (h : cpAbsorbs ℓ ℓ')
+    {ℓ ℓ' : CPFact vars} {σ : State} (h : ℓ ⊑ ℓ')
     (hcorr : cpβ_corr ℓ σ) : cpβ_corr ℓ' σ := by
   simp only [cpβ_corr] at *
-  simp only [cpAbsorbs] at h
   funext i
   simp only [Domain.max_app]
   have hi : ℓ i ⊑ ℓ' i := by
@@ -510,10 +507,6 @@ def cpAnalysis (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
     fhL          := (inferInstance : FiniteHeight (CPFact vars))
     llL          := (inferInstance : LatticeLike (CPFact vars))
     semantics    := cpSemantics vars hnd cfg
-    absorbs      := @cpAbsorbs vars
-    absorbs_refl := by
-      intro ℓ; grind [cpAbsorbs, Domain.max_app, CPVal.join_idem]
-    le_absorbs   := fun _ _ h => h
     mono_absorb  := mono_absorb_cp (vars := vars)
     transferMono := instTransferMonoCP vars cfg }
 
@@ -545,8 +538,9 @@ theorem cp_reachable_correct
   intro n σ hreach
   let A := cpAnalysis vars hnd cfg
   let R := cpAnalyzeCFG vars hnd cfg hwf
+  letI := A.maxL
   exact Flow.Analysis.Generic.reachable_corr (A := A.dfa) A.semantics
-    (absorbs := A.absorbs) (mono_absorb := A.mono_absorb)
+    (mono_absorb := A.mono_absorb)
     (rd := R.inFacts) R.isPostFix R.inFacts_entry hreach
 
 end Flow.Analysis.CP

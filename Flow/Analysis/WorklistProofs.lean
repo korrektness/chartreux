@@ -343,7 +343,7 @@ theorem postFixpoint_of_isForwardPostFixpoint
        , nodeTransfer := nodeTransfer
        , edgeTransfer := edgeTransfer
        , entry := entryInit } : Generic.DFA Node Edge)
-      (fun a b => a ⊑ b) g
+      g
       (fun n =>
         if h : n ∈ g.nodes then
           expectedIn g edgeTransfer entryInit outF ⟨n, h⟩
@@ -396,15 +396,9 @@ structure Analysis (Node Edge State : Type)
   fhL : FiniteHeight dfa.L
   llL : LatticeLike dfa.L
   semantics : Generic.DFASemantics (State := State) dfa
-  absorbs : dfa.L -> dfa.L -> Prop
-  absorbs_refl : ∀ ℓ : dfa.L, absorbs ℓ ℓ
-  le_absorbs :
-    ∀ ℓ ℓ' : dfa.L,
-      letI := botL; letI := maxL; letI := fhL; letI := llL
-      ℓ ⊑ ℓ' -> absorbs ℓ ℓ'
   mono_absorb :
     ∀ {ℓ ℓ' : dfa.L} {σ : State},
-      absorbs ℓ ℓ' -> semantics.Corr ℓ σ -> semantics.Corr ℓ' σ
+      ℓ ⊑ ℓ' -> semantics.Corr ℓ σ -> semantics.Corr ℓ' σ
   transferMono :
       TransferMono dfa.nodeTransfer dfa.edgeTransfer
 
@@ -413,8 +407,8 @@ structure AnalysisResult {Node Edge State : Type}
     (a : Analysis Node Edge State) (g : AnalysisCFG Node Edge) where
   inFacts : Node -> a.dfa.L
   outFacts : Node -> a.dfa.L
-  isPostFix : Generic.PostFixpoint a.dfa a.absorbs g inFacts
-  inFacts_entry : a.absorbs a.dfa.entry (inFacts g.entry)
+  isPostFix : letI := a.maxL; Generic.PostFixpoint a.dfa g inFacts
+  inFacts_entry : letI := a.maxL; a.dfa.entry ⊑ (inFacts g.entry)
 
 def analyze {Node Edge State : Type}
     [DecidableEq Node] [DecidableEq Edge] [LangSem Node Edge State]
@@ -441,20 +435,17 @@ def analyze {Node Edge State : Type}
   have hpost : IsForwardPostFixpoint g nT eT entryInit res.2 :=
     worklistForward_sound_postfixpoint g nT eT entryInit (fun _ => ⊥)
       g.nodes_mem (by intro m hm; exact absurd (List.mem_attach _ m) hm)
-  have hpf : Generic.PostFixpoint a.dfa a.absorbs g inFacts := by
-    intro e he
-    exact a.le_absorbs _ _ <|
-      postFixpoint_of_isForwardPostFixpoint g nT eT entryInit res.2 hpost
-        hno_entry_edge e he
-  have hentry : a.absorbs a.dfa.entry (inFacts g.entry) := by
-    change a.absorbs a.dfa.entry
+  have hpf : Generic.PostFixpoint a.dfa g inFacts := by
+    apply postFixpoint_of_isForwardPostFixpoint <;> assumption
+  have hentry : a.dfa.entry ⊑ (inFacts g.entry) := by
+    change a.dfa.entry ⊑
       (if hn : g.entry ∈ g.nodes then
          expectedIn g eT entryInit res.2 ⟨g.entry, hn⟩
        else ⊥)
     rw [dif_pos hentry_mem]
     unfold expectedIn
     rw [if_pos (show (⟨g.entry, hentry_mem⟩ : NodeOf g).val = g.entry from rfl)]
-    exact a.absorbs_refl _
+    apply JoinLeRefl.refl
   { inFacts := inFacts
   , outFacts := outFacts
   , isPostFix := hpf

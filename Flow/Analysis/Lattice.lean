@@ -44,6 +44,9 @@ lemma join_ge_trans [FiniteHeight A] [ll : LatticeLike A]
     _ = b ⊔ c := by rw [hab]
     _ = c := hbc
 
+instance JoinLeRefl [FiniteHeight A] [LatticeLike A] : Std.Refl (α := A) (· ⊑ ·) where
+  refl := LatticeLike.join_idem
+
 variable {n : Nat}
 
 -- ## domains
@@ -231,7 +234,7 @@ instance {g : AnalysisCFG Node Edge} : Max (StateN g A) where
   max f g := fun n => f n ⊔ g n
 
 instance {g : AnalysisCFG Node Edge} : Bot (StateN g A) where
-  bot := fun _ => ⊥
+  bot := empty
 
 def le {g : AnalysisCFG Node Edge} (f₁ f₂ : StateN g A) : Prop :=
   ∀ n, (f₁ n) ⊑ (f₂ n)
