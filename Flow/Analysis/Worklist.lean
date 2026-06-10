@@ -31,6 +31,11 @@ def joinPredEdges [Bot A] [Max A]
     acc ⊔ edgeTransfer e (outF srcNode)
   ) ⊥
 
+def expectedIn [Bot A] [Max A]
+    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
+    (entryInit : A) (outF : StateN g A) (n : NodeOf g) : A :=
+  if n.val = g.entry then entryInit else joinPredEdges g edgeTransfer outF n
+
 /-- main forward worklist algorithm. -/
 def worklistForward
     [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
@@ -41,8 +46,7 @@ def worklistForward
   match wl with
   | [] => outF
   | n :: rest =>
-      let newIn :=
-        if n.val = g.entry then entryInit else joinPredEdges g edgeTransfer outF n
+      let newIn := expectedIn g edgeTransfer entryInit outF n
       let newOut := outF n ⊔ nodeTransfer n.val newIn
       if newOut = outF n then
         worklistForward g nodeTransfer edgeTransfer entryInit outF rest
@@ -57,11 +61,6 @@ decreasing_by
   · refine Prod.Lex.left (rest ++ g.succOf n).length (n :: rest).length ?_
     apply StateN.height_update_decreases g outF n (outF n ⊔ nodeTransfer n.val newIn)
     exact FiniteHeight.height_join _ _ ‹newOut ≠ outF n›
-
-def expectedIn [Bot A] [Max A]
-    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
-    (entryInit : A) (outF : StateN g A) (n : NodeOf g) : A :=
-  if n.val = g.entry then entryInit else joinPredEdges g edgeTransfer outF n
 
 /-- run the dataflow analysis to a fixpoint, returning the per-node
     entry and exit facts. -/

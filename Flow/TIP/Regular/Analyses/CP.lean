@@ -180,9 +180,9 @@ private lemma const_absorbs_inv {n : Int} {a : CPVal}
   | top => simp at h
 
 private lemma evalExpr_mono (vars : List String) (ρ₁ ρ₂ : CPFact vars)
-    (hρ : ρ₁ ⊔ ρ₂ = ρ₁) (e : Expr) :
-    evalExpr vars ρ₁ e ⊔ evalExpr vars ρ₂ e = evalExpr vars ρ₁ e := by
-  have hpt : ∀ i, ρ₁ i ⊔ ρ₂ i = ρ₁ i := by
+    (hρ : ρ₁ ⊑ ρ₂) (e : Expr) :
+    evalExpr vars ρ₁ e ⊑ evalExpr vars ρ₂ e := by
+  have hpt : ∀ i, ρ₁ i ⊑ ρ₂ i := by
     intro i; have := congrFun hρ i; simpa [Domain.max_app] using this
   induction e with
   | Int n =>
@@ -201,7 +201,6 @@ private lemma evalExpr_mono (vars : List String) (ρ₁ ρ₂ : CPFact vars)
       rw [ha₁, ha₂] at ih₁ <;>
       rw [hb₁, hb₂] at ih₂ <;>
       simp_all [Max.max, CPVal.join]
-    grind
 
 
 /-- Helper: combine four points by interleaved join. -/
@@ -219,13 +218,12 @@ private lemma four_join_eq (a b c d : CPVal)
 private lemma cpTransfer_mono (vars : List String) (g : CFG) (n : NodeID) :
     mono_f (cpTransfer vars g n) := by
   intro ρ₁ ρ₂ hxy
-  have hpt : ∀ i, ρ₁ i ⊔ ρ₂ i = ρ₁ i := by
+  have hpt : ∀ i, ρ₁ i ⊑ ρ₂ i := by
     intro i; have := congrFun hxy i; simpa [Domain.max_app] using this
-  have hev : ∀ e, evalExpr vars ρ₁ e ⊔ evalExpr vars ρ₂ e = evalExpr vars ρ₁ e :=
+  have hev : ∀ e, evalExpr vars ρ₁ e ⊑ evalExpr vars ρ₂ e :=
     fun e => evalExpr_mono vars ρ₁ ρ₂ hxy e
   funext j
-  change (cpTransfer vars g n ρ₁) j ⊔ (cpTransfer vars g n ρ₂) j
-       = (cpTransfer vars g n ρ₁) j
+  change (cpTransfer vars g n ρ₁) j ⊑ (cpTransfer vars g n ρ₂) j
   unfold cpTransfer
   generalize hk : g.nodeKind n = nk
   cases nk with
@@ -313,17 +311,17 @@ def cpβVal : Val -> CPVal
   | .Int n => .const n
 
 def cpβ_corr (ℓ : CPFact vars) (σ : State) : Prop :=
-  ℓ ⊑ (cpβ σ : CPFact vars)
+  (cpβ σ : CPFact vars) ⊑ ℓ
 
 lemma cpβ_corr_pw {ℓ : CPFact vars} {σ : State}
-  (h : ℓ ⊑ (cpβ σ : CPFact vars)) (i : Fin vars.length) :
-    ℓ i ⊔ cpβ σ i = ℓ i := by
+  (h : (cpβ σ : CPFact vars) ⊑ ℓ) (i : Fin vars.length) :
+    cpβ σ i ⊑ ℓ i := by
   have := congrFun h i; simpa [Domain.max_app] using this
 
 lemma evalExpr_sound {ρ : CPFact vars} {σ : State} {e : Expr} {v : Val}
-    (hcorr : ρ ⊑ (cpβ σ : CPFact vars))
+    (hcorr : (cpβ σ : CPFact vars) ⊑ ρ)
     (heval : EvalExpr σ e v) :
-    evalExpr vars ρ e ⊔ cpβVal v = evalExpr vars ρ e := by
+    cpβVal v ⊑ evalExpr vars ρ e := by
   induction heval with
   | int =>
     simp [evalExpr, cpβVal, CPVal.join_idem]
@@ -335,7 +333,7 @@ lemma evalExpr_sound {ρ : CPFact vars} {σ : State} {e : Expr} {v : Val}
       | none =>
         simp
       | some i =>
-        have hi : ρ i ⊔ cpβ σ i = ρ i := cpβ_corr_pw hcorr i
+        have hi : cpβ σ i ⊑ ρ i := cpβ_corr_pw hcorr i
         have hget : vars.get i = x := vars_get_of_varIdx hxi
         have : cpβ σ i = .const n := by
           unfold cpβ
@@ -348,7 +346,6 @@ lemma evalExpr_sound {ρ : CPFact vars} {σ : State} {e : Expr} {v : Val}
       rw [ha] at ih₁ <;>
       rw [hb] at ih₂ <;>
       simp_all [Max.max, CPVal.join]
-    grind
 
 /-- The DFA closure for CP, parameterised by the underlying TIP CFG.
     The CFG is needed to read `nodeKind`. -/
@@ -446,7 +443,7 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
     preserve_entry := by
       intro σ hinit
       cases hinit
-      change cpEntryInit vars ⊑ cpβ State.empty 
+      change cpEntryInit vars ⊑ cpβ State.empty
       funext i
       simp [Domain.max_app, cpEntryInit, cpβ, State.empty]
 
@@ -477,7 +474,7 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
         funext i; unfold cpβ; rw [hstut]
       simpa [hβ] using hcorr }
 
-def cpAbsorbs (ℓ ℓ' : CPFact vars) : Prop := ℓ' ⊑ ℓ
+def cpAbsorbs (ℓ ℓ' : CPFact vars) : Prop := ℓ ⊑ ℓ'
 
 theorem mono_absorb_cp
     {ℓ ℓ' : CPFact vars} {σ : State} (h : cpAbsorbs ℓ ℓ')
@@ -486,14 +483,14 @@ theorem mono_absorb_cp
   simp only [cpAbsorbs] at h
   funext i
   simp only [Domain.max_app]
-  have hi : ℓ' i ⊔ ℓ i = ℓ' i := by
+  have hi : ℓ i ⊑ ℓ' i := by
     have := congrFun h i; simpa [Domain.max_app] using this
-  have hci : ℓ i ⊔ cpβ σ i = ℓ i := by
+  have hci : cpβ σ i ⊑ ℓ i := by
     have := congrFun hcorr i; simpa [Domain.max_app] using this
-  calc ℓ' i ⊔ cpβ σ i
-      = (ℓ' i ⊔ ℓ i) ⊔ cpβ σ i := by rw [hi]
-    _ = ℓ' i ⊔ (ℓ i ⊔ cpβ σ i) := CPVal.join_assoc ..
-    _ = ℓ' i ⊔ ℓ i := by rw [hci]
+  calc cpβ σ i ⊔ ℓ' i
+      = cpβ σ i ⊔ (ℓ i ⊔ ℓ' i) := by rw [hi]
+    _ = (cpβ σ i ⊔ ℓ i) ⊔ ℓ' i := by rw [CPVal.join_assoc]
+    _ = ℓ i ⊔ ℓ' i := by rw [hci]
     _ = ℓ' i := hi
 
 end Corr
@@ -526,7 +523,7 @@ def cpAnalyzeCFG (vars : List String) (hnd : vars.Nodup)
     (cfg : CFG) (hwf : cfg.WellFormed) :
     letI := tipLangSem cfg
     Flow.AnalysisResult (cpAnalysis vars hnd cfg) (forCFG_of_wf cfg hwf) :=
-  letI : LangSem NodeID Edge State := tipLangSem cfg 
+  letI : LangSem NodeID Edge State := tipLangSem cfg
   let G := forCFG_of_wf cfg hwf
   have hentry_mem : G.entry ∈ G.nodes := by
     exact List.mem_range.mpr hwf.1

@@ -4,7 +4,7 @@ import Mathlib.Order.Notation
 variable {A : Type} [Max A] [Bot A]
 
 section Basics
-infix:90 " ⊑ " => fun x y => x ⊔ y = x
+infix:90 " ⊑ " => fun x y => x ⊔ y = y
 
 /-- a function is monotone if it maintains ordering of inputs. -/
 def mono_f (f : A -> A) : Prop :=
@@ -16,7 +16,7 @@ class FiniteHeight (A : Type) [Max A] where
   height : A -> Nat
   maxHeight : Nat
   maxHeight_ub : ∀ a, height a ≤ maxHeight
-  height_join : ∀ a b, ¬(a ⊑ b) -> height a < height (a ⊔ b)
+  height_join : ∀ a b, a ⊔ b ≠ a -> height a < height (a ⊔ b)
 
 namespace FiniteHeight
 
@@ -39,10 +39,10 @@ class LatticeLike (A : Type) [Max A] [Bot A] [FiniteHeight A] where
 lemma join_ge_trans [FiniteHeight A] [ll : LatticeLike A]
     (a b c : A) (hab : a ⊑ b) (hbc : b ⊑ c) :
     a ⊑ c := by
-  calc a ⊔ c = (a ⊔ b) ⊔ c := by rw [hab]
-    _ = a ⊔ (b ⊔ c) := ll.join_assoc a b c
-    _ = a ⊔ b := by rw [hbc]
-    _ = a := hab
+  calc a ⊔ c = a ⊔ (b ⊔ c) := by rw [hbc]
+    _ = (a ⊔ b) ⊔ c := (ll.join_assoc a b c).symm
+    _ = b ⊔ c := by rw [hab]
+    _ = c := hbc
 
 variable {n : Nat}
 
@@ -279,11 +279,11 @@ lemma le_trans {g : AnalysisCFG Node Edge} [FiniteHeight A]
 lemma le_update_join {g : AnalysisCFG Node Edge} [FiniteHeight A]
     [ll : LatticeLike A]
     (outF : StateN g A) (n : NodeOf g) (v : A) :
-    StateN.le (outF.update n (outF n ⊔ v)) outF := by
+    StateN.le outF (outF.update n (outF n ⊔ v)) := by
   intro m; simp only [StateN.update]
   split
   · rename_i h; subst h
-    rw [ll.join_assoc, ll.join_comm v, <- ll.join_assoc, ll.join_idem]
+    rw [<-ll.join_assoc, ll.join_idem]
   · exact ll.join_idem _
 
 end StateN
