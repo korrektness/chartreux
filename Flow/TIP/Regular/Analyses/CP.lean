@@ -47,10 +47,10 @@ def join : CPVal -> CPVal -> CPVal
 instance : Max CPVal where
   max := join
 
-def height : CPVal -> Nat
-  | .bot     => 0
+def remainingHeight : CPVal -> Nat
+  | .bot     => 2
   | .const _ => 1
-  | .top     => 2
+  | .top     => 0
 
 @[simp] lemma join_bot_left (v : CPVal) : CPVal.bot ⊔ v = v := rfl
 @[simp] lemma join_bot_right (v : CPVal) : v ⊔ CPVal.bot = v := by
@@ -93,20 +93,15 @@ lemma bot_le (a : CPVal) : a ⊔ CPVal.bot = a := join_bot_right a
 
 /-- `FiniteHeight` for CPVal : bounded by 2. -/
 instance : FiniteHeight CPVal where
-  height := height
-  maxHeight := 2
-  maxHeight_ub
-    | .bot     => by simp [height]
-    | .const _ => by simp [height]
-    | .top     => by simp [height]
+  remainingHeight := remainingHeight
   height_join a b h := by
     -- `h : ¬ (a ⊔ b = a)`.  We must show `height a < height (a ⊔ b)`.
     match a, b with
     | .bot, .bot         => exact absurd rfl h
-    | .bot, .const _     => simp [height, Max.max, join]
-    | .bot, .top         => simp [height, Max.max, join]
+    | .bot, .const _     => simp [remainingHeight, Max.max, join]
+    | .bot, .top         => simp [remainingHeight, Max.max, join]
     | .const _, .bot     => exact absurd rfl h
-    | .const _, .top     => simp [height, Max.max, join]
+    | .const _, .top     => simp [remainingHeight, Max.max, join]
     | .top, .bot         => exact absurd rfl h
     | .top, .const _     => exact absurd rfl h
     | .top, .top         => exact absurd rfl h
@@ -116,7 +111,7 @@ instance : FiniteHeight CPVal where
           exfalso; apply h
           show CPVal.const a' ⊔ CPVal.const a' = CPVal.const a'
           exact CPVal.join_idem _
-        · simp [height, Max.max, join, hab]
+        · simp [remainingHeight, Max.max, join, hab]
 
 instance : LatticeLike CPVal where
   join_comm  := join_comm

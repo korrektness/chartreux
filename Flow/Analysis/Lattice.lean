@@ -13,16 +13,14 @@ def mono_f (f : A -> A) : Prop :=
 /-- encoding of the finite height requirement on lattices to ensure termination
     of Kildall's algorithm. -/
 class FiniteHeight (A : Type) [Max A] where
-  height : A -> Nat
-  maxHeight : Nat
-  maxHeight_ub : ∀ a, height a ≤ maxHeight
-  height_join : ∀ a b, a ⊔ b ≠ a -> height a < height (a ⊔ b)
+  remainingHeight : A -> Nat
+  height_join : ∀ a b, a ⊔ b ≠ a -> remainingHeight (a ⊔ b) < remainingHeight a
 
 namespace FiniteHeight
 
 omit [Bot A] in
 theorem height_le_of_join [FiniteHeight A] (a b : A) :
-    height a ≤ height (a ⊔ b) := by
+    remainingHeight (a ⊔ b) ≤ remainingHeight a := by
   by_cases h : a ⊔ b = a
   · rw [h]; apply Nat.le_refl
   · refine Nat.le_of_lt (height_join a b h)
@@ -91,22 +89,13 @@ instance [DecidableEq A] : DecidableEq (Domain n A) := fun ρ₁ ρ₂ =>
     isFalse (fun h' => h ((domainBEq_iff ρ₁ ρ₂).mpr h'))
 
 @[simp]
-def domHeight [fh : FiniteHeight A] (ρ : Domain n A) : Nat :=
-  (List.finRange n |>.map fun i => fh.height (ρ i)) |>.sum
+def domRemainingHeight [fh : FiniteHeight A] (ρ : Domain n A) : Nat :=
+  (List.finRange n |>.map fun i => fh.remainingHeight (ρ i)) |>.sum
 
 /-- If `A` is a `FiniteHeight` type, the finite map `Domain n A` is also
     `FiniteHeight`. -/
 instance [fh : FiniteHeight A] : FiniteHeight (Domain n A) where
-  height := domHeight
-  maxHeight := n * fh.maxHeight
-  maxHeight_ub ρ := by
-    induction n with
-    | zero => simp
-    | succ n ih =>
-      have := FiniteHeight.maxHeight_ub (ρ 0)
-      simp only [Nat.add_one_mul, Nat.add_comm, ge_iff_le, domHeight,
-        List.finRange_succ, List.map_cons, List.map_map]
-      exact Nat.add_le_add this (ih fun i ↦ ρ i.succ)
+  remainingHeight := domRemainingHeight
   height_join ρ₁ ρ₂ h := by
     have ⟨i, hi₁, hi₂⟩ : ∃ i, i ∈ List.finRange n ∧ ρ₁ i ⊔ ρ₂ i ≠ ρ₁ i := by
       false_or_by_contra; apply h
@@ -115,12 +104,12 @@ instance [fh : FiniteHeight A] : FiniteHeight (Domain n A) where
       simp only [List.mem_finRange, ne_eq, true_and, not_exists, Classical.not_not] at h'
       exact h' i
     suffices ∀ (l : List (Fin n)), i ∈ l ->
-        (l.map (fun j => FiniteHeight.height (ρ₁ j))).sum <
-        (l.map (fun j => FiniteHeight.height ((ρ₁ ⊔ ρ₂) j))).sum from this _ hi₁
+        (l.map (fun j => FiniteHeight.remainingHeight ((ρ₁ ⊔ ρ₂) j))).sum <
+        (l.map (fun j => FiniteHeight.remainingHeight (ρ₁ j))).sum from this _ hi₁
     intro l hmem
     have hsum_le : ∀ (l : List (Fin n)),
-        (l.map (fun j => FiniteHeight.height (ρ₁ j))).sum ≤
-        (l.map (fun j => FiniteHeight.height ((ρ₁ ⊔ ρ₂) j))).sum := by
+        (l.map (fun j => FiniteHeight.remainingHeight ((ρ₁ ⊔ ρ₂) j))).sum ≤
+        (l.map (fun j => FiniteHeight.remainingHeight (ρ₁ j))).sum := by
       intro l; induction l with
       | nil => simp
       | cons hd tl ih =>

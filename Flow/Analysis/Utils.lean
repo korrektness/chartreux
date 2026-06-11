@@ -4,8 +4,8 @@ import Mathlib.Data.List.Nodup
 namespace Utils
 
 lemma sum_map_update_le {B : Type} [DecidableEq B]
-      (l : List B) (f : B -> Nat) (n : B) (nv : Nat) (hle : f n ≤ nv) :
-    (l.map f).sum ≤ (l.map (fun x => if x = n then nv else f x)).sum := by
+      (l : List B) (f : B -> Nat) (n : B) (nv : Nat) (hle : nv ≤ f n) :
+      (l.map (fun x => if x = n then nv else f x)).sum ≤ (l.map f).sum := by
   induction l with
   | nil => grind
   | cons h t ih =>
@@ -16,8 +16,8 @@ lemma sum_map_update_le {B : Type} [DecidableEq B]
 
 lemma sum_map_update_lt {B : Type} [DecidableEq B]
       (l : List B) (f : B -> Nat) (n : B) (nv : Nat)
-      (hin : n ∈ l) (hlt : f n < nv) :
-    (l.map f).sum < (l.map (fun x => if x = n then nv else f x)).sum := by
+      (hin : n ∈ l) (hlt : nv < f n) :
+   (l.map (fun x => if x = n then nv else f x)).sum < (l.map f).sum := by
   induction l with
   | nil => cases hin
   | cons h t ih =>
