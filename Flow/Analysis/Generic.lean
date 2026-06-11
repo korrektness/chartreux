@@ -1,4 +1,5 @@
 import Flow.Analysis.Lattice
+import Flow.Analysis.CFG
 
 namespace Flow.Analysis.Generic
 
@@ -78,9 +79,10 @@ structure DFASemantics [LangSem Node Edge State] (A : DFA Node Edge) where
     for every `e`, the fact at `srcOf e` after transfer is absorbed
     by the fact at `dstOf e`. -/
 def PostFixpoint
-    (A : DFA Node Edge) (absorbs : A.L -> A.L -> Prop)
-    (g : AnalysisCFG Node Edge) (rd : Node -> A.L) : Prop :=
-  ∀ e ∈ g.edges, absorbs (A.transferAlong g e (rd (g.srcOf e))) (rd (g.dstOf e))
+    (A : DFA Node Edge)
+    (g : AnalysisCFG Node Edge) (rd : Node -> A.L)
+    [Max A.L] : Prop :=
+  ∀ e ∈ g.edges, (A.transferAlong g e (rd (g.srcOf e))) ⊑ (rd (g.dstOf e))
 
 /-- step preservation of analysis correctness: if state `σ`
     * is abstracted by the result at node `srcOf e`
@@ -89,12 +91,12 @@ def PostFixpoint
 theorem step_preserves_corr
     [LangSem Node Edge State]
     {A : DFA Node Edge} (S : DFASemantics A)
-    {absorbs : A.L -> A.L -> Prop}
+    [Max A.L]
     (mono_absorb :
       ∀ {ℓ ℓ' : A.L} {σ : State},
-        absorbs ℓ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
+        ℓ ⊑ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
     {g : AnalysisCFG Node Edge} {rd : Node -> A.L}
-    (hpf : PostFixpoint A absorbs g rd)
+    (hpf : PostFixpoint A g rd)
     {e : EdgeOf g} {σ σ' : State}
     (hstep : LangSem.LStep g e σ σ')
     (hcorr : S.Corr (rd (g.srcOf e)) σ) :
@@ -105,11 +107,11 @@ theorem step_preserves_corr
 theorem steps_preserves_corr
     [LangSem Node Edge State]
     {A : DFA Node Edge} (S : DFASemantics A)
-    {absorbs : A.L -> A.L -> Prop}
+    [Max A.L]
     (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State},
-        absorbs ℓ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
+        ℓ ⊑ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
     {g : AnalysisCFG Node Edge} {rd : Node -> A.L}
-    (hpf : PostFixpoint A absorbs g rd)
+    (hpf : PostFixpoint A g rd)
     {n n' : Node} {σ σ' : State}
     (hsteps : LSteps g n σ n' σ')
     (hcorr : S.Corr (rd n) σ) :
@@ -135,13 +137,13 @@ def Reachable [LangSem Node Edge State] (g : AnalysisCFG Node Edge)
 theorem reachable_corr
     [LangSem Node Edge State]
     {A : DFA Node Edge} (S : DFASemantics A)
-    {absorbs : A.L -> A.L -> Prop}
+    [Max A.L]
     (mono_absorb :
       ∀ {ℓ ℓ' : A.L} {σ : State},
-        absorbs ℓ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
+        ℓ ⊑ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
     {g : AnalysisCFG Node Edge} {rd : Node -> A.L}
-    (hpf : PostFixpoint A absorbs g rd)
-    (hentry : absorbs A.entry (rd g.entry))
+    (hpf : PostFixpoint A g rd)
+    (hentry : A.entry ⊑ (rd g.entry))
     {n : Node} {σ : State}
     (hreach : Reachable g n σ S.isInit) :
     S.Corr (rd n) σ := by

@@ -8,6 +8,7 @@ import Flow.TIP.Regular.Analyses.CP
 import Flow.TIP.Regular.Analyses.Collection
 
 import Flow.Analysis.Lattice
+import Flow.Analysis.CFG
 import Flow.Analysis.Worklist
 import Flow.Analysis.WorklistProofs
 import Flow.Analysis.Generic
