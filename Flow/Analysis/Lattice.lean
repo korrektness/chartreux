@@ -212,4 +212,59 @@ instance : LatticeLike (Option L) where
 
 end Option
 
+-- `Fin n` has no bottom element so it is not `LatticeLike`,
+-- but we can make `Option.none` the bottom element of `Option (Fin n)`.
+section OptionFin
+
+variable (n : ℕ)
+
+instance : Max (Option (Fin n)) where
+  max
+  | none, x => x
+  | x, none => x
+  | some i, some j => some (if i.val ≤ j.val then j else i)
+
+instance : Bot (Option (Fin n)) where
+  bot := none
+
+instance : FiniteHeight (Option (Fin n)) where
+  remainingHeight
+  | none => n
+  | some i => n - 1 - i
+  height_join := by
+    intro x y hmax
+    cases x with
+    | none =>
+      cases y with
+      | none => contradiction
+      | some j =>
+        simp only [max] at *
+        omega
+    | some i =>
+      cases y with
+      | none =>
+        simp [max] at hmax
+      | some j =>
+        simp [max] at *
+        split_ifs <;> omega
+
+instance : LatticeLike (Option (Fin n)) where
+  join_comm := by
+    intro x y
+    cases x <;> cases y <;> simp only [max]
+    split_ifs <;> congr <;> omega
+  join_assoc := by
+    intro x y z
+    cases x <;> cases y <;> cases z <;> simp only [max]
+    split_ifs <;> congr <;> omega
+  join_idem := by
+    intro x
+    cases x <;> simp only [max]
+    split_ifs <;> rfl
+  bot_le := by
+    intro x
+    cases x <;> rfl
+
+end OptionFin
+
 end Basics
