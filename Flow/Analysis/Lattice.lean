@@ -33,7 +33,7 @@ class LatticeLike (A : Type) [Max A] [Bot A] [FiniteHeight A] where
   join_comm : ∀ a b : A, a ⊔ b = b ⊔ a
   join_assoc : ∀ a b c : A, (a ⊔ b) ⊔ c = a ⊔ (b ⊔ c)
   join_idem : ∀ a : A, a ⊔ a = a
-  bot_le : ∀ a : A, a ⊔ ⊥ = a
+  bot_le : ∀ a : A, ⊥ ⊑ a
 
 lemma join_ge_trans [FiniteHeight A] [ll : LatticeLike A]
     (a b c : A) (hab : a ⊑ b) (hbc : b ⊑ c) :
