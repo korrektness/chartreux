@@ -19,8 +19,6 @@ def DFA.transferAlong
 /-- Generic wrapper for semantics over the CFG.
     * `LStep` : proper transition relation
     * `LStutter` : silent transition relation
-    * `IsInitial` : predicate for selecting the initial states
-    * `LStep_edge_mem` : every step follows a recognized edge.
 -/
 class LangSem (Node Edge State : Type)
     [DecidableEq Node] [DecidableEq Edge] where
