@@ -48,7 +48,7 @@ def forCFG (g : CFG)
 
 @[reducible]
 def forCFG_of_wf (g : CFG) (h : g.WellFormed) : AnalysisCFG NodeID Edge :=
-  forCFG g h.2.1 h.2.2.1 h.1
+  forCFG g h.2.1 h.2.2 h.1
 
 /-! ## TIP `LangSem`, parameterised by the underlying TIP `CFG`
 

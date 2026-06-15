@@ -513,9 +513,7 @@ def cpAnalyzeCFG (vars : List String) (hnd : vars.Nodup)
     Flow.AnalysisResult (cpAnalysis vars hnd cfg) (forCFG_of_wf cfg hwf) :=
   letI : LangSem NodeID Edge State := tipLangSem cfg
   let G := forCFG_of_wf cfg hwf
-  have hno_entry : ∀ e ∈ G.edges, G.dstOf e ≠ G.entry := by
-    intro e he; exact hwf.2.2.2 e he
-  Flow.analyze (cpAnalysis vars hnd cfg) G hno_entry
+  Flow.analyze (cpAnalysis vars hnd cfg) G
 
 /-- Turn-key correctness for the bundled CP analysis: at every reachable
     program point, the computed in-fact correctly approximates the
