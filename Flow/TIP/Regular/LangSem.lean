@@ -25,7 +25,8 @@ def inEdges (g : CFG) (n : NodeID) : List Edge :=
 @[reducible]
 def forCFG (g : CFG)
     (hsrc : ∀ e ∈ g.edges, e.src < g.nodes.length)
-    (hdst : ∀ e ∈ g.edges, e.dst < g.nodes.length) :
+    (hdst : ∀ e ∈ g.edges, e.dst < g.nodes.length)
+    (hentry : g.entry < g.nodes.length) :
     AnalysisCFG NodeID Edge where
   nodes := List.range g.nodes.length
   edges := g.edges
@@ -43,10 +44,11 @@ def forCFG (g : CFG)
   dstOf_mem := by
     intro e he
     exact List.mem_range.mpr (hdst e he)
+  entry_mem := List.mem_range.mpr hentry
 
 @[reducible]
 def forCFG_of_wf (g : CFG) (h : g.WellFormed) : AnalysisCFG NodeID Edge :=
-  forCFG g h.2.1 h.2.2.1
+  forCFG g h.2.1 h.2.2.1 h.1
 
 /-! ## TIP `LangSem`, parameterised by the underlying TIP `CFG`
 

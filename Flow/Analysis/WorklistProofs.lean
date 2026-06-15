@@ -413,7 +413,6 @@ structure AnalysisResult {Node Edge State : Type}
 def analyze {Node Edge State : Type}
     [DecidableEq Node] [DecidableEq Edge] [LangSem Node Edge State]
     (a : Analysis Node Edge State) (g : AnalysisCFG Node Edge)
-    (hentry_mem : g.entry ∈ g.nodes)
     (hno_entry_edge : ∀ e ∈ g.edges, g.dstOf e ≠ g.entry) :
     AnalysisResult a g :=
   letI := a.botL
@@ -442,9 +441,9 @@ def analyze {Node Edge State : Type}
       (if hn : g.entry ∈ g.nodes then
          expectedIn g eT entryInit res.2 ⟨g.entry, hn⟩
        else ⊥)
-    rw [dif_pos hentry_mem]
+    rw [dif_pos g.entry_mem]
     unfold expectedIn
-    rw [if_pos (show (⟨g.entry, hentry_mem⟩ : NodeOf g).val = g.entry from rfl)]
+    rw [if_pos (show (⟨g.entry, g.entry_mem⟩ : NodeOf g).val = g.entry from rfl)]
     apply JoinLeRefl.refl
   { inFacts := inFacts
   , outFacts := outFacts
