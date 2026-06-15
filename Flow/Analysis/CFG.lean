@@ -47,9 +47,9 @@ omit [Bot A] in
 private lemma gmap_height_update_eq [FiniteHeight A]
     {g : AnalysisCFG Node Edge}
     (nodes : List (NodeOf g)) (outF : StateN g A) (node : NodeOf g) (newOut : A) :
-    (nodes.map (fun x => FiniteHeight.height (StateN.update outF node newOut x))) =
-       (nodes.map (fun x => if x = node then FiniteHeight.height newOut
-        else FiniteHeight.height (outF x))) := by
+    (nodes.map (fun x => FiniteHeight.remainingHeight (StateN.update outF node newOut x))) =
+       (nodes.map (fun x => if x = node then FiniteHeight.remainingHeight newOut
+        else FiniteHeight.remainingHeight (outF x))) := by
   congr 1; ext x; simp [StateN.update]; split <;> rfl
 
 omit [Bot A] in
@@ -57,12 +57,13 @@ private lemma gmap_update_sum_lt [FiniteHeight A]
     {g : AnalysisCFG Node Edge}
     (nodes : List (NodeOf g)) (outF : StateN g A) (node : NodeOf g) (newOut : A)
     (hn : node ∈ nodes)
-    (hlt : FiniteHeight.height (outF node) < FiniteHeight.height newOut) :
-    (nodes.map (fun x => FiniteHeight.height (outF x))).sum
-    < (nodes.map (fun x => FiniteHeight.height (StateN.update outF node newOut x))).sum := by
+    (hlt : FiniteHeight.remainingHeight newOut < FiniteHeight.remainingHeight (outF node)) :
+    (nodes.map (fun x => FiniteHeight.remainingHeight (StateN.update outF node newOut x))).sum
+    < (nodes.map (fun x => FiniteHeight.remainingHeight (outF x))).sum := by
   rw [gmap_height_update_eq]
   exact Utils.sum_map_update_lt nodes
-    (fun x => FiniteHeight.height (outF x)) node (FiniteHeight.height newOut) hn hlt
+    (fun x => FiniteHeight.remainingHeight (outF x)) node
+    (FiniteHeight.remainingHeight newOut) hn hlt
 
 /- pointwise instances of max/bot/le -/
 instance {g : AnalysisCFG Node Edge} : Max (StateN g A) where
@@ -77,36 +78,16 @@ def le {g : AnalysisCFG Node Edge} (f₁ f₂ : StateN g A) : Prop :=
 omit [Bot A] in
 /-- height of a `StateN`, termination condition for the worklist algorithm. -/
 def height [fh : FiniteHeight A] (g : AnalysisCFG Node Edge) (f : StateN g A) : Nat :=
-  fh.maxHeight * g.nodes.length
-    - (g.nodes.attach.map (fun x => fh.height (f x))).sum
-
-omit [Bot A] in
-lemma sum_height_le_max [fh : FiniteHeight A]
-    {g : AnalysisCFG Node Edge} (l : List (NodeOf g)) (f : StateN g A) :
-    (l.map (fun x => fh.height (f x))).sum ≤ fh.maxHeight * l.length := by
-  induction l with
-  | nil => simp
-  | cons h t ih =>
-    simp only [List.map_cons, List.sum_cons, List.length_cons]
-    calc
-      _ ≤ fh.maxHeight + (t.map (fun x ↦ fh.height (f x))).sum := by
-        simp [fh.maxHeight_ub]
-      _ ≤ fh.maxHeight + fh.maxHeight * t.length := by
-        simp [ih]
-      _ ≤ fh.maxHeight * (t.length + 1) := by
-        grind
+    (g.nodes.attach.map (fun x => fh.remainingHeight (f x))).sum
 
 omit [Bot A] in
 theorem height_update_decreases [FiniteHeight A]
     (g : AnalysisCFG Node Edge) (outF : StateN g A) (node : NodeOf g) (newOut : A)
-    (hlt : FiniteHeight.height (outF node) < FiniteHeight.height newOut) :
+    (hlt : FiniteHeight.remainingHeight newOut < FiniteHeight.remainingHeight (outF node)) :
     StateN.height g (StateN.update outF node newOut) < StateN.height g outF := by
   have hn : node ∈ g.nodes.attach := List.mem_attach _ _
-  have h_le := StateN.sum_height_le_max g.nodes.attach (StateN.update outF node newOut)
   have h_lt := gmap_update_sum_lt g.nodes.attach outF node newOut hn hlt
   unfold StateN.height
-  have h_len : g.nodes.length = g.nodes.attach.length := by simp
-  rw [h_len]
   omega
 
 lemma le_trans {g : AnalysisCFG Node Edge} [FiniteHeight A]
