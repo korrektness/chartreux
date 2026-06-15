@@ -33,7 +33,7 @@ class LatticeLike (A : Type) [Max A] [Bot A] [FiniteHeight A] where
   join_comm : ∀ a b : A, a ⊔ b = b ⊔ a
   join_assoc : ∀ a b c : A, (a ⊔ b) ⊔ c = a ⊔ (b ⊔ c)
   join_idem : ∀ a : A, a ⊔ a = a
-  bot_le : ∀ a : A, a ⊔ ⊥ = a
+  bot_le : ∀ a : A, ⊥ ⊑ a
 
 lemma join_ge_trans [FiniteHeight A] [ll : LatticeLike A]
     (a b c : A) (hab : a ⊑ b) (hbc : b ⊑ c) :
@@ -140,4 +140,131 @@ instance {n : Nat} [FiniteHeight A]
   bot_le a := by funext i; exact ll.bot_le (a i)
 
 end Domain
+
+-- A pointwise product lattice L₁ × L₂
+section Product
+
+variable {L₁ L₂ : Type} [Max L₁] [Max L₂] [Bot L₁] [Bot L₂]
+variable [fh₁ : FiniteHeight L₁] [fh₂ : FiniteHeight L₂]
+variable [ll₁ : LatticeLike L₁] [ll₂ : LatticeLike L₂]
+
+instance : Max (L₁ × L₂) where
+  max
+  | (a₁, b₁), (a₂, b₂) => (max a₁ a₂, max b₁ b₂)
+
+instance : Bot (L₁ × L₂) where
+  bot := (⊥, ⊥)
+
+instance : FiniteHeight (L₁ × L₂) where
+  remainingHeight
+  | (a, b) => FiniteHeight.remainingHeight a + FiniteHeight.remainingHeight b
+  height_join := by
+    intro ⟨a₁, b₁⟩ ⟨a₂, b₂⟩ hmax
+    simp only [max, ne_eq, Prod.mk.injEq, not_and] at *
+    have ne : a₁ ⊔ a₂ ≠ a₁ ∨ b₁ ⊔ b₂ ≠ b₁ := by grind
+    cases ne with
+    | inl h => grind [fh₁.height_join _ _ h, fh₂.height_le_of_join b₁ b₂]
+    | inr h => grind [fh₂.height_join _ _ h, fh₁.height_le_of_join a₁ a₂]
+
+instance : LatticeLike (L₁ × L₂) where
+  join_comm := by simp [max]; grind [ll₁.join_comm, ll₂.join_comm]
+  join_assoc := by simp [max]; grind [ll₁.join_assoc, ll₂.join_assoc]
+  join_idem := by simp [max]; grind [ll₁.join_idem, ll₂.join_idem]
+  bot_le := by simp [max]; grind [ll₁.bot_le, ll₂.bot_le]
+
+end Product
+
+-- A optional lattice `Option L`
+section Option
+
+variable {L : Type} [Max L] [Bot L]
+variable [fh : FiniteHeight L] [ll : LatticeLike L]
+
+instance : Max (Option L) where
+  max
+  | a, .none => a
+  | .none, b => b
+  | .some a, .some b => .some (max a b)
+
+instance : Bot (Option L) where
+  bot := none
+
+instance : FiniteHeight (Option L) where
+  remainingHeight
+  | .none => FiniteHeight.remainingHeight ⊥ + 1
+  | .some a => FiniteHeight.remainingHeight a
+  height_join := by
+    intro a b hmax
+    cases a <;> cases b <;>
+      simp only [max, ne_eq, not_true_eq_false, Option.some.injEq] at * <;> expose_names
+    · have h_bot : ⊥ ⊑ val := ll.bot_le val
+      have h_le := fh.height_le_of_join ⊥ val
+      rw [h_bot] at h_le
+      omega
+    · apply fh.height_join
+      assumption
+
+instance : LatticeLike (Option L) where
+  join_comm := by simp [max]; grind [ll.join_comm]
+  join_assoc := by simp [max]; grind [ll.join_assoc]
+  join_idem := by simp [max]; grind [ll.join_idem]
+  bot_le := by intro a; cases a <;> simp [max]; rfl
+
+end Option
+
+-- `Fin n` has no bottom element so it is not `LatticeLike`,
+-- but we can make `Option.none` the bottom element of `Option (Fin n)`.
+section OptionFin
+
+variable (n : ℕ)
+
+instance : Max (Option (Fin n)) where
+  max
+  | none, x => x
+  | x, none => x
+  | some i, some j => some (if i.val ≤ j.val then j else i)
+
+instance : Bot (Option (Fin n)) where
+  bot := none
+
+instance : FiniteHeight (Option (Fin n)) where
+  remainingHeight
+  | none => n
+  | some i => n - 1 - i
+  height_join := by
+    intro x y hmax
+    cases x with
+    | none =>
+      cases y with
+      | none => contradiction
+      | some j =>
+        simp only [max] at *
+        omega
+    | some i =>
+      cases y with
+      | none =>
+        simp [max] at hmax
+      | some j =>
+        simp [max] at *
+        split_ifs <;> omega
+
+instance : LatticeLike (Option (Fin n)) where
+  join_comm := by
+    intro x y
+    cases x <;> cases y <;> simp only [max]
+    split_ifs <;> congr <;> omega
+  join_assoc := by
+    intro x y z
+    cases x <;> cases y <;> cases z <;> simp only [max]
+    split_ifs <;> congr <;> omega
+  join_idem := by
+    intro x
+    cases x <;> simp only [max]
+    split_ifs <;> rfl
+  bot_le := by
+    intro x
+    cases x <;> rfl
+
+end OptionFin
+
 end Basics

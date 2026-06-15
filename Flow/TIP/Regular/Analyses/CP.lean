@@ -89,7 +89,7 @@ lemma join_idem (a : CPVal) : a ⊔ a = a := by
   | const n => simp [max, join]
   | top     => rfl
 
-lemma bot_le (a : CPVal) : a ⊔ CPVal.bot = a := join_bot_right a
+lemma bot_le (a : CPVal) : CPVal.bot ⊑ a := join_bot_left a
 
 /-- `FiniteHeight` for CPVal : bounded by 2. -/
 instance : FiniteHeight CPVal where
