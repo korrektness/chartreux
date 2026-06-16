@@ -64,10 +64,8 @@ private lemma expectedIn_update_non_pred
     (expectedIn g edgeTransfer entryInit (outF.update n v) m) =
        (expectedIn g edgeTransfer entryInit outF m) := by
   simp only [expectedIn]
-  split
-  · rfl
-  · exact joinPredEdges_update_non_pred g edgeTransfer outF n v m
-      (not_succ_no_in_edge g n m h)
+  rw [joinPredEdges_update_non_pred g edgeTransfer outF n v m
+      (not_succ_no_in_edge g n m h)]
 end Helpers
 
 /-- a mapping is a forward fixpoint if, at every node, applying the
@@ -129,9 +127,8 @@ private lemma expectedIn_mono
         (expectedIn g edgeTransfer entryInit outF2 n) := by
   simp only [expectedIn]
   split
-  · exact ll.join_idem _
-  · exact joinPredEdges_mono g edgeTransfer tm.edge_mono
-      outF1 outF2 hle n
+    <;> grind [ll.join_assoc, ll.join_idem, ll.join_comm,
+               joinPredEdges_mono g edgeTransfer tm.edge_mono outF1 outF2 hle n]
 
 private lemma T_postfix_of_postfix
     [Bot A] [Max A] [FiniteHeight A]
@@ -336,8 +333,7 @@ theorem postFixpoint_of_isForwardPostFixpoint
     (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     [tm : TransferMono nodeTransfer edgeTransfer]
     (entryInit : A) (outF : StateN g A)
-    (hpost : IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit outF)
-    (hno_entry_edge : ∀ e ∈ g.edges, g.dstOf e ≠ g.entry) :
+    (hpost : IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit outF) :
     Generic.PostFixpoint
       ({ L := A
        , nodeTransfer := nodeTransfer
@@ -361,11 +357,6 @@ theorem postFixpoint_of_isForwardPostFixpoint
         ⊑ (if h : g.dstOf e ∈ g.nodes then expectedIn g edgeTransfer entryInit outF ⟨g.dstOf e, h⟩
           else ⊥)
   rw [dif_pos hsrc_mem, dif_pos hdst_mem]
-  have h_dst_ne : m_dst.val ≠ g.entry := hno_entry_edge e he
-  have h_expIn_dst : expectedIn g edgeTransfer entryInit outF m_dst
-                  = joinPredEdges g edgeTransfer outF m_dst := by
-    simp [expectedIn, h_dst_ne]
-  rw [h_expIn_dst]
   have h_node : nodeTransfer (g.srcOf e)
                     (expectedIn g edgeTransfer entryInit outF m_src) ⊑ outF m_src := hpost m_src
   have h_edge : edgeTransfer e
@@ -378,7 +369,11 @@ theorem postFixpoint_of_isForwardPostFixpoint
     have h := joinPredEdges_ge_edge g edgeTransfer outF m_dst e he_in
     rw [h_outF_eq] at h
     exact h
-  exact join_ge_trans _ _ _ h_edge h_join_ge
+  have h_expIn_ge :
+    joinPredEdges g edgeTransfer outF m_dst ⊑ expectedIn g edgeTransfer entryInit outF m_dst := by
+    unfold expectedIn
+    split <;> grind [ll.join_assoc, ll.join_comm, ll.join_idem]
+  exact join_ge_trans _ _ _ h_edge (join_ge_trans _ _ _ h_join_ge h_expIn_ge)
 
 end Flow.Analysis
 
@@ -412,9 +407,7 @@ structure AnalysisResult {Node Edge State : Type}
 
 def analyze {Node Edge State : Type}
     [DecidableEq Node] [DecidableEq Edge] [LangSem Node Edge State]
-    (a : Analysis Node Edge State) (g : AnalysisCFG Node Edge)
-    (hentry_mem : g.entry ∈ g.nodes)
-    (hno_entry_edge : ∀ e ∈ g.edges, g.dstOf e ≠ g.entry) :
+    (a : Analysis Node Edge State) (g : AnalysisCFG Node Edge) :
     AnalysisResult a g :=
   letI := a.botL
   letI := a.maxL
@@ -436,16 +429,17 @@ def analyze {Node Edge State : Type}
     worklistForward_sound_postfixpoint g nT eT entryInit (fun _ => ⊥)
       g.nodes_mem (by intro m hm; exact absurd (List.mem_attach _ m) hm)
   have hpf : Generic.PostFixpoint a.dfa g inFacts := by
-    apply postFixpoint_of_isForwardPostFixpoint <;> assumption
+    apply postFixpoint_of_isForwardPostFixpoint; assumption
   have hentry : a.dfa.entry ⊑ (inFacts g.entry) := by
     change a.dfa.entry ⊑
       (if hn : g.entry ∈ g.nodes then
          expectedIn g eT entryInit res.2 ⟨g.entry, hn⟩
        else ⊥)
-    rw [dif_pos hentry_mem]
+    rw [dif_pos g.entry_mem]
     unfold expectedIn
-    rw [if_pos (show (⟨g.entry, hentry_mem⟩ : NodeOf g).val = g.entry from rfl)]
-    apply JoinLeRefl.refl
+    rw [if_pos (show (⟨g.entry, g.entry_mem⟩ : NodeOf g).val = g.entry from rfl)]
+    simp only
+    rw [<-a.llL.join_assoc, a.llL.join_idem]
   { inFacts := inFacts
   , outFacts := outFacts
   , isPostFix := hpf

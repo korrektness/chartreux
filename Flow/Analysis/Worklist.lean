@@ -33,7 +33,8 @@ def joinPredEdges [Bot A] [Max A]
 def expectedIn [Bot A] [Max A]
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
     (entryInit : A) (outF : StateN g A) (n : NodeOf g) : A :=
-  if n.val = g.entry then entryInit else joinPredEdges g edgeTransfer outF n
+  let join := joinPredEdges g edgeTransfer outF n
+  if n.val = g.entry then entryInit ⊔ join else join
 
 /-- main forward worklist algorithm. -/
 def worklistForward

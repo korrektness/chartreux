@@ -541,8 +541,7 @@ namespace CFG
 def WellFormed (g : CFG) : Prop :=
   g.entry < g.nodes.length ∧
   (∀ e ∈ g.edges, e.src < g.nodes.length) ∧
-  (∀ e ∈ g.edges, e.dst < g.nodes.length) ∧
-  (∀ e ∈ g.edges, e.dst ≠ g.entry)
+  (∀ e ∈ g.edges, e.dst < g.nodes.length)
 
 instance (g : CFG) : Decidable g.WellFormed := by
   unfold WellFormed; infer_instance

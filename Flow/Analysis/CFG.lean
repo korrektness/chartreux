@@ -19,6 +19,7 @@ class AnalysisCFG (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
     ∀ e, e ∈ edges -> e ∈ inEdges (dstOf e)
   dstOf_mem :
     ∀ e, e ∈ edges -> dstOf e ∈ nodes
+  entry_mem : entry ∈ nodes
 
 abbrev NodeOf (g : AnalysisCFG Node Edge) := {n // n ∈ g.nodes}
 abbrev EdgeOf (g : AnalysisCFG Node Edge) := {e // e ∈ g.edges}
