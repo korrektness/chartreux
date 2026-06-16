@@ -22,7 +22,7 @@ inductive EvalExpr (σ : State) : Expr -> Val -> Prop where
     EvalExpr σ (.Int n) (.Int n)
 | var : ∀ x v,
     σ x = some v ->
-    EvalExpr σ (.Var x) v 
+    EvalExpr σ (.Var x) v
 | isnullT : ∀ e,
     EvalExpr σ e (.Null) ->
     EvalExpr σ (.IsNull e) (.Int 1)
