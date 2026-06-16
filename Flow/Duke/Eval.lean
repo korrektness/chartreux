@@ -14,6 +14,7 @@ def applyOp : BinOp -> Int -> Int -> Int
 | .eq,  n₁, n₂ => (if n₁ = n₂ then 1 else 0)
 | .and, n₁, n₂ => (if n₁ ≠ 0 && n₂ ≠ 0 then 1 else 0)
 
+
 inductive EvalExpr (σ : State) : Expr -> Val -> Prop where
 | null :
     EvalExpr σ (.Null) (.Null)
@@ -36,7 +37,8 @@ inductive EvalExpr (σ : State) : Expr -> Val -> Prop where
 | notF : ∀ e,
     EvalExpr σ e (.Int 0) ->
     EvalExpr σ (.Not e) (.Int 1)
-| binop :
+| binop : ∀ o e₁ e₂ n₁ n₂,
     EvalExpr σ e₁ (.Int n₁) ->
     EvalExpr σ e₂ (.Int n₂) ->
     EvalExpr σ (.BinOp o e₁ e₂) (.Int (applyOp o n₁ n₂))
+
