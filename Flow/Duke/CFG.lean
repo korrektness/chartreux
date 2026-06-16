@@ -1,6 +1,7 @@
 import Flow.Duke.Defs
 import Flow.Duke.Eval
 import Flow.Analysis.CFG
+import Flow.Analysis.Generic
 
 -- # Defs
 abbrev NodeID := Nat
@@ -256,4 +257,10 @@ def DukeAnalysisCFG (g : CFG) (hg : g.WellFormed) :
     have hdst := hg.2.2
     exact List.mem_range.mpr (hdst e he)
   entry_mem := by simpa using hg.1
+
+open Flow.Analysis.Generic in
+@[reducible]
+def DukeLS (cfg : CFG) : LangSem NodeID Edge State where
+  LStep _ e σ σ' := Step cfg ⟨e.val.src, σ⟩ ⟨e.val.dst, σ'⟩
+  LStutter _ _ σ σ' := σ = σ'
 
