@@ -1,0 +1,69 @@
+import Flow.Duke.CFG
+
+-- # DotPrinter (sanity check)
+namespace Dot
+
+def binOpStr : BinOp -> String
+| .add => "+"
+| .sub => "-"
+| .mul => "*"
+| .lt  => "<"
+| .eq  => "=="
+| .and => "&&"
+
+partial def exprStr : Expr -> String
+| .Null            => "null"
+| .Int n           => toString n
+| .Var x           => x
+| .IsNull e        => s!"isnull({exprStr e})"
+| .Not e           => s!"!({exprStr e})"
+| .BinOp o e₁ e₂   => s!"({exprStr e₁} {binOpStr o} {exprStr e₂})"
+
+def nodeLabel : NodeKind -> String
+| .Skip       => "skip"
+| .Assign x e => s!"{x} := {exprStr e}"
+| .Assume e   => s!"assume {exprStr e}"
+
+-- escape characters that are special inside a Graphviz quoted label
+def escape (s : String) : String :=
+  s.foldl (fun acc c =>
+    acc ++ (match c with
+            | '"'  => "\\\""
+            | '\\' => "\\\\"
+            | _    => String.singleton c)) ""
+
+def shape : NodeKind -> String
+| .Assume _ => "diamond"
+| _         => "box"
+
+def toDot (g : CFG) : String :=
+  let nodeLines :=
+    g.nodes.zipIdx.map (fun (k, i) =>
+      s!"  n{i} [label=\"{i}: {escape (nodeLabel k)}\", shape={shape k}];")
+  let edgeLines :=
+    g.edges.map (fun e => s!"  n{e.src} -> n{e.dst};")
+  let body := String.intercalate "\n" (nodeLines ++ edgeLines)
+  s!"digraph CFG \{\n{body}\n}"
+
+end Dot
+
+def CFG.toDot (g : CFG) : String := Dot.toDot g
+def Stmt.toDot (s : Stmt) : String := Dot.toDot s.cfg
+
+-- sanity checks
+#eval IO.println (Stmt.Seq (Stmt.Decl "x" (.Null)) (Stmt.Assign "x" (.Int 0))).toDot
+
+#eval IO.println
+  (Stmt.If (.BinOp .lt (.Var "x") (.Int 0))
+    (Stmt.Assign "x" (.Int 1))
+    (Stmt.Assign "x" (.Int 2))).toDot
+
+#eval IO.println
+  (Stmt.If (.BinOp .and (.Var "x") (.Var "y"))
+    (Stmt.Assign "x" (.Null))
+    (Stmt.Assign "x" (.Int 1))).toDot
+
+#eval IO.println
+  (Stmt.While (.BinOp .lt (.Var "i") (.Int 10))
+    (Stmt.Assign "i" (.BinOp .add (.Var "i") (.Int 1)))).toDot
+

@@ -1,3 +1,5 @@
+-- # Language
+
 inductive BinOp where
 | add | sub | mul | lt | eq | and
 deriving DecidableEq, Repr
@@ -24,3 +26,4 @@ inductive Stmt where
 | While (c : Expr) (b : Stmt)
 | Seq (s₁ s₂ : Stmt)
 deriving DecidableEq, Repr
+
