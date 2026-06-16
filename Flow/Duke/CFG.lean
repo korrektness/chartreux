@@ -26,6 +26,8 @@ deriving DecidableEq, Repr
 
 def CFG.inEdges (g : CFG) (n : NodeID) : List Edge :=
   g.edges.filter (·.dst = n)
+def CFG.nodeKind (g : CFG) (n : NodeID) : Option NodeKind :=
+  g.nodes[n]?
 
 -- # Builder
 structure BState where
