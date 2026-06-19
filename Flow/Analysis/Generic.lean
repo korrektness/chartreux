@@ -7,9 +7,8 @@ variable (Node Edge State : Type) [DecidableEq Node] [DecidableEq Edge]
 variable (g : AnalysisCFG Node Edge)
 
 /-- Generic wrapper for semantics over the CFG.
-    * `ValidCFG` : Links an abstract CFG to the language's concrete invariants.
-    * `LStep`    : proper transition relation (requires ValidCFG)
-    * `LStutter` : silent transition relation (requires ValidCFG)
+    * `LStep`    : proper transition relation
+    * `LStutter` : silent transition relation
 -/
 class LangSem where
   LStep : EdgeOf g -> State -> State -> Prop
