@@ -214,6 +214,8 @@ theorem cfg_WF (s : Stmt) : s.cfg.WellFormed := by
   · intro e he; exact (hbound e (hes ▸ he)).1
   · intro e he; exact (hbound e (hes ▸ he)).2
 
+abbrev WFCFG := { cfg : CFG // cfg.WellFormed }
+
 -- # Semantics
 
 abbrev Config := NodeID × State
@@ -258,9 +260,11 @@ def DukeAnalysisCFG (g : CFG) (hg : g.WellFormed) :
     exact List.mem_range.mpr (hdst e he)
   entry_mem := by simpa using hg.1
 
-open Flow.Analysis.Generic in
 @[reducible]
-def DukeLS (cfg : CFG) : LangSem NodeID Edge State where
-  LStep _ e σ σ' := Step cfg ⟨e.val.src, σ⟩ ⟨e.val.dst, σ'⟩
-  LStutter _ _ σ σ' := σ = σ'
+def WFCFG.analysis (g : WFCFG) : AnalysisCFG NodeID Edge :=
+  DukeAnalysisCFG g g.prop
 
+open Flow.Analysis.Generic in
+instance tipLangSem (cfg : WFCFG) : LangSem NodeID Edge State cfg.analysis where
+  LStep e σ σ' := Step cfg ⟨e.val.src, σ⟩ ⟨e.val.dst, σ'⟩
+  LStutter _ σ σ' := σ = σ'
