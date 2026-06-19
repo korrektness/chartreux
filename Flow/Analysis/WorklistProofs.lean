@@ -341,7 +341,7 @@ theorem postFixpoint_of_isForwardPostFixpoint
       ({ L := A
        , nodeTransfer := nodeTransfer
        , edgeTransfer := edgeTransfer
-       , entry := entryInit } : DFA Node Edge State g)
+       , entry := entryInit } : DFA Node Edge)
       (fun n =>
         if h : n ∈ g.nodes then
           expectedIn g edgeTransfer entryInit outF ⟨n, h⟩
@@ -388,13 +388,13 @@ structure Analysis (Node Edge State : Type)
     [DecidableEq Node] [DecidableEq Edge]
     {g : AnalysisCFG Node Edge}
     [ls : LangSem Node Edge State g] where
-  dfa : DFA Node Edge State g
+  dfa : DFA Node Edge
   botL : Bot dfa.L
   maxL : Max dfa.L
   decEqL : DecidableEq dfa.L
   fhL : FiniteHeight dfa.L
   llL : LatticeLike dfa.L
-  semantics : DFASemantics g dfa
+  semantics : DFASemantics (ls := ls) g dfa
   mono_absorb :
     ∀ {ℓ ℓ' : dfa.L} {σ : State},
       ℓ ⊑ ℓ' -> semantics.Corr ℓ σ -> semantics.Corr ℓ' σ

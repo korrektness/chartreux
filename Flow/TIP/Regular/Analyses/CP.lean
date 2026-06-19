@@ -330,7 +330,7 @@ lemma evalExpr_sound {ρ : CPFact vars} {σ : State} {e : Expr} {v : Val}
       simp_all [Max.max, CPVal.join]
 
 /-- The DFA closure for CP, parameterised by the underlying TIP CFG. -/
-def cpDFA (vars : List String) (cfg : WFCFG) : DFA NodeID Edge State cfg.analysis where
+def cpDFA (vars : List String) (cfg : WFCFG) : DFA NodeID Edge where
   L            := CPFact vars
   nodeTransfer := cpTransfer vars cfg
   edgeTransfer := cpEdgeTransfer vars
@@ -417,7 +417,7 @@ private lemma cp_preserve_branch_case (vars : List String) (cfg : CFG)
 /-- The CP `DFASemantics` for a fixed TIP CFG. The three preservation
     fields directly consume the abstract `LangSem` transitions. -/
 def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : WFCFG) :
-    DFASemantics cfg.analysis (cpDFA vars cfg) :=
+    DFASemantics (ls := tipLangSem cfg) cfg.analysis (cpDFA vars cfg) :=
   { Corr := cpβ_corr
     isInit := State.isInit
     preserve_entry := by

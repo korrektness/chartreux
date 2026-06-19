@@ -14,7 +14,7 @@ class LangSem where
   LStep : EdgeOf g -> State -> State -> Prop
   LStutter : Node -> State -> State -> Prop
 
-structure DFA [ls : LangSem Node Edge State g] where
+structure DFA where
   L : Type
   nodeTransfer : Node -> L -> L
   edgeTransfer : Edge -> L -> L
@@ -25,7 +25,7 @@ variable [DecidableEq Node] [DecidableEq Edge]
 variable (g : AnalysisCFG Node Edge)
 variable [ls : LangSem Node Edge State g]
 
-def DFA.transferAlong (A : DFA Node Edge State g) (e : EdgeOf g) (ℓ : A.L) : A.L :=
+def DFA.transferAlong (A : DFA Node Edge) (e : EdgeOf g) (ℓ : A.L) : A.L :=
   A.edgeTransfer e (A.nodeTransfer (g.srcOf e) ℓ)
 
 /-- RTC of `LStep` along stutter edges. -/
@@ -60,7 +60,7 @@ theorem trans {n n₁ n' : Node} {σ σ₁ σ' : State}
 end LSteps
 
 /-- Logical semantics linking the DFA to the abstract LangSem relation -/
-structure DFASemantics (A : DFA Node Edge State g) where
+structure DFASemantics (A : DFA Node Edge) where
   Corr : A.L -> State -> Prop
   isInit : State -> Prop
   preserve_entry :
@@ -75,13 +75,13 @@ structure DFASemantics (A : DFA Node Edge State g) where
 /-- a node-indexed labelling is a post-fixpoint of `A`'s transfer if,
     for every `e`, the fact at `srcOf e` after transfer is absorbed
     by the fact at `dstOf e`. -/
-def PostFixpoint (A : DFA Node Edge State g) (rd : Node -> A.L) [Max A.L] : Prop :=
+def PostFixpoint (A : DFA Node Edge) (rd : Node -> A.L) [Max A.L] : Prop :=
   ∀ e : EdgeOf g,
     (A.transferAlong g e (rd (g.srcOf e))) ⊑ (rd (g.dstOf e))
 
 /-- step preservation of analysis correctness -/
 theorem step_preserves_corr
-    {A : DFA Node Edge State g} (S : DFASemantics g A) [Max A.L]
+    {A : DFA Node Edge} (S : DFASemantics g A) [Max A.L]
     (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State}, ℓ ⊑ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
     {rd : Node -> A.L} (hpf : PostFixpoint g A rd)
     {e : EdgeOf g} {σ σ' : State}
@@ -92,7 +92,7 @@ theorem step_preserves_corr
 
 /-- lift of step preservation through the multi-step closure of the step relation. -/
 theorem steps_preserves_corr
-    {A : DFA Node Edge State g} (S : DFASemantics g A) [Max A.L]
+    {A : DFA Node Edge} (S : DFASemantics g A) [Max A.L]
     (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State}, ℓ ⊑ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
     {rd : Node -> A.L} (hpf : PostFixpoint g A rd)
     {n n' : Node} {σ σ' : State}
@@ -117,7 +117,7 @@ def Reachable (n : Node) (σ : State) (isInit : State -> Prop) : Prop :=
     corresponding to it is correct.
     Direct application of `steps_preserves_corr` -/
 theorem reachable_corr
-    {A : DFA Node Edge State g} (S : DFASemantics g A) [Max A.L]
+    {A : DFA Node Edge} (S : DFASemantics g A) [Max A.L]
     (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State}, ℓ ⊑ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
     {rd : Node -> A.L} (hpf : PostFixpoint g A rd)
     (hentry : A.entry ⊑ (rd g.entry))
