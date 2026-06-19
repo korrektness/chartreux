@@ -265,6 +265,6 @@ def WFCFG.analysis (g : WFCFG) : AnalysisCFG NodeID Edge :=
   DukeAnalysisCFG g g.prop
 
 open Flow.Analysis.Generic in
-instance tipLangSem (cfg : WFCFG) : LangSem NodeID Edge State cfg.analysis where
+instance dukeLangSem (cfg : WFCFG) : LangSem NodeID Edge State cfg.analysis where
   LStep e σ σ' := Step cfg ⟨e.val.src, σ⟩ ⟨e.val.dst, σ'⟩
   LStutter _ σ σ' := σ = σ'
