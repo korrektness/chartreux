@@ -8,7 +8,7 @@ namespace Flow.Eval.Collection
 
 open Flow.Analysis Flow.Analysis.Generic
 open Flow.Eval.Refinement
-open Flow.TIP (tipLStep tipLStutter tipLangSem)
+open Flow.TIP (tipLStep tipLStutter tipLangSem WFCFG)
 
 abbrev SetState := State -> Prop
 
@@ -23,44 +23,40 @@ def transfer (cfg : CFG) (n : NodeID) (R : SetState) : SetState :=
   | none             => R
 
 /-- The collecting-semantics DFA, parameterised by the underlying TIP CFG. -/
-def Collecting (cfg : CFG) : DFA NodeID Edge where
+def Collecting (cfg : WFCFG) : DFA NodeID Edge State cfg.analysis where
   L            := SetState
   nodeTransfer := transfer cfg
   edgeTransfer := fun _ R => R
   entry        := fun _ => True
 
-@[simp] theorem Collecting_transferAlong (cfg : CFG)
-    (G : AnalysisCFG NodeID Edge) (e : Edge) (R : SetState) :
-    (Collecting cfg).transferAlong G e R = transfer cfg (G.srcOf e) R := rfl
+@[simp] private lemma Collecting_transferAlong
+    (cfg : WFCFG) (e : EdgeOf cfg.analysis) :
+    (Collecting cfg).transferAlong cfg.analysis e ℓ =
+    transfer cfg e.val.src ℓ := rfl
 
 def Corr (R : SetState) (σ : State) : Prop :=
   R σ
 
-def CollectingSem (cfg : CFG) :
-    letI := tipLangSem cfg
-    DFASemantics (State := State) (Collecting cfg) :=
-  letI : LangSem NodeID Edge State := tipLangSem cfg
+def CollectingSem
+    (cfg : WFCFG) :
+    DFASemantics (State := State) cfg.analysis (Collecting cfg) :=
   { Corr := Corr
     isInit := State.isInit
     preserve_entry := by intros σ hσ; cases hσ; simp [Corr, Collecting]
     preserve_step := by
-      intro G e σ σ' R hstep hR
-      obtain ⟨hsrc, _hdst, hcase⟩ := hstep
-      simp only [Collecting_transferAlong, hsrc]
-      rcases hcase with ⟨x, e', v, hassign, heval, hE⟩
-                       | ⟨c, _v, hbr, _heval, _hbt, hE⟩
-                       | ⟨hskip, _hkind, hE⟩
-      · change (transfer cfg e.val.src R) σ'
-        rcases hassign with hh | hh
-        · simp only [transfer, hh]; exact ⟨σ, v, hR, heval, hE⟩
-        · simp only [transfer, hh]; exact ⟨σ, v, hR, heval, hE⟩
-      · change (transfer cfg e.val.src R) σ'
-        simp [NodeBranches] at hbr
-        simp only [transfer, hbr, hE]; exact hR
-      · change (transfer cfg e.val.src R) σ'
-        simp only [transfer, hskip, hE]; exact hR
+      intro e σ σ' R hstep hR
+      simp only [Collecting_transferAlong, transfer]
+      rcases hstep with ⟨x, e', v, hassign, heval, hE⟩
+                      | ⟨c, _v, hbr, _heval, _hbt, hE⟩
+                      | ⟨hskip, _hkind, hE⟩
+      · rcases hassign with hh | hh
+        · simp only [hh]; exact ⟨σ, v, hR, heval, hE⟩
+        · simp only [hh]; exact ⟨σ, v, hR, heval, hE⟩
+      · simp [NodeBranches] at hbr
+        simp only [hbr, hE]; exact hR
+      · simp only [hskip, hE]; exact hR
     preserve_stutter := by
-      intro _G _n σ σ' R hstut hR
+      intro _n σ σ' R hstut hR
       change σ' = σ at hstut
       simpa [Corr, hstut] using hR }
 

@@ -6,7 +6,7 @@ import Flow.TIP.Utils.DotPrinter
 import Flow.Analysis.WorklistProofs
 
 open Flow.Analysis Flow.Analysis.CP Flow.Analysis.Generic CFGBuilder Flow.Eval.Refinement
-open Flow.TIP (tipLangSem forCFG forCFG_of_wf stepsN_to_lsteps)
+open Flow.TIP (tipLangSem forCFG WFCFG stepsN_to_lsteps)
 
 section Simple
 open Expr Stmt BinOp in
@@ -21,25 +21,24 @@ def simpleCFG : CFG := CFG.ofStmt simple
 
 private lemma simpleCFG_wf : simpleCFG.WellFormed := by decide
 
+def simpleWFCFG : WFCFG := ⟨simpleCFG, simpleCFG_wf⟩
+
 def sv : { l : List String // l.Nodup } := simpleCFG.vars
 
-instance instlangsem_simple : LangSem NodeID Edge State := tipLangSem simpleCFG
+instance instlangsem_simple : LangSem NodeID Edge State simpleWFCFG.analysis :=
+  tipLangSem simpleWFCFG
 
 /-- The bundled CP analysis result on `simpleCFG`. -/
 def simpleResult :
-    letI := tipLangSem simpleCFG
-    Flow.AnalysisResult (cpAnalysis sv.val sv.prop simpleCFG)
-      (forCFG_of_wf simpleCFG simpleCFG_wf) :=
-  cpAnalyzeCFG sv.val sv.prop simpleCFG simpleCFG_wf
+    Flow.AnalysisResult (cpAnalysis sv.val sv.prop simpleWFCFG) :=
+  cpAnalyzeCFG sv.val sv.prop simpleWFCFG
 
 theorem cp_correct_reachable :
-    letI := tipLangSem simpleCFG
     ∀ {n : NodeID} {σ : State},
-      Reachable (forCFG_of_wf simpleCFG simpleCFG_wf) n σ State.isInit ->
+      Reachable simpleWFCFG.analysis n σ State.isInit ->
       cpβ_corr (simpleResult.inFacts n) σ := by
-  letI : LangSem NodeID Edge State := tipLangSem simpleCFG
   intro n σ hreach
-  exact cp_reachable_correct sv.prop simpleCFG simpleCFG_wf hreach
+  exact cp_reachable_correct sv.prop simpleWFCFG hreach
 
 #eval IO.println (CFG.toDot simpleCFG)
 #eval IO.println
@@ -63,26 +62,25 @@ def loopy : Stmt :=
 
 def loopyCFG : CFG := CFG.ofStmt loopy
 
-instance instlangsem_loop : LangSem NodeID Edge State := tipLangSem loopyCFG
-
 private lemma loopyCFG_wf : loopyCFG.WellFormed := by decide
 
 def loopyVars : { l : List String // l.Nodup } := loopyCFG.vars
 
+def loopyWFCFG : WFCFG := ⟨loopyCFG, loopyCFG_wf⟩
+
+instance instlangsem_loopy : LangSem NodeID Edge State loopyWFCFG.analysis :=
+  tipLangSem loopyWFCFG
+
 def loopyResult :
-    letI := tipLangSem loopyCFG
-    Flow.AnalysisResult (cpAnalysis loopyVars.val loopyVars.prop loopyCFG)
-      (forCFG_of_wf loopyCFG loopyCFG_wf) :=
-  cpAnalyzeCFG loopyVars.val loopyVars.prop loopyCFG loopyCFG_wf
+    Flow.AnalysisResult (cpAnalysis loopyVars.val loopyVars.prop loopyWFCFG) :=
+  cpAnalyzeCFG loopyVars.val loopyVars.prop loopyWFCFG
 
 theorem loopy_cp_correct :
-    letI := tipLangSem loopyCFG
     ∀ {n : NodeID} {σ : State},
-      Reachable (forCFG_of_wf loopyCFG loopyCFG_wf) n σ State.isInit ->
+      Reachable loopyWFCFG.analysis n σ State.isInit ->
       cpβ_corr (loopyResult.inFacts n) σ := by
-  letI : LangSem NodeID Edge State := tipLangSem loopyCFG
   intro n σ hreach
-  exact cp_reachable_correct loopyVars.prop loopyCFG loopyCFG_wf hreach
+  exact cp_reachable_correct loopyVars.prop loopyWFCFG hreach
 
 #eval IO.println (CFG.toDot loopyCFG)
 #eval IO.println

@@ -325,26 +325,28 @@ end Flow.Analysis
 
 namespace Flow.Analysis
 
-variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
+open Flow.Analysis Flow.Analysis.Generic
+
+variable {Node Edge State : Type} [DecidableEq Node] [DecidableEq Edge]
+variable {g : AnalysisCFG Node Edge}
+variable [ls : LangSem Node Edge State g]
 
 theorem postFixpoint_of_isForwardPostFixpoint
     [Bot A] [Max A] [FiniteHeight A] [ll : LatticeLike A]
-    (g : AnalysisCFG Node Edge)
     (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
     [tm : TransferMono nodeTransfer edgeTransfer]
     (entryInit : A) (outF : StateN g A)
     (hpost : IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit outF) :
-    Generic.PostFixpoint
+    Generic.PostFixpoint g
       ({ L := A
        , nodeTransfer := nodeTransfer
        , edgeTransfer := edgeTransfer
-       , entry := entryInit } : Generic.DFA Node Edge)
-      g
+       , entry := entryInit } : DFA Node Edge State g)
       (fun n =>
         if h : n ∈ g.nodes then
           expectedIn g edgeTransfer entryInit outF ⟨n, h⟩
         else ⊥) := by
-  intro e he
+  intro ⟨e, he⟩
   have he_in : e ∈ g.inEdges (g.dstOf e) := g.edges_mem_inEdges e he
   have hdst_mem : g.dstOf e ∈ g.nodes := g.dstOf_mem e he
   have hsrc_mem : g.srcOf e ∈ g.nodes := g.inEdges_src_mem _ e he_in
@@ -383,14 +385,16 @@ open Flow.Analysis Flow.Analysis.Generic
 
 /-- Analysis bundle instance -/
 structure Analysis (Node Edge State : Type)
-    [DecidableEq Node] [DecidableEq Edge] [LangSem Node Edge State] where
-  dfa : Generic.DFA Node Edge
+    [DecidableEq Node] [DecidableEq Edge]
+    {g : AnalysisCFG Node Edge}
+    [ls : LangSem Node Edge State g] where
+  dfa : DFA Node Edge State g
   botL : Bot dfa.L
   maxL : Max dfa.L
   decEqL : DecidableEq dfa.L
   fhL : FiniteHeight dfa.L
   llL : LatticeLike dfa.L
-  semantics : Generic.DFASemantics (State := State) dfa
+  semantics : DFASemantics g dfa
   mono_absorb :
     ∀ {ℓ ℓ' : dfa.L} {σ : State},
       ℓ ⊑ ℓ' -> semantics.Corr ℓ σ -> semantics.Corr ℓ' σ
@@ -398,17 +402,21 @@ structure Analysis (Node Edge State : Type)
       TransferMono dfa.nodeTransfer dfa.edgeTransfer
 
 structure AnalysisResult {Node Edge State : Type}
-    [DecidableEq Node] [DecidableEq Edge] [LangSem Node Edge State]
-    (a : Analysis Node Edge State) (g : AnalysisCFG Node Edge) where
+    [DecidableEq Node] [DecidableEq Edge]
+    {g : AnalysisCFG Node Edge}
+    [ls : LangSem Node Edge State g]
+    (a : Analysis (ls := ls) Node Edge State) where
   inFacts : Node -> a.dfa.L
   outFacts : Node -> a.dfa.L
-  isPostFix : letI := a.maxL; Generic.PostFixpoint a.dfa g inFacts
+  isPostFix : letI := a.maxL; Generic.PostFixpoint g a.dfa inFacts
   inFacts_entry : letI := a.maxL; a.dfa.entry ⊑ (inFacts g.entry)
 
 def analyze {Node Edge State : Type}
-    [DecidableEq Node] [DecidableEq Edge] [LangSem Node Edge State]
-    (a : Analysis Node Edge State) (g : AnalysisCFG Node Edge) :
-    AnalysisResult a g :=
+    [DecidableEq Node] [DecidableEq Edge]
+    {g : AnalysisCFG Node Edge}
+    [ls : LangSem Node Edge State g]
+    (a : Analysis Node Edge State) :
+    AnalysisResult (ls := ls) a :=
   letI := a.botL
   letI := a.maxL
   letI := a.decEqL
@@ -428,7 +436,7 @@ def analyze {Node Edge State : Type}
   have hpost : IsForwardPostFixpoint g nT eT entryInit res.2 :=
     worklistForward_sound_postfixpoint g nT eT entryInit (fun _ => ⊥)
       g.nodes_mem (by intro m hm; exact absurd (List.mem_attach _ m) hm)
-  have hpf : Generic.PostFixpoint a.dfa g inFacts := by
+  have hpf : Generic.PostFixpoint g a.dfa inFacts := by
     apply postFixpoint_of_isForwardPostFixpoint; assumption
   have hentry : a.dfa.entry ⊑ (inFacts g.entry) := by
     change a.dfa.entry ⊑

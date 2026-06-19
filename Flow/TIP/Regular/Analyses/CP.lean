@@ -10,7 +10,7 @@ namespace Flow.Analysis.CP
 
 open Analysis
 open Generic
-open Flow.TIP (tipLStep tipLStutter tipLangSem forCFG forCFG_of_wf)
+open Flow.TIP (tipLStep tipLStutter tipLangSem forCFG WFCFG)
 
 /-- Abstract value for a single variable -/
 inductive CPVal where
@@ -198,18 +198,6 @@ private lemma evalExpr_mono (vars : List String) (ρ₁ ρ₂ : CPFact vars)
       simp_all [Max.max, CPVal.join]
 
 
-/-- Helper: combine four points by interleaved join. -/
-private lemma four_join_eq (a b c d : CPVal)
-    (hac : a ⊔ c = a) (hbd : b ⊔ d = b) :
-    (a ⊔ b) ⊔ (c ⊔ d) = a ⊔ b := by
-  have lc := CPVal.join_comm
-  have la := CPVal.join_assoc
-  calc
-    (a ⊔ b) ⊔ (c ⊔ d)
-        = ((a ⊔ c) ⊔ (b ⊔ d)) := by
-          rw [la, <- la b, lc b c, la, <- la]
-    _   = a ⊔ b := by rw [hac, hbd]
-
 private lemma cpTransfer_mono (vars : List String) (g : CFG) (n : NodeID) :
     mono_f (cpTransfer vars g n) := by
   intro ρ₁ ρ₂ hxy
@@ -235,11 +223,10 @@ private lemma cpTransfer_mono (vars : List String) (g : CFG) (n : NodeID) :
 private lemma cpEdgeTransfer_mono (vars : List String) :
     ∀ e, mono_f (cpEdgeTransfer vars e) := fun _ _ _ h => h
 
-instance instTransferMonoCP (vars : List String) (g : CFG) :
-    TransferMono (cpTransfer vars g) (cpEdgeTransfer vars) where
-  node_mono := cpTransfer_mono vars g
-  edge_mono := cpEdgeTransfer_mono vars
-
+instance instTransferMonoCP (vars : List String) (cfg : WFCFG) :
+  TransferMono (cpTransfer vars cfg) (cpEdgeTransfer vars) where
+    node_mono := cpTransfer_mono vars cfg
+    edge_mono := cpEdgeTransfer_mono vars
 
 section Corr
 variable {vars : List String}
@@ -342,17 +329,17 @@ lemma evalExpr_sound {ρ : CPFact vars} {σ : State} {e : Expr} {v : Val}
       rw [hb] at ih₂ <;>
       simp_all [Max.max, CPVal.join]
 
-/-- The DFA closure for CP, parameterised by the underlying TIP CFG.
-    The CFG is needed to read `nodeKind`. -/
-def cpDFA (vars : List String) (cfg : CFG) : DFA NodeID Edge where
+/-- The DFA closure for CP, parameterised by the underlying TIP CFG. -/
+def cpDFA (vars : List String) (cfg : WFCFG) : DFA NodeID Edge State cfg.analysis where
   L            := CPFact vars
   nodeTransfer := cpTransfer vars cfg
   edgeTransfer := cpEdgeTransfer vars
   entry        := cpEntryInit vars
 
-@[simp] private lemma cpDFA_transferAlong (vars : List String) (cfg : CFG)
-    (G : AnalysisCFG NodeID Edge) (e : Edge) (ℓ : CPFact vars) :
-    (cpDFA vars cfg).transferAlong G e ℓ = cpTransfer vars cfg (G.srcOf e) ℓ := rfl
+@[simp] private lemma cpDFA_transferAlong (vars : List String) (cfg : WFCFG)
+    (e : EdgeOf cfg.analysis) (ℓ : CPFact vars) :
+    (cpDFA vars cfg).transferAlong cfg.analysis e ℓ =
+    cpTransfer vars cfg e.val.src ℓ := rfl
 
 /-- Internal lemma: the env-update + Assign/Decl case of `preserve_step`.
     Shared between Assign and Decl since they have the same shape. -/
@@ -429,10 +416,8 @@ private lemma cp_preserve_branch_case (vars : List String) (cfg : CFG)
 
 /-- The CP `DFASemantics` for a fixed TIP CFG. The three preservation
     fields directly consume the abstract `LangSem` transitions. -/
-def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
-    letI : LangSem NodeID Edge State := tipLangSem cfg
-    DFASemantics (State := State) (cpDFA vars cfg) :=
-  letI : LangSem NodeID Edge State := tipLangSem cfg
+def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : WFCFG) :
+    DFASemantics cfg.analysis (cpDFA vars cfg) :=
   { Corr := cpβ_corr
     isInit := State.isInit
     preserve_entry := by
@@ -443,13 +428,11 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
       simp [Domain.max_app, cpEntryInit, cpβ, State.empty]
 
     preserve_step := by
-      intro _G e σ σ' ℓ hstep hcorr
-      -- Unpack the abstract `LStep` into TIP-specific witnesses.
-      obtain ⟨hsrc, _hdst, hcase⟩ := hstep
-      simp only [cpDFA_transferAlong, hsrc]
-      rcases hcase with ⟨x, e', v, hassign, heval, hEupd⟩
-                       | ⟨c, v, hbr, _heval, _hbt, hE⟩
-                       | ⟨hskip, _hkind, hE⟩
+      intro e σ σ' ℓ hstep hcorr
+      simp only [cpDFA_transferAlong, cpTransfer]
+      rcases hstep with ⟨x, e', v, hassign, heval, hEupd⟩
+                      | ⟨c, v, hbr, _heval, _hbt, hE⟩
+                      | ⟨hskip, _hkind, hE⟩
       · exact cp_preserve_assign_case vars hnd cfg e.val.src ℓ σ σ' x e' v
           hassign heval hEupd hcorr
       · -- Cond is identity for `cpTransfer`.
@@ -461,7 +444,7 @@ def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
           funext j; unfold cpTransfer; rw [hskip]
         simpa [hE] using cp_preserve_branch_case vars cfg e.val.src ℓ σ htr_id hcorr
     preserve_stutter := by
-      intro _G _n σ σ' ℓ hstut hcorr
+      intro _n σ σ' ℓ hstut hcorr
       -- `LStutter` boils down to `σ'.E = σ.E`.
       change σ' = σ at hstut
       simp only [cpβ_corr] at *
@@ -491,10 +474,8 @@ end Corr
 
 /-- A bundled `Flow.Analysis` for constant propagation, parameterized by
     the variable list, a `Nodup` proof, and the underlying TIP CFG. -/
-def cpAnalysis (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
-    letI := tipLangSem cfg
-    Flow.Analysis NodeID Edge State :=
-  letI : LangSem NodeID Edge State := tipLangSem cfg
+def cpAnalysis (vars : List String) (hnd : vars.Nodup) (cfg : WFCFG) :
+    Flow.Analysis (g := cfg.analysis) NodeID Edge State :=
   { dfa          := cpDFA vars cfg
     botL         := (inferInstance : Bot (CPFact vars))
     maxL         := (inferInstance : Max (CPFact vars))
@@ -502,36 +483,33 @@ def cpAnalysis (vars : List String) (hnd : vars.Nodup) (cfg : CFG) :
     fhL          := (inferInstance : FiniteHeight (CPFact vars))
     llL          := (inferInstance : LatticeLike (CPFact vars))
     semantics    := cpSemantics vars hnd cfg
-    mono_absorb  := mono_absorb_cp (vars := vars)
-    transferMono := instTransferMonoCP vars cfg }
+    mono_absorb  := mono_absorb_cp
+    transferMono := instTransferMonoCP vars cfg}
 
 /-- TIP-facing wrapper around `Flow.analyze`: run the bundled CP
     analysis directly on a TIP `CFG`. -/
-def cpAnalyzeCFG (vars : List String) (hnd : vars.Nodup)
-    (cfg : CFG) (hwf : cfg.WellFormed) :
-    letI := tipLangSem cfg
-    Flow.AnalysisResult (cpAnalysis vars hnd cfg) (forCFG_of_wf cfg hwf) :=
-  letI : LangSem NodeID Edge State := tipLangSem cfg
-  let G := forCFG_of_wf cfg hwf
-  Flow.analyze (cpAnalysis vars hnd cfg) G
+def cpAnalyzeCFG (vars : List String) (hnd : vars.Nodup) (cfg : WFCFG) :=
+  Flow.analyze (cpAnalysis vars hnd cfg)
 
 /-- Turn-key correctness for the bundled CP analysis: at every reachable
     program point, the computed in-fact correctly approximates the
     concrete state. -/
 theorem cp_reachable_correct
     {vars : List String} (hnd : vars.Nodup)
-    (cfg : CFG) (hwf : cfg.WellFormed) :
-    letI := tipLangSem cfg
+    (cfg : WFCFG) :
     ∀ {n : NodeID} {σ : State},
-      Flow.Analysis.Generic.Reachable (forCFG_of_wf cfg hwf) n σ State.isInit ->
-      cpβ_corr ((cpAnalyzeCFG vars hnd cfg hwf).inFacts n) σ := by
-  letI : LangSem NodeID Edge State := tipLangSem cfg
+      Flow.Analysis.Generic.Reachable cfg.analysis n σ State.isInit ->
+        cpβ_corr ((cpAnalyzeCFG vars hnd cfg).inFacts n) σ := by
   intro n σ hreach
   let A := cpAnalysis vars hnd cfg
-  let R := cpAnalyzeCFG vars hnd cfg hwf
+  let R := cpAnalyzeCFG vars hnd cfg
   letI := A.maxL
-  exact Flow.Analysis.Generic.reachable_corr (A := A.dfa) A.semantics
-    (mono_absorb := A.mono_absorb)
-    (rd := R.inFacts) R.isPostFix R.inFacts_entry hreach
+  exact Flow.Analysis.Generic.reachable_corr
+    cfg.analysis
+    A.semantics
+    A.mono_absorb
+    R.isPostFix
+    R.inFacts_entry
+    hreach
 
 end Flow.Analysis.CP
