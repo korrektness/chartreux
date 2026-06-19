@@ -8,7 +8,7 @@ namespace Flow.Eval.Collection
 
 open Flow.Analysis Flow.Analysis.Generic
 open Flow.Eval.Refinement
-open Flow.TIP (tipLStep tipLStutter tipLangSem forCFG_of_wf)
+open Flow.TIP (tipLStep tipLStutter tipLangSem WFCFG)
 
 abbrev SetState := State -> Prop
 
@@ -23,33 +23,29 @@ def transfer (cfg : CFG) (n : NodeID) (R : SetState) : SetState :=
   | none             => R
 
 /-- The collecting-semantics DFA, parameterised by the underlying TIP CFG. -/
-def Collecting (g : AnalysisCFG NodeID Edge) (gValid : tipLangSem.ValidCFG g)
-    : DFA NodeID Edge State where
+def Collecting (cfg : WFCFG) : DFA NodeID Edge State cfg.analysis where
   L            := SetState
-  nodeTransfer := transfer gValid.cfg
+  nodeTransfer := transfer cfg
   edgeTransfer := fun _ R => R
   entry        := fun _ => True
 
 @[simp] private lemma Collecting_transferAlong
-    (G : AnalysisCFG NodeID Edge) (gValid : tipLangSem.ValidCFG G)
-    (e : EdgeOf G) :
-    (Collecting G gValid).transferAlong G e ℓ =
-    transfer gValid.cfg (G.srcOf e.val) ℓ := rfl
+    (cfg : WFCFG) (e : EdgeOf cfg.analysis) :
+    (Collecting cfg).transferAlong cfg.analysis e ℓ =
+    transfer cfg e.val.src ℓ := rfl
 
 def Corr (R : SetState) (σ : State) : Prop :=
   R σ
 
 def CollectingSem
-    (g : AnalysisCFG NodeID Edge) (gValid : tipLangSem.ValidCFG g) :
-    DFASemantics (State := State) g gValid (Collecting g gValid) :=
+    (cfg : WFCFG) :
+    DFASemantics (State := State) cfg.analysis (Collecting cfg) :=
   { Corr := Corr
     isInit := State.isInit
     preserve_entry := by intros σ hσ; cases hσ; simp [Corr, Collecting]
     preserve_step := by
       intro e σ σ' R hstep hR
-      have hsrc : g.srcOf e.val = e.val.src :=
-        congrArg (fun G => G.srcOf e.val) gValid.is_forCFG
-      simp only [Collecting_transferAlong, transfer, hsrc]
+      simp only [Collecting_transferAlong, transfer]
       rcases hstep with ⟨x, e', v, hassign, heval, hE⟩
                       | ⟨c, _v, hbr, _heval, _hbt, hE⟩
                       | ⟨hskip, _hkind, hE⟩
