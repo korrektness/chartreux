@@ -218,6 +218,9 @@ theorem cfg_WF (s : Stmt) : s.cfg.WellFormed := by
 
 abbrev WFCFG := { cfg : CFG // cfg.WellFormed }
 
+def Stmt.wfcfg (s : Stmt) : WFCFG :=
+  ⟨s.cfg, cfg_WF s⟩
+
 @[reducible]
 def DukeAnalysisCFG (g : CFG) (hg : g.WellFormed) :
     AnalysisCFG NodeID Edge where
@@ -244,6 +247,14 @@ def DukeAnalysisCFG (g : CFG) (hg : g.WellFormed) :
 @[reducible]
 def WFCFG.analysis (g : WFCFG) : AnalysisCFG NodeID Edge :=
   DukeAnalysisCFG g g.prop
+
+/-- All variables appearing in the program , de-duplicated, with a `Nodup` witness. -/
+def vars (g : CFG) : { l : List String // l.Nodup } :=
+  let base := g.nodes.filterMap (fun k =>
+  match k with
+  | .Assign x _ => some x
+  | _           => none)
+  ⟨base.eraseDups, Utils.List.eraseDups_nodup base⟩
 
 -- # Semantics
 

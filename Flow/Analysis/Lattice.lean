@@ -71,6 +71,12 @@ omit [Bot A] in
 lemma max_app {x y : Domain n A} {i : Fin n} :
   (x ⊔ y) i = x i ⊔ y i := by rfl
 
+omit [Bot A] in
+lemma ord_distr {x y : Domain n A} {i : Fin n} (h : x ⊑ y) : x i ⊑ y i := by
+  simp only
+  nth_rw 2 [<-h]
+  rw [max_app]
+
 -- decidable equality instances
 @[simp]
 private def domainBEq [DecidableEq A] (ρ₁ ρ₂ : Domain n A) : Bool :=
