@@ -1,5 +1,21 @@
 import Flow.Duke.CFG
 
+namespace List
+
+variable {α : Type} (x : α) (l : List α)
+variable [DecidableEq α]
+
+lemma finIdxOf?_nodup (hnd : l.Nodup)
+    (i j : Fin l.length) (hi : l.finIdxOf? x = some i) (hneq : j ≠ i) :
+    x ≠ l.get j := by
+  intro h_eq
+  have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
+  subst h_eq
+  apply List.not_nodup_of_get_eq_of_ne (h := hget) <;> grind
+
+end List
+
+
 -- # DotPrinter (sanity check)
 namespace Dot
 
@@ -66,4 +82,3 @@ def Stmt.toDot (s : Stmt) : String := Dot.toDot s.cfg
 #eval IO.println
   (Stmt.While (.BinOp .lt (.Var "i") (.Int 10))
     (Stmt.Assign "i" (.BinOp .add (.Var "i") (.Int 1)))).toDot
-

@@ -26,6 +26,8 @@ deriving DecidableEq, Repr
 
 def CFG.inEdges (g : CFG) (n : NodeID) : List Edge :=
   g.edges.filter (·.dst = n)
+def CFG.nodeKind (g : CFG) (n : NodeID) : Option NodeKind :=
+  g.nodes[n]?
 
 -- # Builder
 structure BState where
@@ -216,26 +218,8 @@ theorem cfg_WF (s : Stmt) : s.cfg.WellFormed := by
 
 abbrev WFCFG := { cfg : CFG // cfg.WellFormed }
 
--- # Semantics
-
-abbrev Config := NodeID × State
-
-inductive Step (g : CFG) : Config -> Config -> Prop where
-| skip {n n' σ} :
-    g.nodes[n]? = some .Skip ->
-    ⟨n, n'⟩ ∈ g.edges ->
-    Step g ⟨n, σ⟩ ⟨n', σ⟩
-| assign {n n' x e v σ} :
-    g.nodes[n]? = some (.Assign x e) ->
-    EvalExpr σ e v ->
-    ⟨n, n'⟩ ∈ g.edges ->
-    Step g ⟨n, σ⟩ ⟨n', σ.updated x v⟩
-| assum {n n' m c σ} :
-    g.nodes[n]? = some (NodeKind.Assume c) ->
-    EvalExpr σ c (.Int m) ->
-    m != 0 ->
-    ⟨n, n'⟩ ∈ g.edges ->
-    Step g ⟨n, σ⟩ ⟨n', σ⟩
+def Stmt.wfcfg (s : Stmt) : WFCFG :=
+  ⟨s.cfg, cfg_WF s⟩
 
 @[reducible]
 def DukeAnalysisCFG (g : CFG) (hg : g.WellFormed) :
@@ -263,6 +247,35 @@ def DukeAnalysisCFG (g : CFG) (hg : g.WellFormed) :
 @[reducible]
 def WFCFG.analysis (g : WFCFG) : AnalysisCFG NodeID Edge :=
   DukeAnalysisCFG g g.prop
+
+/-- All variables appearing in the program , de-duplicated, with a `Nodup` witness. -/
+def vars (g : CFG) : { l : List String // l.Nodup } :=
+  let base := g.nodes.filterMap (fun k =>
+  match k with
+  | .Assign x _ => some x
+  | _           => none)
+  ⟨base.eraseDups, Utils.List.eraseDups_nodup base⟩
+
+-- # Semantics
+
+abbrev Config := NodeID × State
+
+inductive Step (g : CFG) : Config -> Config -> Prop where
+| skip {n n' σ} :
+    g.nodes[n]? = some .Skip ->
+    ⟨n, n'⟩ ∈ g.edges ->
+    Step g ⟨n, σ⟩ ⟨n', σ⟩
+| assign {n n' x e v σ} :
+    g.nodes[n]? = some (.Assign x e) ->
+    EvalExpr σ e v ->
+    ⟨n, n'⟩ ∈ g.edges ->
+    Step g ⟨n, σ⟩ ⟨n', σ.updated x v⟩
+| assum {n n' m c σ} :
+    g.nodes[n]? = some (NodeKind.Assume c) ->
+    EvalExpr σ c (.Int m) ->
+    m != 0 ->
+    ⟨n, n'⟩ ∈ g.edges ->
+    Step g ⟨n, σ⟩ ⟨n', σ⟩
 
 open Flow.Analysis.Generic in
 instance dukeLangSem (cfg : WFCFG) : LangSem NodeID Edge State cfg.analysis where

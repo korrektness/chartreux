@@ -23,7 +23,7 @@ def transfer (cfg : CFG) (n : NodeID) (R : SetState) : SetState :=
   | none             => R
 
 /-- The collecting-semantics DFA, parameterised by the underlying TIP CFG. -/
-def Collecting (cfg : WFCFG) : DFA NodeID Edge State cfg.analysis where
+def Collecting (cfg : WFCFG) : DFA NodeID Edge where
   L            := SetState
   nodeTransfer := transfer cfg
   edgeTransfer := fun _ R => R

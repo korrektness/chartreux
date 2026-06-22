@@ -6,6 +6,19 @@ def State.updated (σ : State) (x : String) (v : Val) : State :=
 def State.empty : State := fun _ => none
 def State.isInit (σ : State) : Prop := σ = State.empty
 
+namespace State
+
+@[simp]
+theorem updated_eq (σ : State) (x : String) (v : Val) :
+    (σ.updated x v) x = some v := by simp [State.updated]
+
+theorem updated_neq (σ : State) (x y : String) (v : Val) (hne : x ≠ y) :
+    (σ.updated x v) y = σ y := by
+  unfold State.updated
+  exact if_neg hne
+
+end State
+
 def applyOp : BinOp -> Int -> Int -> Int
 | .add, n₁, n₂ => (n₁ + n₂)
 | .sub, n₁, n₂ => (n₁ - n₂)
@@ -41,4 +54,3 @@ inductive EvalExpr (σ : State) : Expr -> Val -> Prop where
     EvalExpr σ e₁ (.Int n₁) ->
     EvalExpr σ e₂ (.Int n₂) ->
     EvalExpr σ (.BinOp o e₁ e₂) (.Int (applyOp o n₁ n₂))
-
