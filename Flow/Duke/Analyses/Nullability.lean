@@ -327,7 +327,7 @@ def nAnalyzeCFG {locs : List Loc} (hnd : locs.Nodup)
 
 /-- Turn-key correctness for the bundled nullability analysis: at every reachable
     program point, the computed in fact correctly approximates the
-    /oncrete state. -/
+    concrete state. -/
 theorem nreachable_correct
     {locs : List Loc} (hnd : locs.Nodup)
     (cfg : WFCFG) :
