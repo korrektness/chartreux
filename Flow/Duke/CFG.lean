@@ -76,11 +76,10 @@ def lowerStmt : Stmt -> Builder (NodeID × NodeID)
     let atru <- addNode (.Assume c)
     let afls <- addNode (.Assume (.Not c))
     let (enb, exb) <- lowerStmt b
-    let ex <- addNode (.Skip)
     addEdge en atru; addEdge en afls
-    addEdge atru enb; addEdge afls ex
+    addEdge atru enb
     addEdge exb en
-    pure (en, ex)
+    pure (en, afls)
 
 def Stmt.cfg (s : Stmt) : CFG :=
     let (res, st) := (lowerStmt s).run { cfg := ⟨[], [], 0, 0⟩, nextID := 0 }
@@ -192,17 +191,17 @@ theorem lowerStmt_spec (s : Stmt) (b : BState) (hinv : b.nextID = b.cfg.nodes.le
     obtain ⟨hinvb, ⟨nsb, hnsb⟩, ⟨esb, hesb, hbb⟩, henb, hexb⟩ := hb
     have hL1 : b.cfg.nodes.length + 3 ≤ bb.cfg.nodes.length := by
       rw [hnsb]; grind
-    refine ⟨by simp [hinvb], ?_, ?_, by simp; grind, by simp [hinvb]⟩
-    · exact ⟨[NodeKind.Skip, NodeKind.Assume c, NodeKind.Assume c.Not] ++ nsb ++ [NodeKind.Skip],
+    refine ⟨by simp [hinvb], ?_, ?_, by simp; grind, by simp; grind⟩
+    · exact ⟨[NodeKind.Skip, NodeKind.Assume c, NodeKind.Assume c.Not] ++ nsb,
         by rw [hnsb]; simp [List.append_assoc]⟩
     · refine ⟨esb ++ [⟨b.nextID, b.nextID + 1⟩, ⟨b.nextID, b.nextID + 1 + 1⟩,
-        ⟨b.nextID + 1, enb⟩, ⟨b.nextID + 1 + 1, bb.nextID⟩, ⟨exb, b.nextID⟩],
+        ⟨b.nextID + 1, enb⟩, ⟨exb, b.nextID⟩],
         by rw [hesb]; simp [List.append_assoc], ?_⟩
       intro e he
       simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at he
       rcases he with he | he
       · have := hbb e he; simp; grind
-      · rcases he with h|h|h|h|h <;> subst h <;> simp <;> grind
+      · rcases he with h|h|h|h <;> subst h <;> simp <;> grind
 
 def CFG.WellFormed (g : CFG) :=
   (g.entry < g.nodes.length) ∧
