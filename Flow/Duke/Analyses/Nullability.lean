@@ -247,11 +247,21 @@ instance instTransferMonoN :
 /-! ## Correspondence predicate for concrete and abstract states -/
 
 /-- For each variable, if the analysis tells us it is not null, the concrete value is not null -/
-def ncorr (ℓ : NFact locs) (σ : State) : Prop :=
+def ncorr_self (ℓ : NFact locs) (σ : State) : Prop :=
   ∀ i v,
-    ℓ i = .nonnull ->
+    (ℓ i).fst = .nonnull ->
     σ (locs.get i) = some v ->
     v ≠ .Null
+/-- Variable `i` is the witness that variable `j` is not null -/
+def ncorr_wit (ℓ : NFact locs) (σ : State) : Prop :=
+  ∀ i j n v,
+    (ℓ i).snd j = .nonnull ->
+    σ (locs.get i) = some (.Int n) ->
+    n ≠ 0 -> -- if variable `i` is truthy
+    σ (locs.get j) = some v ->
+    v ≠ .Null
+
+def ncorr (ℓ : NFact locs) (σ : State) : Prop := ncorr_self ℓ σ ∧ ncorr_wit ℓ σ
 
 /-- The DFA closure for nullability, parameterised by the underlying CFG.
     The CFG is needed to read `nodeKind`. -/
@@ -269,17 +279,17 @@ lemma evalExpr_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : E
   | @var x v h =>
     split at h_abs <;> try contradiction
     rename_i hi
-    apply hcorr <;> try trivial
+    apply hcorr.left <;> try trivial
     grind [List.finIdxOf?_eq_some_iff]
 
-lemma nonNullAssumption_sound {locs : List Loc} {σ : State} {expr : Expr} {n : Int}
+lemma nonNullAssumption_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : Expr} {n : Int}
     {i : Fin locs.length}
+    (hcorr : ncorr ℓ σ)
     (heval : EvalExpr σ expr (Val.Int n))
     (htruthy : n ≠ 0)
-    (hget : σ (locs.get i) = some Val.Null)
-    (hass : locs.get i ∈ nonNullAssumption expr) :
-    ∃ j, j < i ∧ locs.get j = locs.get i := by
-  induction expr generalizing n with try contradiction
+    (hget : σ (locs.get i) = some Val.Null) :
+    locs.get i ∉ nonNullAssumption locs ℓ expr := by
+  induction expr generalizing n with (intro hass; try contradiction)
   | Not expr =>
     cases expr with try contradiction
     | IsNull expr =>
@@ -302,25 +312,40 @@ lemma nonNullAssumption_sound {locs : List Loc} {σ : State} {expr : Expr} {n : 
         have h2_neq : n₂ ≠ 0 := by grind [applyOp]
         simp! [nonNullAssumption] at hass
         cases hass <;> grind
+  | Var x =>
+    simp! [nonNullAssumption, extractWitnesses] at hass
+    split at hass <;> try trivial
+    rename_i j hin
+    have ⟨rfl, _⟩ := List.finIdxOf?_eq_some_iff.mp hin
+    cases heval with
+    | var _ _ h_sig =>
+      simp only [List.mem_filterMap, List.mem_finRange, true_and] at hass
+      obtain ⟨a, ha⟩ := hass
+      cases h_snd : (ℓ j).snd a <;> simp [h_snd] at ha
+      apply hcorr.right <;> try trivial
+      grind
 
-lemma assumeExpr_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : Expr} {n : Int}
+lemma exprWitness_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : Expr} {n : Int}
     (hcorr : ncorr ℓ σ)
     (heval : EvalExpr σ expr (Val.Int n))
     (htruthy : n ≠ 0) :
-    ncorr (assumeExpr locs ℓ expr) σ := by
-  simp! [ncorr, assumeExpr]
+    ncorr_self (fun i => (
+      if exprWitness locs ℓ expr i = NVal.nonnull then NVal.nonnull else (ℓ i).fst,
+      (ℓ i).snd
+    )) σ := by
   intro i v h henv rfl
-  apply hcorr <;> try trivial
+  apply hcorr.left <;> try trivial
+  simp! [exprWitness] at h
   apply h
   intro hass
+  absurd hass
   apply nonNullAssumption_sound <;> trivial
 
 private lemma n_preserve_update_none (ℓ : NFact locs)
-  (hnone : locs.finIdxOf? x = none) (hcorr : ncorr ℓ σ) :
-  ncorr ℓ (σ.updated x v) := by
-    intro j v' habs hupd hv'
-    simp only [ncorr, State.updated, hv'] at *
-    split at hupd <;> grind [List.finIdxOf?_eq_none_iff]
+    (hnone : locs.finIdxOf? x = none) (hcorr : ncorr ℓ σ) :
+    ncorr ℓ (σ.updated x v) := by
+  simp only [ncorr, ncorr_self, ncorr_wit, State.updated] at *
+  grind [List.finIdxOf?_eq_none_iff]
 
 @[simp] private lemma nDFA_transferAlong (cfg : WFCFG)
     (e : EdgeOf cfg.analysis) (ℓ : NFact locs) :
@@ -336,7 +361,7 @@ def nSemantics (hnd : locs.Nodup) :
     preserve_entry := by
       intro σ hinit
       cases hinit
-      simp [ncorr, nDFA, State.empty]
+      simp [ncorr, ncorr_self, ncorr_wit, nDFA, State.empty]
     preserve_step := by
       intro e σ σ' ℓ hstep hcorr
       simp only [nDFA_transferAlong, nTransfer, CFG.nodeKind]
@@ -345,23 +370,45 @@ def nSemantics (hnd : locs.Nodup) :
         rename_i x expr v _ _
         split
         · apply n_preserve_update_none <;> trivial
-        · intro k v' h hupd hv'
-          subst hv'
-          simp only at h
-          split_ifs at h
-          · subst k
-            rename_i i hi
-            have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
-            rw [Fin.getElem_fin] at hget
-            rw [List.get_eq_getElem, hget, State.updated_eq σ x v] at hupd
-            have h_v_not_null : v ≠ Val.Null := evalExpr_sound hcorr heval h
-            grind
-          · have h_x_neq : x ≠ locs.get k := by apply List.finIdxOf?_nodup <;> trivial
-            rw [State.updated_neq] at hupd <;> try trivial
-            apply hcorr <;> trivial
+        · rename_i i hi
+          split_ands
+          · intro j v' h hupd rfl
+            simp only at h
+            split_ifs at h
+            · subst j
+              have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
+              rw [Fin.getElem_fin] at hget
+              rw [List.get_eq_getElem, hget, State.updated_eq σ x v] at hupd
+              have h_v_not_null : v ≠ Val.Null := evalExpr_sound hcorr heval h
+              grind
+            · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
+              rw [State.updated_neq] at hupd <;> try trivial
+              apply hcorr.left <;> trivial
+          · intro j k n v' hupd1 habs hn hupd2 rfl
+            simp only at hupd1
+            split_ifs at hupd1 <;> simp only at hupd1
+            · subst j
+              have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
+              rw [Fin.getElem_fin] at hget
+              rw [List.get_eq_getElem, hget, State.updated_eq σ x v] at habs
+              injection habs
+              subst v
+              by_cases h_ki : k = i
+              · subst k
+                rw [List.get_eq_getElem, hget, State.updated_eq] at hupd2
+                injection hupd2
+                contradiction
+              · have h_x_neq : x ≠ locs.get k := by apply List.finIdxOf?_nodup <;> trivial
+                rw [State.updated_neq] at hupd2 <;> try trivial
+                apply exprWitness_sound hcorr heval hn k .Null <;> grind
+            · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
+              rw [State.updated_neq] at habs <;> try trivial
       | @assum _ _ n _ _ _ heval htruthy _ =>
         have : n ≠ 0 := by grind
-        apply assumeExpr_sound <;> trivial
+        simp only [ncorr, beq_iff_eq]
+        split_ands
+        · apply exprWitness_sound <;> trivial
+        · apply hcorr.right
     preserve_stutter := by
       intro _n σ σ' ℓ hstut hcorr
       simp only [LangSem.LStutter] at hstut
@@ -369,16 +416,35 @@ def nSemantics (hnd : locs.Nodup) :
       assumption
   }
 
-theorem mono_absorb_corr
+theorem mono_absorb_corr_self
     {ℓ ℓ' : NFact locs} {σ : State} (h : ℓ ⊑ ℓ')
-    (hcorr : ncorr ℓ σ) : ncorr ℓ' σ := by
-  simp only [ncorr] at *
+    (hcorr : ncorr_self ℓ σ) : ncorr_self ℓ' σ := by
+  simp only [ncorr_self] at *
   intros i v habs
-  have hi : ℓ i ⊑ ℓ' i := Domain.ord_distr h
+  have hi : (ℓ i).fst ⊑ (ℓ' i).fst := by
+    exact congrArg (fun ρ => (ρ i).fst) h
   rw [habs] at hi
   simp only [max] at hi
   generalize heq : ℓ i = x at hi
+  grind
+theorem mono_absorb_corr_wit
+    {ℓ ℓ' : NFact locs} {σ : State} (h : ℓ ⊑ ℓ')
+    (hcorr : ncorr_wit ℓ σ) : ncorr_wit ℓ' σ := by
+  simp only [ncorr_wit] at *
+  intro i j n v habs
+  have hi : (ℓ i).snd ⊑ (ℓ' i).snd := by
+    exact congrArg (fun ρ => (ρ i).snd) h
+  apply Domain.ord_distr at hi
+  rw [habs] at hi
+  simp only [max] at hi
+  generalize heq : (ℓ i).snd j = x at hi
   cases x <;> grind
+theorem mono_absorb_corr
+    {ℓ ℓ' : NFact locs} {σ : State} (h : ℓ ⊑ ℓ')
+    (hcorr : ncorr ℓ σ) : ncorr ℓ' σ := by
+  unfold ncorr at *
+  grind [mono_absorb_corr_self, mono_absorb_corr_wit]
+
 
 /-! ## Bundled Nullability analysis -/
 
