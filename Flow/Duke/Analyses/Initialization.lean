@@ -20,6 +20,12 @@ open Flow.Analysis.Generic
 -/
 abbrev Fact (locs : List Loc) : Type := Domain locs.length Bool
 
+def formatFact (locs : List Loc) (ℓ : Fact locs) : String :=
+  let parts : List String :=
+    (List.finRange locs.length).filterMap fun i =>
+      let isUninitialized := ℓ i
+      if isUninitialized then some (locs.get i) else none
+  "uninit[" ++ String.intercalate ", " parts ++ "]"
 
 /-! ## CFG transition functions -/
 
@@ -211,8 +217,9 @@ def checkNode {locs : List Loc} (ℓ : Fact locs) : NodeKind → Bool
   | .Assign _ e => checkExpr ℓ e
   | .Assume e => checkExpr ℓ e
 
-def checkCFG {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) : Bool :=
-  let res := analyzeCFG hnd cfg
+def checkCFG (cfg : WFCFG) : Bool :=
+  let locs := vars cfg
+  let res := analyzeCFG locs.prop cfg
   (List.range cfg.val.nodes.length).all fun n =>
     match cfg.val.nodes[n]? with
     | none => false
