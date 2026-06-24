@@ -486,4 +486,28 @@ theorem nreachable_correct
     R.inFacts_entry
     hreach
 
+def checkExpr {locs : List Loc} (ℓ : NFact locs) : Expr -> Bool
+  | .Null => true
+  | .Int _ => true
+  | .Var _ => true
+  | .IsNull e => checkExpr ℓ e
+  | .Not e =>
+      checkExpr ℓ e && (evalExpr locs ℓ e == NVal.nonnull)
+  | .BinOp _ e₁ e₂ =>
+      checkExpr ℓ e₁ && checkExpr ℓ e₂ &&
+      (evalExpr locs ℓ e₁ == NVal.nonnull) && (evalExpr locs ℓ e₂ == NVal.nonnull)
+
+def checkNode {locs : List Loc} (ℓ : NFact locs) : NodeKind -> Bool
+  | .Skip => true
+  | .Assign _ e => checkExpr ℓ e
+  | .Assume e => checkExpr ℓ e
+
+def checkCFG (cfg : WFCFG) : Bool :=
+  let locs := vars cfg
+  let res := nAnalyzeCFG locs.prop cfg
+  (List.range cfg.val.nodes.length).all fun n =>
+    match cfg.val.nodes[n]? with
+    | none => false
+    | some kind => checkNode (res.inFacts n) kind
+
 end Duke.Analysis.Nullability
