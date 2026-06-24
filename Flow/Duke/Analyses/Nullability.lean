@@ -26,13 +26,6 @@ instance : ToString NVal where
     | .nonnull => "nonnull"
     | .top     => "⊤"
 
-instance {v : List String} : ToString (Domain v.length NVal) where
-  toString ρ :=
-    let parts : List String :=
-      (List.finRange v.length).map fun i =>
-        v.get i ++ "=" ++ toString (ρ i)
-    "[" ++ String.intercalate ", " parts ++ "]"
-
 instance : Bot NVal where
   bot := .nonnull
 
@@ -76,6 +69,22 @@ def extractWitnesses (locs : List Loc) (wit : NWitness locs) : List Loc :=
              | _ => none
   )
 
+/-- Pretty-print a witness map using variable names: the set of locations
+    that this witness currently proves to be non-null. -/
+def formatNWitness (witnesses : List Loc) : String :=
+  "{" ++ String.intercalate ", " witnesses ++ "}"
+
+/-- Pretty-print a nullability fact using variable names. For each tracked
+    variable we show its abstract nullability value and the set of variables
+    it witnesses as non-null. -/
+def formatNFact (locs : List Loc) (ℓ : NFact locs) : String :=
+  let parts : List String :=
+    (List.finRange locs.length).map fun i =>
+      let (v, wit) := ℓ i
+      let witnesses := extractWitnesses locs wit
+      s!"{locs.get i}={v}" ++ if witnesses.isEmpty then "" else s!" ⇒ {formatNWitness witnesses}"
+  "[" ++ String.intercalate ", " parts ++ "]"
+
 def nonNullAssumption (locs : List Loc) (inFacts : NFact locs) (e : Expr) : List Loc :=
   match e with
   | .BinOp .and e₁ e₂ => nonNullAssumption locs inFacts e₁ ++ nonNullAssumption locs inFacts e₂
@@ -98,8 +107,8 @@ def evalExpr (locs : List Loc) (ρ : NFact locs) : Expr → NVal
       match locs.finIdxOf? x with
       | none   => .top
       | some i => ρ i |>.fst
-  | .IsNull e => evalExpr locs ρ e
-  | .Not e => evalExpr locs ρ e
+  | .IsNull _ => .nonnull
+  | .Not _ => .nonnull
   | .BinOp _ e₁ e₂ => evalExpr locs ρ e₁ ⊔ evalExpr locs ρ e₂
 
 def nTransfer (locs : List Loc) (g : CFG) (n : NodeID) :
@@ -178,9 +187,7 @@ private lemma exprWitness_mono (ρ₁ ρ₂ : NFact locs)
 private lemma evalExpr_mono (ρ₁ ρ₂ : NFact locs)
     (hρ : ρ₁ ⊑ ρ₂) (e : Expr) :
     evalExpr locs ρ₁ e ⊑ evalExpr locs ρ₂ e := by
-  induction e with simp only [evalExpr]
-  | Null => grind [LatticeLike.join_idem]
-  | Int n => grind [LatticeLike.join_idem]
+  induction e with (simp only [evalExpr]; try grind [LatticeLike.join_idem])
   | Var x =>
     split <;> try rfl
     rename_i i _
@@ -193,8 +200,6 @@ private lemma evalExpr_mono (ρ₁ ρ₂ : NFact locs)
       rw [ha₁, ha₂] at ih₁ <;>
       rw [hb₁, hb₂] at ih₂ <;>
       simp_all [Max.max]
-  | Not e => grind
-  | IsNull e => grind
 
 private lemma nTransfer_mono (n : NodeID) :
     mono_f (nTransfer locs cfg n) := by
@@ -265,6 +270,7 @@ def ncorr (ℓ : NFact locs) (σ : State) : Prop := ncorr_self ℓ σ ∧ ncorr_
 
 /-- The DFA closure for nullability, parameterised by the underlying CFG.
     The CFG is needed to read `nodeKind`. -/
+@[reducible]
 def nDFA (locs : List Loc) : DFA NodeID Edge where
   L            := NFact locs
   nodeTransfer := nTransfer locs cfg
@@ -361,7 +367,7 @@ def nSemantics (hnd : locs.Nodup) :
     preserve_entry := by
       intro σ hinit
       cases hinit
-      simp [ncorr, ncorr_self, ncorr_wit, nDFA, State.empty]
+      simp [ncorr, ncorr_self, ncorr_wit, State.empty]
     preserve_step := by
       intro e σ σ' ℓ hstep hcorr
       simp only [nDFA_transferAlong, nTransfer, CFG.nodeKind]
@@ -450,6 +456,7 @@ theorem mono_absorb_corr
 
 /-- A bundled `Flow.Analysis` for nullability, parameterized by
     the variable list, a `Nodup` proof, and the underlying CFG. -/
+@[reducible]
 def nAnalysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
     Flow.Analysis (ls := dukeLangSem cfg) NodeID Edge State :=
   { dfa          := nDFA cfg locs
@@ -489,5 +496,29 @@ theorem nreachable_correct
     R.isPostFix
     R.inFacts_entry
     hreach
+
+def checkExpr {locs : List Loc} (ℓ : NFact locs) : Expr -> Bool
+  | .Null => true
+  | .Int _ => true
+  | .Var _ => true
+  | .IsNull e => checkExpr ℓ e
+  | .Not e =>
+      checkExpr ℓ e && (evalExpr locs ℓ e == NVal.nonnull)
+  | .BinOp _ e₁ e₂ =>
+      checkExpr ℓ e₁ && checkExpr ℓ e₂ &&
+      (evalExpr locs ℓ e₁ == NVal.nonnull) && (evalExpr locs ℓ e₂ == NVal.nonnull)
+
+def checkNode {locs : List Loc} (ℓ : NFact locs) : NodeKind -> Bool
+  | .Skip => true
+  | .Assign _ e => checkExpr ℓ e
+  | .Assume e => checkExpr ℓ e
+
+def checkCFG (cfg : WFCFG) : Bool :=
+  let locs := vars cfg
+  let res := nAnalyzeCFG locs.prop cfg
+  (List.range cfg.val.nodes.length).all fun n =>
+    match cfg.val.nodes[n]? with
+    | none => false
+    | some kind => checkNode (res.inFacts n) kind
 
 end Duke.Analysis.Nullability
