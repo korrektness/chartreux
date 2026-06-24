@@ -26,13 +26,6 @@ instance : ToString NVal where
     | .nonnull => "nonnull"
     | .top     => "⊤"
 
-instance {v : List String} : ToString (Domain v.length NVal) where
-  toString ρ :=
-    let parts : List String :=
-      (List.finRange v.length).map fun i =>
-        v.get i ++ "=" ++ toString (ρ i)
-    "[" ++ String.intercalate ", " parts ++ "]"
-
 instance : Bot NVal where
   bot := .nonnull
 
@@ -75,6 +68,21 @@ def extractWitnesses (locs : List Loc) (wit : NWitness locs) : List Loc :=
              | .nonnull => some (locs.get i)
              | _ => none
   )
+
+/-- Pretty-print a witness map using variable names: the set of locations
+    that this witness currently proves to be non-null. -/
+def formatNWitness (locs : List Loc) (wit : NWitness locs) : String :=
+  "{" ++ String.intercalate ", " (extractWitnesses locs wit) ++ "}"
+
+/-- Pretty-print a nullability fact using variable names. For each tracked
+    variable we show its abstract nullability value and the set of variables
+    it witnesses as non-null. -/
+def formatNFact (locs : List Loc) (ℓ : NFact locs) : String :=
+  let parts : List String :=
+    (List.finRange locs.length).map fun i =>
+      let (v, wit) := ℓ i
+      s!"{locs.get i}={v}|->{formatNWitness locs wit}"
+  "[" ++ String.intercalate ", " parts ++ "]"
 
 def nonNullAssumption (locs : List Loc) (inFacts : NFact locs) (e : Expr) : List Loc :=
   match e with
@@ -261,6 +269,7 @@ def ncorr (ℓ : NFact locs) (σ : State) : Prop := ncorr_self ℓ σ ∧ ncorr_
 
 /-- The DFA closure for nullability, parameterised by the underlying CFG.
     The CFG is needed to read `nodeKind`. -/
+@[reducible]
 def nDFA (locs : List Loc) : DFA NodeID Edge where
   L            := NFact locs
   nodeTransfer := nTransfer locs cfg
@@ -357,7 +366,7 @@ def nSemantics (hnd : locs.Nodup) :
     preserve_entry := by
       intro σ hinit
       cases hinit
-      simp [ncorr, ncorr_self, ncorr_wit, nDFA, State.empty]
+      simp [ncorr, ncorr_self, ncorr_wit, State.empty]
     preserve_step := by
       intro e σ σ' ℓ hstep hcorr
       simp only [nDFA_transferAlong, nTransfer, CFG.nodeKind]
@@ -446,6 +455,7 @@ theorem mono_absorb_corr
 
 /-- A bundled `Flow.Analysis` for nullability, parameterized by
     the variable list, a `Nodup` proof, and the underlying CFG. -/
+@[reducible]
 def nAnalysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
     Flow.Analysis (ls := dukeLangSem cfg) NodeID Edge State :=
   { dfa          := nDFA cfg locs

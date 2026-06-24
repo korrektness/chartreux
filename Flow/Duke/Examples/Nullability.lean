@@ -33,4 +33,7 @@ def sv : { l : List String // l.Nodup } := vars cfg
 
 def result : Flow.AnalysisResult (nAnalysis sv.prop cfg) :=
   nAnalyzeCFG sv.prop cfg
-  #eval IO.println (cfg.val.toDotWithFn result.inFacts result.outFacts)
+
+#eval IO.println (cfg.val.toDotWithFn (A := String)
+  (fun n => formatNFact sv.val (result.inFacts n))
+  (fun n => formatNFact sv.val (result.outFacts n)))

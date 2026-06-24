@@ -50,7 +50,7 @@ def escape (s : String) : String :=
             | _    => String.singleton c)) ""
 
 def shape : NodeKind -> String
-| .Assume _ => "diamond"
+| .Assume _ => "ellipse"
 | _         => "box"
 
 -- Annotations
