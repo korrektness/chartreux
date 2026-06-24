@@ -40,31 +40,66 @@ def nodeLabel : NodeKind -> String
 | .Assign x e => s!"{x} := {exprStr e}"
 | .Assume e   => s!"assume {exprStr e}"
 
--- escape characters that are special inside a Graphviz quoted label
+-- escape characters that are special inside a Graphviz quoted label.
 def escape (s : String) : String :=
   s.foldl (fun acc c =>
     acc ++ (match c with
             | '"'  => "\\\""
             | '\\' => "\\\\"
+            | '\n' => "\\l"
             | _    => String.singleton c)) ""
 
 def shape : NodeKind -> String
 | .Assume _ => "diamond"
 | _         => "box"
 
-def toDot (g : CFG) : String :=
+-- Annotations
+abbrev Annotator := NodeID -> Option (String × String)
+
+def nodeText (annot : Annotator) (i : NodeID) (k : NodeKind) : String :=
+  let body := s!"{i}: {nodeLabel k}"
+  match annot i with
+  | some (inS, outS) => s!"IN: {inS}\n{body}\nOUT: {outS}\n"
+  | none             => body
+
+/-- Core DOT printer, parameterized by an optional per-node annotator. -/
+def toDotCore (g : CFG) (annot : Annotator) : String :=
   let nodeLines :=
     g.nodes.zipIdx.map (fun (k, i) =>
-      s!"  n{i} [label=\"{i}: {escape (nodeLabel k)}\", shape={shape k}];")
+      s!"  n{i} [label=\"{escape (nodeText annot i k)}\", shape={shape k}];")
   let edgeLines :=
     g.edges.map (fun e => s!"  n{e.src} -> n{e.dst};")
   let body := String.intercalate "\n" (nodeLines ++ edgeLines)
   s!"digraph CFG \{\n{body}\n}"
 
+def toDot (g : CFG) : String := toDotCore g (fun _ => none)
+
+
+def annotatorOfStates {A : Type} [ToString A]
+    (ag : AnalysisCFG NodeID Edge) (inSt outSt : StateN ag A) : Dot.Annotator :=
+  fun n =>
+    if h : n ∈ ag.nodes then
+      some (toString (inSt ⟨n, h⟩), toString (outSt ⟨n, h⟩))
+    else
+      none
+
 end Dot
 
 def CFG.toDot (g : CFG) : String := Dot.toDot g
 def Stmt.toDot (s : Stmt) : String := Dot.toDot s.cfg
+
+/-- Render a `CFG` as a Graphviz DOT string, overlaying each node with the
+    IN/OUT facts produced by an analysis on `ag`. -/
+def CFG.toDotWith {A : Type} [ToString A]
+    (g : CFG) (ag : AnalysisCFG NodeID Edge)
+    (inSt outSt : StateN ag A) : String :=
+  Dot.toDotCore g (Dot.annotatorOfStates ag inSt outSt)
+
+/-- Variant of `toDotWith` that takes plain `NodeID -> A` annotators
+    (e.g. the bundled `AnalysisResult.inFacts` / `outFacts`). -/
+def CFG.toDotWithFn {A : Type} [ToString A]
+    (g : CFG) (inF outF : NodeID -> A) : String :=
+  Dot.toDotCore g (fun n => some (toString (inF n), toString (outF n)))
 
 -- sanity checks
 #eval IO.println (Stmt.Seq (Stmt.Decl "x" (.Null)) (Stmt.Assign "x" (.Int 0))).toDot
