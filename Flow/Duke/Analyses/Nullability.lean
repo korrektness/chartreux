@@ -71,8 +71,8 @@ def extractWitnesses (locs : List Loc) (wit : NWitness locs) : List Loc :=
 
 /-- Pretty-print a witness map using variable names: the set of locations
     that this witness currently proves to be non-null. -/
-def formatNWitness (locs : List Loc) (wit : NWitness locs) : String :=
-  "{" ++ String.intercalate ", " (extractWitnesses locs wit) ++ "}"
+def formatNWitness (witnesses : List Loc) : String :=
+  "{" ++ String.intercalate ", " witnesses ++ "}"
 
 /-- Pretty-print a nullability fact using variable names. For each tracked
     variable we show its abstract nullability value and the set of variables
@@ -81,7 +81,8 @@ def formatNFact (locs : List Loc) (ℓ : NFact locs) : String :=
   let parts : List String :=
     (List.finRange locs.length).map fun i =>
       let (v, wit) := ℓ i
-      s!"{locs.get i}={v}|->{formatNWitness locs wit}"
+      let witnesses := extractWitnesses locs wit
+      s!"{locs.get i}={v}" ++ if witnesses.isEmpty then "" else s!" ⇒ {formatNWitness witnesses}"
   "[" ++ String.intercalate ", " parts ++ "]"
 
 def nonNullAssumption (locs : List Loc) (inFacts : NFact locs) (e : Expr) : List Loc :=
