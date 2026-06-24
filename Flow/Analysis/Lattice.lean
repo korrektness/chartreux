@@ -218,59 +218,25 @@ instance : LatticeLike (Option L) where
 
 end Option
 
--- `Fin n` has no bottom element so it is not `LatticeLike`,
--- but we can make `Option.none` the bottom element of `Option (Fin n)`.
-section OptionFin
+-- A boolean lattice with `false` as bottom
+section Bool
 
-variable (n : ℕ)
+instance : Max Bool where
+  max := Bool.or
 
-instance : Max (Option (Fin n)) where
-  max
-  | none, x => x
-  | x, none => x
-  | some i, some j => some (if i.val ≤ j.val then j else i)
+instance : Bot Bool where
+  bot := false
 
-instance : Bot (Option (Fin n)) where
-  bot := none
+instance : FiniteHeight Bool where
+  remainingHeight a := if a then 0 else 1
+  height_join := by simp! [max]
 
-instance : FiniteHeight (Option (Fin n)) where
-  remainingHeight
-  | none => n
-  | some i => n - 1 - i
-  height_join := by
-    intro x y hmax
-    cases x with
-    | none =>
-      cases y with
-      | none => contradiction
-      | some j =>
-        simp only [max] at *
-        omega
-    | some i =>
-      cases y with
-      | none =>
-        simp [max] at hmax
-      | some j =>
-        simp [max] at *
-        split_ifs <;> omega
+instance : LatticeLike Bool where
+  join_comm := by simp [max]
+  join_assoc := by simp [max]
+  join_idem := by simp [max]
+  bot_le := by simp [max]
 
-instance : LatticeLike (Option (Fin n)) where
-  join_comm := by
-    intro x y
-    cases x <;> cases y <;> simp only [max]
-    split_ifs <;> congr <;> omega
-  join_assoc := by
-    intro x y z
-    cases x <;> cases y <;> cases z <;> simp only [max]
-    split_ifs <;> congr <;> omega
-  join_idem := by
-    intro x
-    cases x <;> simp only [max]
-    split_ifs <;> rfl
-  bot_le := by
-    intro x
-    cases x <;> rfl
-
-end OptionFin
+end Bool
 
 end Basics
