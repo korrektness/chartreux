@@ -74,7 +74,6 @@ def toDotCore (g : CFG) (annot : Annotator) : String :=
 
 def toDot (g : CFG) : String := toDotCore g (fun _ => none)
 
-
 def annotatorOfStates {A : Type} [ToString A]
     (ag : AnalysisCFG NodeID Edge) (inSt outSt : StateN ag A) : Dot.Annotator :=
   fun n =>
@@ -85,21 +84,13 @@ def annotatorOfStates {A : Type} [ToString A]
 
 end Dot
 
-def CFG.toDot (g : CFG) : String := Dot.toDot g
-def Stmt.toDot (s : Stmt) : String := Dot.toDot s.cfg
-
-/-- Render a `CFG` as a Graphviz DOT string, overlaying each node with the
-    IN/OUT facts produced by an analysis on `ag`. -/
-def CFG.toDotWith {A : Type} [ToString A]
-    (g : CFG) (ag : AnalysisCFG NodeID Edge)
-    (inSt outSt : StateN ag A) : String :=
-  Dot.toDotCore g (Dot.annotatorOfStates ag inSt outSt)
-
-/-- Variant of `toDotWith` that takes plain `NodeID -> A` annotators
-    (e.g. the bundled `AnalysisResult.inFacts` / `outFacts`). -/
+/-- annotated printing -/
 def CFG.toDotWithFn {A : Type} [ToString A]
     (g : CFG) (inF outF : NodeID -> A) : String :=
   Dot.toDotCore g (fun n => some (toString (inF n), toString (outF n)))
+
+/-- unannotated printing -/
+def Stmt.toDot (s : Stmt) := Dot.toDotCore s.cfg (fun _ => none)
 
 -- sanity checks
 #eval IO.println (Stmt.Seq (Stmt.Decl "x" (.Null)) (Stmt.Assign "x" (.Int 0))).toDot
