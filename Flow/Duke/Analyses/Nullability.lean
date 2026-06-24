@@ -58,27 +58,46 @@ instance : LatticeLike NVal where
 
 /-! ## CFG transition functions -/
 
-/-- A nullability fact for a program with location `locs`
-    is a `Domain` over `NVal`. -/
-abbrev NFact (locs : List Loc) : Type := Domain locs.length NVal
+/-- A nullability witness for other variables -/
+abbrev NWitness (locs : List Loc) : Type := Domain locs.length NVal
+def emptyWitness (locs : List Loc) : NWitness locs := fun _ => .top
 
-def nonNullAssumption (e : Expr) : List Loc :=
+/-- A nullability fact for a program with location `locs`
+    is a `Domain` over
+    * `NVal` - am I null?
+    * `NWitness` - do I carry the proof that others are null?
+-/
+abbrev NFact (locs : List Loc) : Type := Domain locs.length (NVal × NWitness locs)
+
+def extractWitnesses (locs : List Loc) (wit : NWitness locs) : List Loc :=
+  (List.finRange locs.length).filterMap (
+    fun i => match wit i with
+             | .nonnull => some (locs.get i)
+             | _ => none
+  )
+
+def nonNullAssumption (locs : List Loc) (inFacts : NFact locs) (e : Expr) : List Loc :=
   match e with
-  | .BinOp .and e₁ e₂ => nonNullAssumption e₁ ++ nonNullAssumption e₂
+  | .BinOp .and e₁ e₂ => nonNullAssumption locs inFacts e₁ ++ nonNullAssumption locs inFacts e₂
   | .Not (.IsNull (.Var x)) => [x]
+  | .Var x =>
+      match locs.finIdxOf? x with
+      | none   => []
+      | some i => inFacts i |>.snd |> extractWitnesses locs
   | _ => []
 
-def assumeExpr (locs : List Loc) (inFacts : NFact locs) (e : Expr) : NFact locs :=
-  let nonNull := nonNullAssumption e |>.filterMap locs.finIdxOf?
-  fun j => if nonNull.contains j then .nonnull else inFacts j
+/-- What does this expression witness? -/
+def exprWitness (locs : List Loc) (inFacts : NFact locs) (e : Expr) : NWitness locs :=
+  let nonNull := nonNullAssumption locs inFacts e |>.filterMap locs.finIdxOf?
+  fun j => if nonNull.contains j then .nonnull else .top
 
 def evalExpr (locs : List Loc) (ρ : NFact locs) : Expr → NVal
   | .Null => .top
   | .Int _ => .nonnull
   | .Var x =>
-      match  locs.finIdxOf? x with
+      match locs.finIdxOf? x with
       | none   => .top
-      | some i => ρ i
+      | some i => ρ i |>.fst
   | .IsNull e => evalExpr locs ρ e
   | .Not e => evalExpr locs ρ e
   | .BinOp _ e₁ e₂ => evalExpr locs ρ e₁ ⊔ evalExpr locs ρ e₂
@@ -91,32 +110,70 @@ def nTransfer (locs : List Loc) (g : CFG) (n : NodeID) :
     | none   => ρ
     | some i =>
         let v := evalExpr locs ρ e
-        fun j => if j = i then v else ρ j
-  | some (.Assume e) => assumeExpr locs ρ e
+        let wit := exprWitness locs ρ e
+        -- mutation might have invalidated some of the witnesses
+        -- we could be smart about just invalidating relevant ones,
+        -- but for now we just invalidate all of them.
+        -- TODO: invalidate only relevant bits
+        fun j => if j = i then (v, wit) else (ρ j |>.fst, emptyWitness locs)
+  | some (.Assume e) =>
+    let wit := exprWitness locs ρ e
+    -- we preserve the witnesses from before, but update the nullability status
+    fun i => (if wit i == .nonnull then .nonnull else ρ i |>.fst, ρ i |>.snd)
   | some .Skip | none => ρ
 
 /-- Edge transfer for forward nullability is the identity. -/
 def nEdgeTransfer (vars : List String) : Edge -> NFact vars -> NFact vars :=
   fun _ a => a
 
-/-- The default initial fact: every tracked variable is `nonnull`. -/
-def nEntryInit (locs : List Loc) : NFact locs := fun _ => .nonnull
+/-- The default initial fact: every tracked variable is `nonnull` and carries witnesses. -/
+def nEntryInit (locs : List Loc) : NFact locs := fun _ => (.nonnull, emptyWitness locs)
 
 /-! ### Transfer function monotonicity -/
 
 variable (cfg : WFCFG)
 variable {locs : List Loc}
 
-private lemma assumeExpr_mono (ρ₁ ρ₂ : NFact locs)
+private lemma extractWitnesses_incl (ρ₁ ρ₂ : NWitness locs)
+    (hρ : ρ₁ ⊑ ρ₂) (l : Loc) :
+    l ∈ extractWitnesses locs ρ₂ -> l ∈ extractWitnesses locs ρ₁ := by
+  unfold extractWitnesses
+  intro h
+  rw [List.mem_filterMap] at *
+  have ⟨i, hin, heq⟩ := h
+  use i
+  apply Domain.ord_distr (i := i) at hρ
+  generalize h1 : ρ₁ i = x₁ at *
+  generalize h2 : ρ₂ i = x₂ at *
+  cases x₁ <;> cases x₂ <;> trivial
+
+private lemma nonNullAssumption_incl (ρ₁ ρ₂ : NFact locs)
+    (hρ : ρ₁ ⊑ ρ₂) (e : Expr) (l : Loc) :
+    l ∈ nonNullAssumption locs ρ₂ e -> l ∈ nonNullAssumption locs ρ₁ e := by
+  induction e generalizing l with try grind [nonNullAssumption]
+  | Not e => unfold nonNullAssumption at *; grind
+  | BinOp op e₁ e₂ ih₁ ih₂ =>
+    intro hin
+    cases op <;> grind [nonNullAssumption]
+  | Var x =>
+    simp [nonNullAssumption]
+    split <;> try grind
+    rename_i i _
+    apply extractWitnesses_incl
+    exact congrArg (fun ρ => (ρ i).snd) hρ
+
+private lemma exprWitness_mono (ρ₁ ρ₂ : NFact locs)
     (hρ : ρ₁ ⊑ ρ₂) (e : Expr) :
-    assumeExpr locs ρ₁ e ⊑ assumeExpr locs ρ₂ e := by
-  unfold assumeExpr
+    exprWitness locs ρ₁ e ⊑ exprWitness locs ρ₂ e := by
+  unfold exprWitness
   simp only
   funext j
   rw [Domain.max_app]
-  split
-  · apply LatticeLike.join_idem
-  · grind [Domain.ord_distr hρ]
+  repeat split <;> try rfl
+  rename_i hneg hpos
+  absurd hneg
+  rw [List.contains_iff_mem, List.mem_filterMap] at *
+  grind [nonNullAssumption_incl]
 
 private lemma evalExpr_mono (ρ₁ ρ₂ : NFact locs)
     (hρ : ρ₁ ⊑ ρ₂) (e : Expr) :
@@ -124,7 +181,10 @@ private lemma evalExpr_mono (ρ₁ ρ₂ : NFact locs)
   induction e with simp only [evalExpr]
   | Null => grind [LatticeLike.join_idem]
   | Int n => grind [LatticeLike.join_idem]
-  | Var x => grind [LatticeLike.join_idem, Domain.ord_distr hρ]
+  | Var x =>
+    split <;> try rfl
+    rename_i i _
+    exact congrArg (fun ρ => (ρ i).fst) hρ
   | BinOp op e₁ e₂ ih₁ ih₂ =>
     cases ha₁ : evalExpr locs ρ₁ e₁ <;>
       cases hb₁ : evalExpr locs ρ₁ e₂ <;>
@@ -152,11 +212,29 @@ private lemma nTransfer_mono (n : NodeID) :
     | Assign x e =>
       generalize hx : locs.finIdxOf? x = a
       cases a <;> simp only <;> try split
-      all_goals grind [Domain.ord_distr hxy, evalExpr_mono]
+      · apply Domain.ord_distr
+        assumption
+      · ext
+        case fst =>
+          apply evalExpr_mono
+          assumption
+        case h k =>
+          apply Domain.ord_distr
+          apply exprWitness_mono
+          assumption
+      · ext
+        case fst => exact congrArg (fun ρ => (ρ j).fst) hxy
+        case h k => rfl
     | Assume e =>
-      apply Domain.ord_distr
-      apply assumeExpr_mono
-      assumption
+      ext
+      case fst =>
+        have hw_mono := Domain.ord_distr (exprWitness_mono ρ₁ ρ₂ hxy e) (i := j)
+        generalize hw1 : exprWitness locs ρ₁ e j = w₁ at *
+        generalize hw2 : exprWitness locs ρ₂ e j = w₂ at *
+        cases w₁ <;> cases w₂ <;> simp [Max.max] at * <;> grind
+      case h i =>
+        apply Domain.ord_distr
+        exact congrArg (fun ρ => (ρ j).snd) hxy
 
 private lemma nEdgeTransfer_mono :
     ∀ e, mono_f (nEdgeTransfer locs e) := fun _ _ _ h => h
@@ -169,11 +247,21 @@ instance instTransferMonoN :
 /-! ## Correspondence predicate for concrete and abstract states -/
 
 /-- For each variable, if the analysis tells us it is not null, the concrete value is not null -/
-def ncorr (ℓ : NFact locs) (σ : State) : Prop :=
+def ncorr_self (ℓ : NFact locs) (σ : State) : Prop :=
   ∀ i v,
-    ℓ i = .nonnull ->
+    (ℓ i).fst = .nonnull ->
     σ (locs.get i) = some v ->
     v ≠ .Null
+/-- Variable `i` is the witness that variable `j` is not null -/
+def ncorr_wit (ℓ : NFact locs) (σ : State) : Prop :=
+  ∀ i j n v,
+    (ℓ i).snd j = .nonnull ->
+    σ (locs.get i) = some (.Int n) ->
+    n ≠ 0 -> -- if variable `i` is truthy
+    σ (locs.get j) = some v ->
+    v ≠ .Null
+
+def ncorr (ℓ : NFact locs) (σ : State) : Prop := ncorr_self ℓ σ ∧ ncorr_wit ℓ σ
 
 /-- The DFA closure for nullability, parameterised by the underlying CFG.
     The CFG is needed to read `nodeKind`. -/
@@ -191,17 +279,17 @@ lemma evalExpr_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : E
   | @var x v h =>
     split at h_abs <;> try contradiction
     rename_i hi
-    apply hcorr <;> try trivial
+    apply hcorr.left <;> try trivial
     grind [List.finIdxOf?_eq_some_iff]
 
-lemma nonNullAssumption_sound {locs : List Loc} {σ : State} {expr : Expr} {n : Int}
+lemma nonNullAssumption_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : Expr} {n : Int}
     {i : Fin locs.length}
+    (hcorr : ncorr ℓ σ)
     (heval : EvalExpr σ expr (Val.Int n))
     (htruthy : n ≠ 0)
-    (hget : σ (locs.get i) = some Val.Null)
-    (hass : locs.get i ∈ nonNullAssumption expr) :
-    ∃ j, j < i ∧ locs.get j = locs.get i := by
-  induction expr generalizing n with try contradiction
+    (hget : σ (locs.get i) = some Val.Null) :
+    locs.get i ∉ nonNullAssumption locs ℓ expr := by
+  induction expr generalizing n with (intro hass; try contradiction)
   | Not expr =>
     cases expr with try contradiction
     | IsNull expr =>
@@ -224,25 +312,40 @@ lemma nonNullAssumption_sound {locs : List Loc} {σ : State} {expr : Expr} {n : 
         have h2_neq : n₂ ≠ 0 := by grind [applyOp]
         simp! [nonNullAssumption] at hass
         cases hass <;> grind
+  | Var x =>
+    simp! [nonNullAssumption, extractWitnesses] at hass
+    split at hass <;> try trivial
+    rename_i j hin
+    have ⟨rfl, _⟩ := List.finIdxOf?_eq_some_iff.mp hin
+    cases heval with
+    | var _ _ h_sig =>
+      simp only [List.mem_filterMap, List.mem_finRange, true_and] at hass
+      obtain ⟨a, ha⟩ := hass
+      cases h_snd : (ℓ j).snd a <;> simp [h_snd] at ha
+      apply hcorr.right <;> try trivial
+      grind
 
-lemma assumeExpr_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : Expr} {n : Int}
+lemma exprWitness_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : Expr} {n : Int}
     (hcorr : ncorr ℓ σ)
     (heval : EvalExpr σ expr (Val.Int n))
     (htruthy : n ≠ 0) :
-    ncorr (assumeExpr locs ℓ expr) σ := by
-  simp! [ncorr, assumeExpr]
+    ncorr_self (fun i => (
+      if exprWitness locs ℓ expr i = NVal.nonnull then NVal.nonnull else (ℓ i).fst,
+      (ℓ i).snd
+    )) σ := by
   intro i v h henv rfl
-  apply hcorr <;> try trivial
+  apply hcorr.left <;> try trivial
+  simp! [exprWitness] at h
   apply h
   intro hass
+  absurd hass
   apply nonNullAssumption_sound <;> trivial
 
 private lemma n_preserve_update_none (ℓ : NFact locs)
-  (hnone : locs.finIdxOf? x = none) (hcorr : ncorr ℓ σ) :
-  ncorr ℓ (σ.updated x v) := by
-    intro j v' habs hupd hv'
-    simp only [ncorr, State.updated, hv'] at *
-    split at hupd <;> grind [List.finIdxOf?_eq_none_iff]
+    (hnone : locs.finIdxOf? x = none) (hcorr : ncorr ℓ σ) :
+    ncorr ℓ (σ.updated x v) := by
+  simp only [ncorr, ncorr_self, ncorr_wit, State.updated] at *
+  grind [List.finIdxOf?_eq_none_iff]
 
 @[simp] private lemma nDFA_transferAlong (cfg : WFCFG)
     (e : EdgeOf cfg.analysis) (ℓ : NFact locs) :
@@ -258,7 +361,7 @@ def nSemantics (hnd : locs.Nodup) :
     preserve_entry := by
       intro σ hinit
       cases hinit
-      simp [ncorr, nDFA, State.empty]
+      simp [ncorr, ncorr_self, ncorr_wit, nDFA, State.empty]
     preserve_step := by
       intro e σ σ' ℓ hstep hcorr
       simp only [nDFA_transferAlong, nTransfer, CFG.nodeKind]
@@ -267,23 +370,45 @@ def nSemantics (hnd : locs.Nodup) :
         rename_i x expr v _ _
         split
         · apply n_preserve_update_none <;> trivial
-        · intro k v' h hupd hv'
-          subst hv'
-          simp only at h
-          split_ifs at h
-          · subst k
-            rename_i i hi
-            have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
-            rw [Fin.getElem_fin] at hget
-            rw [List.get_eq_getElem, hget, State.updated_eq σ x v] at hupd
-            have h_v_not_null : v ≠ Val.Null := evalExpr_sound hcorr heval h
-            grind
-          · have h_x_neq : x ≠ locs.get k := by apply List.finIdxOf?_nodup <;> trivial
-            rw [State.updated_neq] at hupd <;> try trivial
-            apply hcorr <;> trivial
+        · rename_i i hi
+          split_ands
+          · intro j v' h hupd rfl
+            simp only at h
+            split_ifs at h
+            · subst j
+              have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
+              rw [Fin.getElem_fin] at hget
+              rw [List.get_eq_getElem, hget, State.updated_eq σ x v] at hupd
+              have h_v_not_null : v ≠ Val.Null := evalExpr_sound hcorr heval h
+              grind
+            · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
+              rw [State.updated_neq] at hupd <;> try trivial
+              apply hcorr.left <;> trivial
+          · intro j k n v' hupd1 habs hn hupd2 rfl
+            simp only at hupd1
+            split_ifs at hupd1 <;> simp only at hupd1
+            · subst j
+              have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
+              rw [Fin.getElem_fin] at hget
+              rw [List.get_eq_getElem, hget, State.updated_eq σ x v] at habs
+              injection habs
+              subst v
+              by_cases h_ki : k = i
+              · subst k
+                rw [List.get_eq_getElem, hget, State.updated_eq] at hupd2
+                injection hupd2
+                contradiction
+              · have h_x_neq : x ≠ locs.get k := by apply List.finIdxOf?_nodup <;> trivial
+                rw [State.updated_neq] at hupd2 <;> try trivial
+                apply exprWitness_sound hcorr heval hn k .Null <;> grind
+            · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
+              rw [State.updated_neq] at habs <;> try trivial
       | @assum _ _ n _ _ _ heval htruthy _ =>
         have : n ≠ 0 := by grind
-        apply assumeExpr_sound <;> trivial
+        simp only [ncorr, beq_iff_eq]
+        split_ands
+        · apply exprWitness_sound <;> trivial
+        · apply hcorr.right
     preserve_stutter := by
       intro _n σ σ' ℓ hstut hcorr
       simp only [LangSem.LStutter] at hstut
@@ -291,16 +416,35 @@ def nSemantics (hnd : locs.Nodup) :
       assumption
   }
 
-theorem mono_absorb_corr
+theorem mono_absorb_corr_self
     {ℓ ℓ' : NFact locs} {σ : State} (h : ℓ ⊑ ℓ')
-    (hcorr : ncorr ℓ σ) : ncorr ℓ' σ := by
-  simp only [ncorr] at *
+    (hcorr : ncorr_self ℓ σ) : ncorr_self ℓ' σ := by
+  simp only [ncorr_self] at *
   intros i v habs
-  have hi : ℓ i ⊑ ℓ' i := Domain.ord_distr h
+  have hi : (ℓ i).fst ⊑ (ℓ' i).fst := by
+    exact congrArg (fun ρ => (ρ i).fst) h
   rw [habs] at hi
   simp only [max] at hi
   generalize heq : ℓ i = x at hi
+  grind
+theorem mono_absorb_corr_wit
+    {ℓ ℓ' : NFact locs} {σ : State} (h : ℓ ⊑ ℓ')
+    (hcorr : ncorr_wit ℓ σ) : ncorr_wit ℓ' σ := by
+  simp only [ncorr_wit] at *
+  intro i j n v habs
+  have hi : (ℓ i).snd ⊑ (ℓ' i).snd := by
+    exact congrArg (fun ρ => (ρ i).snd) h
+  apply Domain.ord_distr at hi
+  rw [habs] at hi
+  simp only [max] at hi
+  generalize heq : (ℓ i).snd j = x at hi
   cases x <;> grind
+theorem mono_absorb_corr
+    {ℓ ℓ' : NFact locs} {σ : State} (h : ℓ ⊑ ℓ')
+    (hcorr : ncorr ℓ σ) : ncorr ℓ' σ := by
+  unfold ncorr at *
+  grind [mono_absorb_corr_self, mono_absorb_corr_wit]
+
 
 /-! ## Bundled Nullability analysis -/
 
