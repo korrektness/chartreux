@@ -98,8 +98,8 @@ def evalExpr (locs : List Loc) (ρ : NFact locs) : Expr → NVal
       match locs.finIdxOf? x with
       | none   => .top
       | some i => ρ i |>.fst
-  | .IsNull e => evalExpr locs ρ e
-  | .Not e => evalExpr locs ρ e
+  | .IsNull _ => .nonnull
+  | .Not _ => .nonnull
   | .BinOp _ e₁ e₂ => evalExpr locs ρ e₁ ⊔ evalExpr locs ρ e₂
 
 def nTransfer (locs : List Loc) (g : CFG) (n : NodeID) :
@@ -178,9 +178,7 @@ private lemma exprWitness_mono (ρ₁ ρ₂ : NFact locs)
 private lemma evalExpr_mono (ρ₁ ρ₂ : NFact locs)
     (hρ : ρ₁ ⊑ ρ₂) (e : Expr) :
     evalExpr locs ρ₁ e ⊑ evalExpr locs ρ₂ e := by
-  induction e with simp only [evalExpr]
-  | Null => grind [LatticeLike.join_idem]
-  | Int n => grind [LatticeLike.join_idem]
+  induction e with (simp only [evalExpr]; try grind [LatticeLike.join_idem])
   | Var x =>
     split <;> try rfl
     rename_i i _
@@ -193,8 +191,6 @@ private lemma evalExpr_mono (ρ₁ ρ₂ : NFact locs)
       rw [ha₁, ha₂] at ih₁ <;>
       rw [hb₁, hb₂] at ih₂ <;>
       simp_all [Max.max]
-  | Not e => grind
-  | IsNull e => grind
 
 private lemma nTransfer_mono (n : NodeID) :
     mono_f (nTransfer locs cfg n) := by
