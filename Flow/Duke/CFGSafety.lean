@@ -2,16 +2,40 @@ import Flow.Duke.Analyses.Nullability
 import Flow.Duke.Analyses.Initialization
 
 open Duke.Analysis
+open Flow.Analysis.Generic
 
 abbrev Loc := String
 
+/-- Taking steps does not move us out of the CFG -/
+lemma LSteps_bounds (cfg : WFCFG) {n n' : NodeID} {σ σ' : State}
+    (hsteps : LSteps cfg.analysis n σ n' σ')
+    (h : n < cfg.val.nodes.length) :
+    n' < cfg.val.nodes.length := by
+  induction hsteps with
+  | refl => assumption
+  | step hstep h_rest _hsrc ih =>
+    apply ih
+    apply cfg.prop.2.2.1
+    cases hstep <;> assumption
+  | stut _ _ ih =>
+    apply ih; trivial
+
+/-- Every reachable node is in the CFG -/
+theorem reachable_in_bounds (cfg : WFCFG) {n : NodeID} {σ : State}
+    (hreach : Reachable cfg.analysis n σ State.isInit) :
+    n < cfg.val.nodes.length := by
+  have ⟨σ₀, _, hsteps⟩ := hreach
+  apply LSteps_bounds <;> try trivial
+  apply cfg.prop.1
+
+/-- An analyzed expression can always step to a value -/
 theorem eval_expr_progress {locs : List Loc}
     {nℓ : Nullability.NFact locs} {iℓ : Initialization.Fact locs}
     {σ : State} (e : Expr)
     (hn : Nullability.ncorr_self nℓ σ)
     (hi : Initialization.corr iℓ σ)
-    (hcn : Nullability.checkExpr nℓ e = true)
-    (hci : Initialization.checkExpr iℓ e = true) :
+    (hcn : Nullability.checkExpr nℓ e)
+    (hci : Initialization.checkExpr iℓ e) :
     ∃ v, EvalExpr σ e v := by
   induction e with
     simp! [Nullability.checkExpr, Initialization.checkExpr, Initialization.evalExpr] at *
