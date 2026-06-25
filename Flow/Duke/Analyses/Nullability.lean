@@ -6,9 +6,9 @@ import Flow.Duke.CFG
 import Flow.Duke.Utils
 import Mathlib.Data.List.Nodup
 
-abbrev Loc := String
-
 namespace Duke.Analysis.Nullability
+
+abbrev Loc := String
 
 open Flow.Analysis
 open Flow.Analysis.Generic
@@ -278,14 +278,14 @@ def nDFA (locs : List Loc) : DFA NodeID Edge where
   entry        := nEntryInit locs
 
 lemma evalExpr_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : Expr} {v : Val}
-    (hcorr : ncorr ℓ σ)
+    (hcorr : ncorr_self ℓ σ)
     (heval : EvalExpr σ expr v)
     (h_abs : evalExpr locs ℓ expr = NVal.nonnull) : v ≠ Val.Null := by
   induction heval with simp! [evalExpr] at *
   | @var x v h =>
     split at h_abs <;> try contradiction
     rename_i hi
-    apply hcorr.left <;> try trivial
+    apply hcorr <;> try trivial
     grind [List.finIdxOf?_eq_some_iff]
 
 lemma nonNullAssumption_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : Expr} {n : Int}
@@ -385,7 +385,7 @@ def nSemantics (hnd : locs.Nodup) :
               have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
               rw [Fin.getElem_fin] at hget
               rw [List.get_eq_getElem, hget, State.updated_eq σ x v] at hupd
-              have h_v_not_null : v ≠ Val.Null := evalExpr_sound hcorr heval h
+              have h_v_not_null : v ≠ Val.Null := evalExpr_sound hcorr.left heval h
               grind
             · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
               rw [State.updated_neq] at hupd <;> try trivial
@@ -469,7 +469,7 @@ def nAnalysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
     mono_absorb  := mono_absorb_corr
     transferMono := instTransferMonoN cfg }
 
-/-- TIP-facing wrapper around `Flow.analyze`: run the bundled Nullability
+/-- Wrapper around `Flow.analyze`: run the bundled Nullability
     analysis directly on a `CFG`. -/
 def nAnalyzeCFG {locs : List Loc} (hnd : locs.Nodup)
     (cfg : WFCFG) :
@@ -515,10 +515,10 @@ def checkNode {locs : List Loc} (ℓ : NFact locs) : NodeKind -> Bool
 
 def checkCFG (cfg : WFCFG) : Bool :=
   let locs := vars cfg
-  let res := nAnalyzeCFG locs.prop cfg
+  let res := (nAnalyzeCFG locs.prop cfg).inFacts
   (List.range cfg.val.nodes.length).all fun n =>
     match cfg.val.nodes[n]? with
     | none => false
-    | some kind => checkNode (res.inFacts n) kind
+    | some kind => checkNode (res n) kind
 
 end Duke.Analysis.Nullability
