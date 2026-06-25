@@ -6,9 +6,9 @@ import Flow.Duke.CFG
 import Flow.Duke.Utils
 import Mathlib.Data.List.Nodup
 
-abbrev Loc := String
-
 namespace Duke.Analysis.Initialization
+
+abbrev Loc := String
 
 open Flow.Analysis
 open Flow.Analysis.Generic
@@ -181,7 +181,7 @@ def analysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
     mono_absorb  := mono_absorb_corr
     transferMono := instTransferMonoN cfg }
 
-/-- TIP-facing wrapper around `Flow.analyze`: run the bundled
+/-- Wrapper around `Flow.analyze`: run the bundled
     analysis directly on a `CFG`. -/
 def analyzeCFG {locs : List Loc} (hnd : locs.Nodup)
     (cfg : WFCFG) :
@@ -219,10 +219,10 @@ def checkNode {locs : List Loc} (ℓ : Fact locs) : NodeKind → Bool
 
 def checkCFG (cfg : WFCFG) : Bool :=
   let locs := vars cfg
-  let res := analyzeCFG locs.prop cfg
+  let res := (analyzeCFG locs.prop cfg).inFacts
   (List.range cfg.val.nodes.length).all fun n =>
     match cfg.val.nodes[n]? with
     | none => false
-    | some kind => checkNode (res.inFacts n) kind
+    | some kind => checkNode (res n) kind
 
 end Duke.Analysis.Initialization
