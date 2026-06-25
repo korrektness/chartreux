@@ -103,35 +103,38 @@ theorem lowerStmt_spec (s : Stmt) (b : BState) (hinv : b.nextID = b.cfg.nodes.le
     (∃ ns, b'.cfg.nodes = b.cfg.nodes ++ ns) ∧
     (∃ es, b'.cfg.edges = b.cfg.edges ++ es ∧
       (∀ e ∈ es, e.src < b'.cfg.nodes.length ∧
-        e.dst < b'.cfg.nodes.length)) ∧
+        e.dst < b'.cfg.nodes.length) ∧
+      (∀ n, b.nextID ≤ n → n < b'.nextID → n ≠ res.2 → ∃ n', ⟨n, n'⟩ ∈ es)) ∧
     res.1 < b'.cfg.nodes.length ∧
     res.2 < b'.cfg.nodes.length := by
   induction s generalizing b with
-  | Skip => simp [lowerStmt, Builder.addNode, hinv]   -- one fresh node
-  | Decl x e | Assign x e => simp [lowerStmt, Builder.addNode, hinv]
+  | Skip => simp [lowerStmt, Builder.addNode, hinv]; grind -- one fresh node
+  | Decl x e | Assign x e => simp [lowerStmt, Builder.addNode, hinv]; grind
   | Seq s₁ s₂ ih₁ ih₂ =>
     simp only [lowerStmt, StateT.run_bind, StateT.run_pure]
     rcases hr₁ : StateT.run (lowerStmt s₁) b with ⟨⟨en₁, ex₁⟩, b₁⟩
     have h₁ := ih₁ b hinv
     rw [hr₁] at h₁
     simp only at h₁
-    obtain ⟨hinv₁, ⟨ns₁, hns₁⟩, ⟨es₁, hes₁, hb₁⟩, hen₁, hex₁⟩ := h₁
+    obtain ⟨hinv₁, ⟨ns₁, hns₁⟩, ⟨es₁, hes₁, hb₁, hedge₁⟩, hen₁, hex₁⟩ := h₁
     rcases hr₂ : StateT.run (lowerStmt s₂) b₁ with ⟨⟨en₂, ex₂⟩, b₂⟩
     have h₂ := ih₂ b₁ hinv₁
     rw [hr₂] at h₂
     simp only at h₂
-    obtain ⟨hinv₂, ⟨ns₂, hns₂⟩, ⟨es₂, hes₂, hb₂⟩, hen₂, hex₂⟩ := h₂
+    obtain ⟨hinv₂, ⟨ns₂, hns₂⟩, ⟨es₂, hes₂, hb₂, hedge₂⟩, hen₂, hex₂⟩ := h₂
     simp only [addEdge_run]
     have hmono : b₁.cfg.nodes.length ≤ b₂.cfg.nodes.length := by rw [hns₂]; simp
     refine ⟨by simpa using hinv₂, ⟨ns₁ ++ ns₂, by rw [hns₂, hns₁]; simp⟩,
       ⟨es₁ ++ es₂ ++ [⟨ex₁, en₂⟩], by simp [hes₂, hes₁, List.append_assoc], ?_⟩,
       by grind, by simpa using hex₂⟩
-    intro e he
-    simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at he
-    rcases he with (he | he) | he
-    · exact ⟨by have := (hb₁ e he).1; simp; grind, by have := (hb₁ e he).2; simp; grind⟩
-    · have := hb₂ e he; simpa using this
-    · subst he; exact ⟨by simp; grind, by simpa using hen₂⟩
+    split_ands
+    · intro e he
+      simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at he
+      rcases he with (he | he) | he
+      · exact ⟨by have := (hb₁ e he).1; simp; grind, by have := (hb₁ e he).2; simp; grind⟩
+      · have := hb₂ e he; simpa using this
+      · subst he; exact ⟨by simp; grind, by simpa using hen₂⟩
+    · grind
   | If c t f ih_t ih_f =>
     simp only [lowerStmt, StateT.run_bind, StateT.run_pure, addNode_run, addEdge_run]
     have hbt0 : (b.nextID + 1 + 1 + 1) = (b.cfg.nodes ++ [NodeKind.Skip] ++
@@ -149,12 +152,12 @@ theorem lowerStmt_spec (s : Stmt) (b : BState) (hinv : b.nextID = b.cfg.nodes.le
         nextID := b.nextID + 1 + 1 + 1 } with ⟨⟨ent, ext⟩, bt⟩
     rw [hrt] at ht
     simp only at ht
-    obtain ⟨hinvt, ⟨nst, hnst⟩, ⟨est, hest, hbt⟩, hent, hext⟩ := ht
+    obtain ⟨hinvt, ⟨nst, hnst⟩, ⟨est, hest, hbt, hedt⟩, hent, hext⟩ := ht
     have hf := ih_f bt hinvt
     rcases hrf : StateT.run (lowerStmt f) bt with ⟨⟨enf, exf⟩, bf⟩
     rw [hrf] at hf
     simp only at hf
-    obtain ⟨hinvf, ⟨nsf, hnsf⟩, ⟨esf, hesf, hbf⟩, henf, hexf⟩ := hf
+    obtain ⟨hinvf, ⟨nsf, hnsf⟩, ⟨esf, hesf, hbf, hedf⟩, henf, hexf⟩ := hf
     have hL1 : b.cfg.nodes.length + 3 ≤ bt.cfg.nodes.length := by
       rw [hnst]; grind
     have hL2 : bt.cfg.nodes.length ≤ bf.cfg.nodes.length := by rw [hnsf]; simp
@@ -165,12 +168,19 @@ theorem lowerStmt_spec (s : Stmt) (b : BState) (hinv : b.nextID = b.cfg.nodes.le
     · refine ⟨est ++ esf ++ [⟨b.nextID, b.nextID + 1⟩, ⟨b.nextID, b.nextID + 1 + 1⟩,
         ⟨b.nextID + 1, ent⟩, ⟨b.nextID + 1 + 1, enf⟩, ⟨ext, bf.nextID⟩, ⟨exf, bf.nextID⟩],
         by rw [hesf, hest]; simp [List.append_assoc], ?_⟩
-      intro e he
-      simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at he
-      rcases he with (he | he) | he
-      · have := hbt e he; simp; grind
-      · have := hbf e he; simp; grind
-      · rcases he with h|h|h|h|h|h <;> subst h <;> simp <;> grind
+      split_ands
+      · intro e he
+        simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at he
+        rcases he with (he | he) | he
+        · have := hbt e he; simp; grind
+        · have := hbf e he; simp; grind
+        · rcases he with h|h|h|h|h|h <;> subst h <;> simp <;> grind
+      · intro n hn1 hn2 hn3
+        by_cases h0 : n = b.nextID; · grind
+        by_cases h1 : n = b.nextID + 1; · grind
+        by_cases h2 : n = b.nextID + 2; · grind
+        have hn1' : b.nextID + 3 ≤ n := by grind
+        by_cases ht_range : n < bt.nextID <;> grind
   | While c body ih_b =>
     simp only [lowerStmt, StateT.run_bind, StateT.run_pure, addNode_run, addEdge_run]
     have hbb0 : (b.nextID + 1 + 1 + 1) = (b.cfg.nodes ++ [NodeKind.Skip] ++ [NodeKind.Assume c] ++
@@ -188,7 +198,7 @@ theorem lowerStmt_spec (s : Stmt) (b : BState) (hinv : b.nextID = b.cfg.nodes.le
         nextID := b.nextID + 1 + 1 + 1 } with ⟨⟨enb, exb⟩, bb⟩
     rw [hrb] at hb
     simp only at hb
-    obtain ⟨hinvb, ⟨nsb, hnsb⟩, ⟨esb, hesb, hbb⟩, henb, hexb⟩ := hb
+    obtain ⟨hinvb, ⟨nsb, hnsb⟩, ⟨esb, hesb, hbb, hedb⟩, henb, hexb⟩ := hb
     have hL1 : b.cfg.nodes.length + 3 ≤ bb.cfg.nodes.length := by
       rw [hnsb]; grind
     refine ⟨by simp [hinvb], ?_, ?_, by simp; grind, by simp; grind⟩
@@ -197,23 +207,39 @@ theorem lowerStmt_spec (s : Stmt) (b : BState) (hinv : b.nextID = b.cfg.nodes.le
     · refine ⟨esb ++ [⟨b.nextID, b.nextID + 1⟩, ⟨b.nextID, b.nextID + 1 + 1⟩,
         ⟨b.nextID + 1, enb⟩, ⟨exb, b.nextID⟩],
         by rw [hesb]; simp [List.append_assoc], ?_⟩
-      intro e he
-      simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at he
-      rcases he with he | he
-      · have := hbb e he; simp; grind
-      · rcases he with h|h|h|h <;> subst h <;> simp <;> grind
+      split_ands
+      · intro e he
+        simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at he
+        rcases he with he | he
+        · have := hbb e he; simp; grind
+        · rcases he with h|h|h|h <;> subst h <;> simp <;> grind
+      · intro n hn1 hn2 hn3
+        by_cases h0 : n = b.nextID; · grind
+        by_cases h1 : n = b.nextID + 1; · grind
+        by_cases h2 : n = b.nextID + 2; · grind
+        have hn1' : b.nextID + 3 ≤ n := by grind
+        by_cases ht_range : n < bb.nextID <;> grind
 
 def CFG.WellFormed (g : CFG) :=
   (g.entry < g.nodes.length) ∧
   (∀ e ∈ g.edges, e.src < g.nodes.length) ∧
-  (∀ e ∈ g.edges, e.dst < g.nodes.length)
+  (∀ e ∈ g.edges, e.dst < g.nodes.length) ∧
+  (∀ n < g.nodes.length, n ≠ g.exit → ∃ n', ⟨n, n'⟩ ∈ g.edges)
 
 theorem cfg_WF (s : Stmt) : s.cfg.WellFormed := by
-  obtain ⟨-, -, ⟨es, hes, hbound⟩, hen, -⟩ := lowerStmt_spec s ⟨⟨[], [], 0, 0⟩, 0⟩ rfl
-  simp only [Stmt.cfg, List.nil_append] at hes ⊢
-  refine ⟨hen, ?_, ?_⟩
+  have hspec := lowerStmt_spec s ⟨⟨[], [], 0, 0⟩, 0⟩ rfl
+  unfold Stmt.cfg
+  generalize hrun :
+    StateT.run (lowerStmt s) {cfg:={nodes:=[], edges:=[], entry:=0, exit:=0 }, nextID:=0}
+      = run_res at *
+  obtain ⟨hlen, -, ⟨es, hes, hbound, hedge⟩, hen, -⟩ := hspec
+  simp only [List.nil_append] at hes
+  refine ⟨hen, ?_, ?_, ?_⟩
   · intro e he; exact (hbound e (hes ▸ he)).1
   · intro e he; exact (hbound e (hes ▸ he)).2
+  · intro n hn_len hn_exit
+    obtain ⟨n', hn'⟩ := hedge n (Nat.zero_le n) (by grind) hn_exit
+    exact ⟨n', hes ▸ hn'⟩
 
 abbrev WFCFG := { cfg : CFG // cfg.WellFormed }
 
@@ -239,7 +265,7 @@ def DukeAnalysisCFG (g : CFG) (hg : g.WellFormed) :
     simp [CFG.inEdges, List.mem_filter, he]
   dstOf_mem := by
     intros e he
-    have hdst := hg.2.2
+    have hdst := hg.2.2.1
     exact List.mem_range.mpr (hdst e he)
   entry_mem := by simpa using hg.1
 
