@@ -511,7 +511,7 @@ def checkExpr {locs : List Loc} (ℓ : NFact locs) : Expr -> Bool
 def checkNode {locs : List Loc} (ℓ : NFact locs) : NodeKind -> Bool
   | .Skip => true
   | .Assign _ e => checkExpr ℓ e
-  | .Assume e => checkExpr ℓ e
+  | .Assume e => checkExpr ℓ e && (evalExpr locs ℓ e == NVal.nonnull)
 
 def checkCFG (cfg : WFCFG) : Bool :=
   let locs := vars cfg
