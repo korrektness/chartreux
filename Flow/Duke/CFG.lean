@@ -261,16 +261,16 @@ abbrev Config := NodeID × State
 
 inductive Step (g : CFG) : Config -> Config -> Prop where
 | skip {n n' σ} :
-    g.nodes[n]? = some .Skip ->
+    g.nodeKind n = some .Skip ->
     ⟨n, n'⟩ ∈ g.edges ->
     Step g ⟨n, σ⟩ ⟨n', σ⟩
 | assign {n n' x e v σ} :
-    g.nodes[n]? = some (.Assign x e) ->
+    g.nodeKind n = some (.Assign x e) ->
     EvalExpr σ e v ->
     ⟨n, n'⟩ ∈ g.edges ->
     Step g ⟨n, σ⟩ ⟨n', σ.updated x v⟩
 | assum {n n' m c σ} :
-    g.nodes[n]? = some (NodeKind.Assume c) ->
+    g.nodeKind n = some (NodeKind.Assume c) ->
     EvalExpr σ c (.Int m) ->
     m != 0 ->
     ⟨n, n'⟩ ∈ g.edges ->

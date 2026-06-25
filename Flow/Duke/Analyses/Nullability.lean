@@ -370,7 +370,7 @@ def nSemantics (hnd : locs.Nodup) :
       simp [ncorr, ncorr_self, ncorr_wit, State.empty]
     preserve_step := by
       intro e σ σ' ℓ hstep hcorr
-      simp only [nDFA_transferAlong, nTransfer, CFG.nodeKind]
+      simp only [nDFA_transferAlong, nTransfer]
       cases hstep with simp only [*]
       | assign _ heval _ =>
         rename_i x expr v _ _
@@ -517,7 +517,7 @@ def checkCFG (cfg : WFCFG) : Bool :=
   let locs := vars cfg
   let res := (nAnalyzeCFG locs.prop cfg).inFacts
   (List.range cfg.val.nodes.length).all fun n =>
-    match cfg.val.nodes[n]? with
+    match cfg.val.nodeKind n with
     | none => false
     | some kind => checkNode (res n) kind
 
