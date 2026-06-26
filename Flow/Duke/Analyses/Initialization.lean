@@ -130,7 +130,7 @@ def semantics (hnd : locs.Nodup) :
       simp [corr, State.empty, entryInit]
     preserve_step := by
       intro e σ σ' ℓ hstep hcorr
-      simp only [DFA_transferAlong, nodeTransfer, CFG.nodeKind]
+      simp only [DFA_transferAlong, nodeTransfer]
       cases hstep with simp only [*]
       | @assign _ _ x expr v _ _ heval =>
         split
@@ -221,7 +221,7 @@ def checkCFG (cfg : WFCFG) : Bool :=
   let locs := vars cfg
   let res := (analyzeCFG locs.prop cfg).inFacts
   (List.range cfg.val.nodes.length).all fun n =>
-    match cfg.val.nodes[n]? with
+    match cfg.val.nodeKind n with
     | none => false
     | some kind => checkNode (res n) kind
 
