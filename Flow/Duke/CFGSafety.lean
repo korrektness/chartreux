@@ -30,9 +30,9 @@ theorem reachable_in_bounds (cfg : WFCFG) {n : NodeID} {σ : State}
 
 /-- An analyzed expression can always step to a value -/
 theorem eval_expr_progress {locs : List Loc}
-    {nℓ : Nullability.NFact locs} {iℓ : Initialization.Fact locs}
+    {nℓ : Nullability.Fact locs} {iℓ : Initialization.Fact locs}
     {σ : State} (e : Expr)
-    (hn : Nullability.ncorr_self nℓ σ)
+    (hn : Nullability.corr_self nℓ σ)
     (hi : Initialization.corr iℓ σ)
     (hcn : Nullability.checkExpr nℓ e)
     (hci : Initialization.checkExpr iℓ e) :
@@ -91,12 +91,12 @@ theorem eval_expr_progress {locs : List Loc}
 /-- An analyzed node can always step, unless it is an Assume with a false condition -/
 lemma eval_node_safe (cfg : WFCFG) {locs : List Loc}
     {n : NodeID} {kind : NodeKind}
-    {nℓ : Nullability.NFact locs} {iℓ : Initialization.Fact locs}
+    {nℓ : Nullability.Fact locs} {iℓ : Initialization.Fact locs}
     {σ : State}
     (hreach : Flow.Analysis.Generic.Reachable cfg.analysis n σ State.isInit)
     (hexit : n ≠ cfg.val.exit)
     (hkind : cfg.val.nodeKind n = some kind)
-    (hn : Nullability.ncorr_self nℓ σ)
+    (hn : Nullability.corr_self nℓ σ)
     (hi : Initialization.corr iℓ σ)
     (hcn : Nullability.checkNode nℓ kind)
     (hci : Initialization.checkNode iℓ kind) :
@@ -139,7 +139,7 @@ theorem duke_cfg_safety (cfg : WFCFG) {n : NodeID} {σ : State}
       ∃ c, cfg.val.nodeKind n = some (.Assume c) ∧ EvalExpr σ c (.Int 0) := by
   have hnode := reachable_in_bounds cfg hreach
   let vars := vars cfg
-  have hn := Nullability.nreachable_correct vars.prop cfg hreach |>.left
+  have hn := Nullability.reachable_correct vars.prop cfg hreach |>.left
   have hi := Initialization.reachable_correct vars.prop cfg hreach
   simp! [Nullability.checkCFG] at hcn
   simp! [Initialization.checkCFG] at hci

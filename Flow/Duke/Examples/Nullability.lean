@@ -31,9 +31,9 @@ def cfg := prog.wfcfg
 
 def sv : { l : List String // l.Nodup } := vars cfg
 
-def result : Flow.AnalysisResult (nAnalysis sv.prop cfg) :=
-  nAnalyzeCFG sv.prop cfg
+def result : Flow.AnalysisResult (analysis sv.prop cfg) :=
+  analyzeCFG sv.prop cfg
 
 #eval IO.println (cfg.val.toDotWithFn (A := String)
-  (fun n => formatNFact sv.val (result.inFacts n))
-  (fun n => formatNFact sv.val (result.outFacts n)))
+  (fun n => formatFact sv.val (result.inFacts n))
+  (fun n => formatFact sv.val (result.outFacts n)))
