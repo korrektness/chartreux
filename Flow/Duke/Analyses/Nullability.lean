@@ -51,38 +51,36 @@ instance : LatticeLike NVal where
 
 /-! ## CFG transition functions -/
 
-/-- A nullability witness for other variables -/
-abbrev NWitness (locs : List Loc) : Type := Domain locs.length NVal
-def emptyWitness (locs : List Loc) : NWitness locs := fun _ => .top
+/-- Nullability consequent for other variables -/
+abbrev Consequent (locs : List Loc) : Type := Domain locs.length NVal
+def emptyConsequent (locs : List Loc) : Consequent locs := fun _ => .top
 
 /-- A nullability fact for a program with location `locs`
     is a `Domain` over
-    * `NVal` - am I null?
-    * `NWitness` - do I carry the proof that others are null?
+    * `NVal` - am I nonnull?
+    * `Consequent` - do I witness that others are nonnull?
 -/
-abbrev Fact (locs : List Loc) : Type := Domain locs.length (NVal × NWitness locs)
+abbrev Fact (locs : List Loc) : Type := Domain locs.length (NVal × Consequent locs)
 
-def extractWitnesses (locs : List Loc) (wit : NWitness locs) : List Loc :=
+def extractConsequents (locs : List Loc) (cons : Consequent locs) : List Loc :=
   (List.finRange locs.length).filterMap (
-    fun i => match wit i with
+    fun i => match cons i with
              | .nonnull => some (locs.get i)
              | _ => none
   )
 
-/-- Pretty-print a witness map using variable names: the set of locations
-    that this witness currently proves to be non-null. -/
-def formatNWitness (witnesses : List Loc) : String :=
-  "{" ++ String.intercalate ", " witnesses ++ "}"
+def formatConsequents (consequents : List Loc) : String :=
+  "{" ++ String.intercalate ", " consequents ++ "}"
 
 /-- Pretty-print a nullability fact using variable names. For each tracked
     variable we show its abstract nullability value and the set of variables
-    it witnesses as non-null. -/
+    it witnesses as nonnull. -/
 def formatFact (locs : List Loc) (ℓ : Fact locs) : String :=
   let parts : List String :=
     (List.finRange locs.length).map fun i =>
-      let (v, wit) := ℓ i
-      let witnesses := extractWitnesses locs wit
-      s!"{locs.get i}={v}" ++ if witnesses.isEmpty then "" else s!" ⇒ {formatNWitness witnesses}"
+      let (v, cons) := ℓ i
+      let conss := extractConsequents locs cons
+      s!"{locs.get i}={v}" ++ if conss.isEmpty then "" else s!" ⇒ {formatConsequents conss}"
   "[" ++ String.intercalate ", " parts ++ "]"
 
 def nonNullAssumption (locs : List Loc) (inFacts : Fact locs) (e : Expr) : List Loc :=
@@ -92,11 +90,11 @@ def nonNullAssumption (locs : List Loc) (inFacts : Fact locs) (e : Expr) : List 
   | .Var x =>
       match locs.finIdxOf? x with
       | none   => []
-      | some i => inFacts i |>.snd |> extractWitnesses locs
+      | some i => inFacts i |>.snd |> extractConsequents locs
   | _ => []
 
-/-- What does this expression witness? -/
-def exprWitness (locs : List Loc) (inFacts : Fact locs) (e : Expr) : NWitness locs :=
+/-- What is the consequent of this expression being true? -/
+def exprConsequent (locs : List Loc) (inFacts : Fact locs) (e : Expr) : Consequent locs :=
   let nonNull := nonNullAssumption locs inFacts e |>.filterMap locs.finIdxOf?
   fun j => if nonNull.contains j then .nonnull else .top
 
@@ -119,34 +117,34 @@ def nodeTransfer (locs : List Loc) (g : CFG) (n : NodeID) :
     | none   => ρ
     | some i =>
         let v := evalExpr locs ρ e
-        let wit := exprWitness locs ρ e
-        -- mutation might have invalidated some of the witnesses
+        let cons := exprConsequent locs ρ e
+        -- mutation might have invalidated some of the implications
         -- we could be smart about just invalidating relevant ones,
         -- but for now we just invalidate all of them.
         -- TODO: invalidate only relevant bits
-        fun j => if j = i then (v, wit) else (ρ j |>.fst, emptyWitness locs)
+        fun j => if j = i then (v, cons) else (ρ j |>.fst, emptyConsequent locs)
   | some (.Assume e) =>
-    let wit := exprWitness locs ρ e
-    -- we preserve the witnesses from before, but update the nullability status
-    fun i => (if wit i == .nonnull then .nonnull else ρ i |>.fst, ρ i |>.snd)
+    let cons := exprConsequent locs ρ e
+    -- we preserve the implications from before, but update the nullability status
+    fun i => (if cons i == .nonnull then .nonnull else ρ i |>.fst, ρ i |>.snd)
   | some .Skip | none => ρ
 
 /-- Edge transfer for forward nullability is the identity. -/
 def edgeTransfer (vars : List String) : Edge -> Fact vars -> Fact vars :=
   fun _ a => a
 
-/-- The default initial fact: every tracked variable is `nonnull` and carries witnesses. -/
-def entryInit (locs : List Loc) : Fact locs := fun _ => (.nonnull, emptyWitness locs)
+/-- The default initial fact: every tracked variable is `nonnull` and witnesses nothing. -/
+def entryInit (locs : List Loc) : Fact locs := fun _ => (.nonnull, emptyConsequent locs)
 
 /-! ### Transfer function monotonicity -/
 
 variable (cfg : WFCFG)
 variable {locs : List Loc}
 
-private lemma extractWitnesses_incl (ρ₁ ρ₂ : NWitness locs)
+private lemma extractConsequents_incl (ρ₁ ρ₂ : Consequent locs)
     (hρ : ρ₁ ⊑ ρ₂) (l : Loc) :
-    l ∈ extractWitnesses locs ρ₂ -> l ∈ extractWitnesses locs ρ₁ := by
-  unfold extractWitnesses
+    l ∈ extractConsequents locs ρ₂ -> l ∈ extractConsequents locs ρ₁ := by
+  unfold extractConsequents
   intro h
   rw [List.mem_filterMap] at *
   have ⟨i, hin, heq⟩ := h
@@ -168,13 +166,13 @@ private lemma nonNullAssumption_incl (ρ₁ ρ₂ : Fact locs)
     simp [nonNullAssumption]
     split <;> try grind
     rename_i i _
-    apply extractWitnesses_incl
+    apply extractConsequents_incl
     exact congrArg (fun ρ => (ρ i).snd) hρ
 
-private lemma exprWitness_mono (ρ₁ ρ₂ : Fact locs)
+private lemma exprConsequent_mono (ρ₁ ρ₂ : Fact locs)
     (hρ : ρ₁ ⊑ ρ₂) (e : Expr) :
-    exprWitness locs ρ₁ e ⊑ exprWitness locs ρ₂ e := by
-  unfold exprWitness
+    exprConsequent locs ρ₁ e ⊑ exprConsequent locs ρ₂ e := by
+  unfold exprConsequent
   simp only
   funext j
   rw [Domain.max_app]
@@ -225,7 +223,7 @@ private lemma nodeTransfer_mono (n : NodeID) :
           assumption
         case h k =>
           apply Domain.ord_distr
-          apply exprWitness_mono
+          apply exprConsequent_mono
           assumption
       · ext
         case fst => exact congrArg (fun ρ => (ρ j).fst) hxy
@@ -233,9 +231,9 @@ private lemma nodeTransfer_mono (n : NodeID) :
     | Assume e =>
       ext
       case fst =>
-        have hw_mono := Domain.ord_distr (exprWitness_mono ρ₁ ρ₂ hxy e) (i := j)
-        generalize hw1 : exprWitness locs ρ₁ e j = w₁ at *
-        generalize hw2 : exprWitness locs ρ₂ e j = w₂ at *
+        have hw_mono := Domain.ord_distr (exprConsequent_mono ρ₁ ρ₂ hxy e) (i := j)
+        generalize hw1 : exprConsequent locs ρ₁ e j = w₁ at *
+        generalize hw2 : exprConsequent locs ρ₂ e j = w₂ at *
         cases w₁ <;> cases w₂ <;> simp [Max.max] at * <;> grind
       case h i =>
         apply Domain.ord_distr
@@ -258,7 +256,7 @@ def corr_self (ℓ : Fact locs) (σ : State) : Prop :=
     σ (locs.get i) = some v ->
     v ≠ .Null
 /-- Variable `i` is the witness that variable `j` is not null -/
-def corr_wit (ℓ : Fact locs) (σ : State) : Prop :=
+def corr_impl (ℓ : Fact locs) (σ : State) : Prop :=
   ∀ i j n v,
     (ℓ i).snd j = .nonnull ->
     σ (locs.get i) = some (.Int n) ->
@@ -266,7 +264,7 @@ def corr_wit (ℓ : Fact locs) (σ : State) : Prop :=
     σ (locs.get j) = some v ->
     v ≠ .Null
 
-def corr (ℓ : Fact locs) (σ : State) : Prop := corr_self ℓ σ ∧ corr_wit ℓ σ
+def corr (ℓ : Fact locs) (σ : State) : Prop := corr_self ℓ σ ∧ corr_impl ℓ σ
 
 /-- The DFA closure for nullability, parameterised by the underlying CFG.
     The CFG is needed to read `nodeKind`. -/
@@ -319,7 +317,7 @@ lemma nonNullAssumption_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {
         simp! [nonNullAssumption] at hass
         cases hass <;> grind
   | Var x =>
-    simp! [nonNullAssumption, extractWitnesses] at hass
+    simp! [nonNullAssumption, extractConsequents] at hass
     split at hass <;> try trivial
     rename_i j hin
     have ⟨rfl, _⟩ := List.finIdxOf?_eq_some_iff.mp hin
@@ -331,17 +329,17 @@ lemma nonNullAssumption_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {
       apply hcorr.right <;> try trivial
       grind
 
-lemma exprWitness_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {expr : Expr} {n : Int}
+lemma exprConsequent_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {expr : Expr} {n : Int}
     (hcorr : corr ℓ σ)
     (heval : EvalExpr σ expr (Val.Int n))
     (htruthy : n ≠ 0) :
     corr_self (fun i => (
-      if exprWitness locs ℓ expr i = NVal.nonnull then NVal.nonnull else (ℓ i).fst,
+      if exprConsequent locs ℓ expr i = NVal.nonnull then NVal.nonnull else (ℓ i).fst,
       (ℓ i).snd
     )) σ := by
   intro i v h henv rfl
   apply hcorr.left <;> try trivial
-  simp! [exprWitness] at h
+  simp! [exprConsequent] at h
   apply h
   intro hass
   absurd hass
@@ -350,7 +348,7 @@ lemma exprWitness_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {expr :
 private lemma preserve_update_none (ℓ : Fact locs)
     (hnone : locs.finIdxOf? x = none) (hcorr : corr ℓ σ) :
     corr ℓ (σ.updated x v) := by
-  simp only [corr, corr_self, corr_wit, State.updated] at *
+  simp only [corr, corr_self, corr_impl, State.updated] at *
   grind [List.finIdxOf?_eq_none_iff]
 
 @[simp] private lemma DFA_transferAlong (cfg : WFCFG)
@@ -367,7 +365,7 @@ def semantics (hnd : locs.Nodup) :
     preserve_entry := by
       intro σ hinit
       cases hinit
-      simp [corr, corr_self, corr_wit, State.empty]
+      simp [corr, corr_self, corr_impl, State.empty]
     preserve_step := by
       intro e σ σ' ℓ hstep hcorr
       simp only [DFA_transferAlong, nodeTransfer]
@@ -406,14 +404,14 @@ def semantics (hnd : locs.Nodup) :
                 contradiction
               · have h_x_neq : x ≠ locs.get k := by apply List.finIdxOf?_nodup <;> trivial
                 rw [State.updated_neq] at hupd2 <;> try trivial
-                apply exprWitness_sound hcorr heval hn k .Null <;> grind
+                apply exprConsequent_sound hcorr heval hn k .Null <;> grind
             · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
               rw [State.updated_neq] at habs <;> try trivial
       | @assum _ _ n _ _ _ heval htruthy _ =>
         have : n ≠ 0 := by grind
         simp only [corr, beq_iff_eq]
         split_ands
-        · apply exprWitness_sound <;> trivial
+        · apply exprConsequent_sound <;> trivial
         · apply hcorr.right
     preserve_stutter := by
       intro _n σ σ' ℓ hstut hcorr
@@ -433,10 +431,10 @@ theorem mono_absorb_corr_self
   simp only [max] at hi
   generalize heq : ℓ i = x at hi
   grind
-theorem mono_absorb_corr_wit
+theorem mono_absorb_corr_impl
     {ℓ ℓ' : Fact locs} {σ : State} (h : ℓ ⊑ ℓ')
-    (hcorr : corr_wit ℓ σ) : corr_wit ℓ' σ := by
-  simp only [corr_wit] at *
+    (hcorr : corr_impl ℓ σ) : corr_impl ℓ' σ := by
+  simp only [corr_impl] at *
   intro i j n v habs
   have hi : (ℓ i).snd ⊑ (ℓ' i).snd := by
     exact congrArg (fun ρ => (ρ i).snd) h
@@ -449,7 +447,7 @@ theorem mono_absorb_corr
     {ℓ ℓ' : Fact locs} {σ : State} (h : ℓ ⊑ ℓ')
     (hcorr : corr ℓ σ) : corr ℓ' σ := by
   unfold corr at *
-  grind [mono_absorb_corr_self, mono_absorb_corr_wit]
+  grind [mono_absorb_corr_self, mono_absorb_corr_impl]
 
 
 /-! ## Bundled Nullability analysis -/
