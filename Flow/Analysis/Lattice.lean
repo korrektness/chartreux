@@ -46,11 +46,13 @@ lemma join_ge_trans [FiniteHeight A] [ll : LatticeLike A]
 instance JoinLeRefl [FiniteHeight A] [LatticeLike A] : Std.Refl (α := A) (· ⊑ ·) where
   refl := LatticeLike.join_idem
 
-variable {n : Nat}
 
 -- ## domains
 -- the goal of this section is to show that the type of a finite map from
 -- integers to lattice elements forms itself a lattice.
+section Domain
+
+variable {n : Nat}
 
 /-- a domain is a finite map from integers to lattice elements. -/
 abbrev Domain (n : Nat) (A : Type) := Fin n -> A
@@ -63,19 +65,6 @@ instance : Bot (Domain n A) where
 /-- the lub is computed pointwise. -/
 instance : Max (Domain n A) where
   max ρ₁ ρ₂ := fun i => ρ₁ i ⊔ ρ₂ i
-
-namespace Domain
-
--- function application distributes over lub
-omit [Bot A] in
-lemma max_app {x y : Domain n A} {i : Fin n} :
-  (x ⊔ y) i = x i ⊔ y i := by rfl
-
-omit [Bot A] in
-lemma ord_distr {x y : Domain n A} {i : Fin n} (h : x ⊑ y) : x i ⊑ y i := by
-  simp only
-  nth_rw 2 [<-h]
-  rw [max_app]
 
 -- decidable equality instances
 @[simp]
@@ -138,12 +127,25 @@ instance [fh : FiniteHeight A] : FiniteHeight (Domain n A) where
 
 /-- If `A` is a `LatticeLike` type, the finite map `Domain n A` is also
     `LatticeLike`. -/
-instance {n : Nat} [FiniteHeight A]
+instance [FiniteHeight A]
     [ll : LatticeLike A] : LatticeLike (Domain n A) where
   join_comm a b := by funext i; exact ll.join_comm (a i) (b i)
   join_assoc a b c := by funext i; exact ll.join_assoc (a i) (b i) (c i)
   join_idem a := by funext i; exact ll.join_idem (a i)
   bot_le a := by funext i; exact ll.bot_le (a i)
+
+namespace Domain
+-- function application distributes over lub
+omit [Bot A] in
+lemma max_app {x y : Domain n A} {i : Fin n} :
+  (x ⊔ y) i = x i ⊔ y i := by rfl
+
+omit [Bot A] in
+lemma ord_distr {x y : Domain n A} {i : Fin n} (h : x ⊑ y) : x i ⊑ y i := by
+  simp only
+  nth_rw 2 [<-h]
+  rw [max_app]
+end Domain
 
 end Domain
 
@@ -239,4 +241,12 @@ instance : LatticeLike Bool where
 
 end Bool
 
+-- A powerset lattice
+section Powerset
+
+-- Powerset represented as a set characteristic function.
+-- This induces a join to be the set union and order to be the subset relation.
+abbrev Powerset (n : Nat) := Domain n Bool
+
+end Powerset
 end Basics
