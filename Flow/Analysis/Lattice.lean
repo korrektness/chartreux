@@ -246,7 +246,7 @@ section Powerset
 
 -- Powerset represented as a set characteristic function.
 -- This induces a join to be the set union and order to be the subset relation.
-abbrev PowersetRaw (n : Nat) := Domain n Bool
+abbrev Powerset (n : Nat) := Domain n Bool
 
 end Powerset
 end Basics
