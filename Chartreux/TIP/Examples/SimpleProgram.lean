@@ -5,7 +5,8 @@ import Chartreux.TIP.Regular.LangSem
 import Chartreux.TIP.Utils.DotPrinter
 import Chartreux.Analysis.WorklistProofs
 
-open Chartreux.Analysis Chartreux.Analysis.CP Chartreux.Analysis.Generic CFGBuilder Chartreux.Eval.Refinement
+open Chartreux.Analysis Chartreux.Analysis.CP Chartreux.Analysis.Generic CFGBuilder
+open Chartreux.Eval.Refinement 
 open Chartreux.TIP (tipLangSem forCFG WFCFG stepsN_to_lsteps)
 
 section Simple
