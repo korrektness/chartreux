@@ -10,39 +10,39 @@ Abstract, forward worklist algorithm for dataflow analysis.
 namespace Flow.Analysis
 
 variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
-variable {A : Type}
+variable {L : Type}
 
 /-- transfer-function monotonicity properties for the dataflow framework. -/
-class TransferMono [Max A]
-    (nodeTransfer : Node -> A -> A)
-    (edgeTransfer : Edge -> A -> A) where
+class TransferMono [Max L]
+    (nodeTransfer : Node -> L -> L)
+    (edgeTransfer : Edge -> L -> L) where
   node_mono : ∀ n, mono_f (nodeTransfer n)
   edge_mono : ∀ e, mono_f (edgeTransfer e)
 
 
 /-- computes the join of the results of applying an edge transfer function
     to all incoming edges of a given node `n` in `g`. -/
-def joinPredEdges [Bot A] [Max A]
-    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
-    (outF : StateN g A) (n : NodeOf g) : A :=
+def joinPredEdges [Bot L] [Max L]
+    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> L -> L)
+    (outF : StateN g L) (n : NodeOf g) : L :=
   ((g.inEdges n.val).attach).foldl (fun acc ⟨e, he⟩ =>
     let srcNode : NodeOf g := ⟨g.srcOf e, g.inEdges_src_mem n.val e he⟩
     acc ⊔ edgeTransfer e (outF srcNode)
   ) ⊥
 
-def expectedIn [Bot A] [Max A]
-    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> A -> A)
-    (entryInit : A) (outF : StateN g A) (n : NodeOf g) : A :=
+def expectedIn [Bot L] [Max L]
+    (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> L -> L)
+    (entryInit : L) (outF : StateN g L) (n : NodeOf g) : L :=
   let join := joinPredEdges g edgeTransfer outF n
   if n.val = g.entry then entryInit ⊔ join else join
 
 /-- main forward worklist algorithm. -/
 def worklistForward
-    [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
-    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A)
-    (edgeTransfer : Edge -> A -> A) (entryInit : A)
-    (outF : StateN g A := StateN.empty)
-    (wl : List (NodeOf g) := g.nodes_mem) : StateN g A :=
+    [Bot L] [Max L] [DecidableEq L] [FiniteHeight L]
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L)
+    (edgeTransfer : Edge -> L -> L) (entryInit : L)
+    (outF : StateN g L := StateN.empty)
+    (wl : List (NodeOf g) := g.nodes_mem) : StateN g L :=
   match wl with
   | [] => outF
   | n :: rest =>
@@ -65,12 +65,12 @@ decreasing_by
 /-- run the dataflow analysis to a fixpoint, returning the per-node
     entry and exit facts. -/
 def runDataflow
-    [Bot A] [Max A] [DecidableEq A] [FiniteHeight A]
-    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> A -> A) (edgeTransfer : Edge -> A -> A)
-    (entryInit : A) : StateN g A × StateN g A :=
-  let finalOut : StateN g A :=
+    [Bot L] [Max L] [DecidableEq L] [FiniteHeight L]
+    (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
+    (entryInit : L) : StateN g L × StateN g L :=
+  let finalOut : StateN g L :=
     worklistForward g nodeTransfer edgeTransfer entryInit
-  let finalIn : StateN g A := fun n => expectedIn g edgeTransfer entryInit finalOut n
+  let finalIn : StateN g L := fun n => expectedIn g edgeTransfer entryInit finalOut n
   ⟨finalIn, finalOut⟩
 
 end Flow.Analysis

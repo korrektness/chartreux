@@ -89,10 +89,10 @@ instance instTransferMonoN :
   node_mono := nodeTransfer_mono cfg
   edge_mono := edgeTransfer_mono
 
-/-! ## Correspondence predicate for concrete and abstract states -/
+/-! ## Coherence predicate for concrete and abstract states -/
 
 /-- For each variable, if the analysis tells us it is initialized, the concrete value exists -/
-def corr (ℓ : Fact locs) (σ : State) : Prop :=
+def coh (ℓ : Fact locs) (σ : State) : Prop :=
   ∀ i,
     ℓ i = false ->
     (σ (locs.get i)).isSome
@@ -108,9 +108,9 @@ def nDFA (locs : List Loc) : DFA NodeID Edge where
 
 
 private lemma preserve_update_none (ℓ : Fact locs)
-    (hnone : locs.finIdxOf? x = none) (hcorr : corr ℓ σ) :
-    corr ℓ (σ.updated x v) := by
-  simp only [corr, State.updated] at *
+    (hnone : locs.finIdxOf? x = none) (hcoh : coh ℓ σ) :
+    coh ℓ (σ.updated x v) := by
+  simp only [coh, State.updated] at *
   grind [List.finIdxOf?_eq_none_iff]
 
 @[simp] private lemma DFA_transferAlong (cfg : WFCFG)
@@ -122,14 +122,14 @@ private lemma preserve_update_none (ℓ : Fact locs)
     fields directly consume the abstract `LangSem` transitions. -/
 def semantics (hnd : locs.Nodup) :
     DFASemantics (ls := dukeLangSem cfg) cfg.analysis (nDFA cfg locs) :=
-  { Corr := corr
+  { Coh := coh
     isInit := State.isInit
     preserve_entry := by
       intro σ hinit
       cases hinit
-      simp [corr, State.empty, entryInit]
+      simp [coh, State.empty, entryInit]
     preserve_step := by
-      intro e σ σ' ℓ hstep hcorr
+      intro e σ σ' ℓ hstep hcoh
       simp only [DFA_transferAlong, nodeTransfer]
       cases hstep with simp only [*]
       | @assign _ _ x expr v _ _ heval =>
@@ -146,20 +146,20 @@ def semantics (hnd : locs.Nodup) :
             rfl
           · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
             rw [State.updated_neq] <;> try trivial
-            apply hcorr; assumption
+            apply hcoh; assumption
     preserve_stutter := by
-      intro _n σ σ' ℓ hstut hcorr
+      intro _n σ σ' ℓ hstut hcoh
       simp only [LangSem.LStutter] at hstut
       subst hstut
       assumption
   }
 
-theorem mono_absorb_corr
+theorem mono_absorb_coh
     {ℓ ℓ' : Fact locs} {σ : State} (h : ℓ ⊑ ℓ')
-    (hcorr : corr ℓ σ) : corr ℓ' σ := by
-  unfold corr at *
+    (hcoh : coh ℓ σ) : coh ℓ' σ := by
+  unfold coh at *
   intro i hi
-  apply hcorr
+  apply hcoh
   apply Domain.ord_distr (i := i) at h
   simp [hi] at h
   assumption
@@ -178,7 +178,7 @@ def analysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
     fhL          := _
     llL          := (inferInstance : LatticeLike (Fact locs))
     semantics    := semantics cfg hnd
-    mono_absorb  := mono_absorb_corr
+    mono_absorb  := mono_absorb_coh
     transferMono := instTransferMonoN cfg }
 
 /-- Wrapper around `Flow.analyze`: run the bundled
@@ -196,7 +196,7 @@ theorem reachable_correct
     (cfg : WFCFG) :
     ∀ {n : NodeID} {σ : State},
       Flow.Analysis.Generic.Reachable cfg.analysis n σ State.isInit ->
-      corr ((analyzeCFG hnd cfg).inFacts n) σ := by
+      coh ((analyzeCFG hnd cfg).inFacts n) σ := by
   intro n σ hreach
   let A := analysis hnd cfg
   let R := analyzeCFG hnd cfg

@@ -418,7 +418,7 @@ private lemma cp_preserve_branch_case (vars : List String) (cfg : CFG)
     fields directly consume the abstract `LangSem` transitions. -/
 def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : WFCFG) :
     DFASemantics (ls := tipLangSem cfg) cfg.analysis (cpDFA vars cfg) :=
-  { Corr := cpβ_corr
+  { Coh := cpβ_corr
     isInit := State.isInit
     preserve_entry := by
       intro σ hinit

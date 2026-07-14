@@ -247,16 +247,16 @@ instance instTransferMono :
   node_mono := nodeTransfer_mono cfg
   edge_mono := edgeTransfer_mono
 
-/-! ## Correspondence predicate for concrete and abstract states -/
+/-! ## Coherence predicate for concrete and abstract states -/
 
 /-- For each variable, if the analysis tells us it is not null, the concrete value is not null -/
-def corr_self (ℓ : Fact locs) (σ : State) : Prop :=
+def coh_self (ℓ : Fact locs) (σ : State) : Prop :=
   ∀ i v,
     (ℓ i).fst = .nonnull ->
     σ (locs.get i) = some v ->
     v ≠ .Null
 /-- Variable `i` is the witness that variable `j` is not null -/
-def corr_impl (ℓ : Fact locs) (σ : State) : Prop :=
+def coh_impl (ℓ : Fact locs) (σ : State) : Prop :=
   ∀ i j n v,
     (ℓ i).snd j = .nonnull ->
     σ (locs.get i) = some (.Int n) ->
@@ -264,7 +264,7 @@ def corr_impl (ℓ : Fact locs) (σ : State) : Prop :=
     σ (locs.get j) = some v ->
     v ≠ .Null
 
-def corr (ℓ : Fact locs) (σ : State) : Prop := corr_self ℓ σ ∧ corr_impl ℓ σ
+def coh (ℓ : Fact locs) (σ : State) : Prop := coh_self ℓ σ ∧ coh_impl ℓ σ
 
 /-- The DFA closure for nullability, parameterised by the underlying CFG.
     The CFG is needed to read `nodeKind`. -/
@@ -276,19 +276,19 @@ def DFA (locs : List Loc) : DFA NodeID Edge where
   entry        := entryInit locs
 
 lemma evalExpr_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {expr : Expr} {v : Val}
-    (hcorr : corr_self ℓ σ)
+    (hcoh : coh_self ℓ σ)
     (heval : EvalExpr σ expr v)
     (h_abs : evalExpr locs ℓ expr = NVal.nonnull) : v ≠ Val.Null := by
   induction heval with simp! [evalExpr] at *
   | @var x v h =>
     split at h_abs <;> try contradiction
     rename_i hi
-    apply hcorr <;> try trivial
+    apply hcoh <;> try trivial
     grind [List.finIdxOf?_eq_some_iff]
 
 lemma nonNullAssumption_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {expr : Expr} {n : Int}
     {i : Fin locs.length}
-    (hcorr : corr ℓ σ)
+    (hcoh : coh ℓ σ)
     (heval : EvalExpr σ expr (Val.Int n))
     (htruthy : n ≠ 0)
     (hget : σ (locs.get i) = some Val.Null) :
@@ -326,19 +326,19 @@ lemma nonNullAssumption_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {
       simp only [List.mem_filterMap, List.mem_finRange, true_and] at hass
       obtain ⟨a, ha⟩ := hass
       cases h_snd : (ℓ j).snd a <;> simp [h_snd] at ha
-      apply hcorr.right <;> try trivial
+      apply hcoh.right <;> try trivial
       grind
 
 lemma exprConsequent_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {expr : Expr} {n : Int}
-    (hcorr : corr ℓ σ)
+    (hcoh : coh ℓ σ)
     (heval : EvalExpr σ expr (Val.Int n))
     (htruthy : n ≠ 0) :
-    corr_self (fun i => (
+    coh_self (fun i => (
       if exprConsequent locs ℓ expr i = NVal.nonnull then NVal.nonnull else (ℓ i).fst,
       (ℓ i).snd
     )) σ := by
   intro i v h henv rfl
-  apply hcorr.left <;> try trivial
+  apply hcoh.left <;> try trivial
   simp! [exprConsequent] at h
   apply h
   intro hass
@@ -346,9 +346,9 @@ lemma exprConsequent_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {exp
   apply nonNullAssumption_sound <;> trivial
 
 private lemma preserve_update_none (ℓ : Fact locs)
-    (hnone : locs.finIdxOf? x = none) (hcorr : corr ℓ σ) :
-    corr ℓ (σ.updated x v) := by
-  simp only [corr, corr_self, corr_impl, State.updated] at *
+    (hnone : locs.finIdxOf? x = none) (hcoh : coh ℓ σ) :
+    coh ℓ (σ.updated x v) := by
+  simp only [coh, coh_self, coh_impl, State.updated] at *
   grind [List.finIdxOf?_eq_none_iff]
 
 @[simp] private lemma DFA_transferAlong (cfg : WFCFG)
@@ -360,14 +360,14 @@ private lemma preserve_update_none (ℓ : Fact locs)
     fields directly consume the abstract `LangSem` transitions. -/
 def semantics (hnd : locs.Nodup) :
     DFASemantics (ls := dukeLangSem cfg) cfg.analysis (DFA cfg locs) :=
-  { Corr := corr
+  { Coh := coh
     isInit := State.isInit
     preserve_entry := by
       intro σ hinit
       cases hinit
-      simp [corr, corr_self, corr_impl, State.empty]
+      simp [coh, coh_self, coh_impl, State.empty]
     preserve_step := by
-      intro e σ σ' ℓ hstep hcorr
+      intro e σ σ' ℓ hstep hcoh
       simp only [DFA_transferAlong, nodeTransfer]
       cases hstep with simp only [*]
       | assign _ heval _ =>
@@ -383,11 +383,11 @@ def semantics (hnd : locs.Nodup) :
               have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
               rw [Fin.getElem_fin] at hget
               rw [List.get_eq_getElem, hget, State.updated_eq σ x v] at hupd
-              have h_v_not_null : v ≠ Val.Null := evalExpr_sound hcorr.left heval h
+              have h_v_not_null : v ≠ Val.Null := evalExpr_sound hcoh.left heval h
               grind
             · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
               rw [State.updated_neq] at hupd <;> try trivial
-              apply hcorr.left <;> trivial
+              apply hcoh.left <;> trivial
           · intro j k n v' hupd1 habs hn hupd2 rfl
             simp only at hupd1
             split_ifs at hupd1 <;> simp only at hupd1
@@ -404,26 +404,26 @@ def semantics (hnd : locs.Nodup) :
                 contradiction
               · have h_x_neq : x ≠ locs.get k := by apply List.finIdxOf?_nodup <;> trivial
                 rw [State.updated_neq] at hupd2 <;> try trivial
-                apply exprConsequent_sound hcorr heval hn k .Null <;> grind
+                apply exprConsequent_sound hcoh heval hn k .Null <;> grind
             · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
               rw [State.updated_neq] at habs <;> try trivial
       | @assum _ _ n _ _ _ heval htruthy _ =>
         have : n ≠ 0 := by grind
-        simp only [corr, beq_iff_eq]
+        simp only [coh, beq_iff_eq]
         split_ands
         · apply exprConsequent_sound <;> trivial
-        · apply hcorr.right
+        · apply hcoh.right
     preserve_stutter := by
-      intro _n σ σ' ℓ hstut hcorr
+      intro _n σ σ' ℓ hstut hcoh
       simp only [LangSem.LStutter] at hstut
       subst hstut
       assumption
   }
 
-theorem mono_absorb_corr_self
+theorem mono_absorb_coh_self
     {ℓ ℓ' : Fact locs} {σ : State} (h : ℓ ⊑ ℓ')
-    (hcorr : corr_self ℓ σ) : corr_self ℓ' σ := by
-  simp only [corr_self] at *
+    (hcoh : coh_self ℓ σ) : coh_self ℓ' σ := by
+  simp only [coh_self] at *
   intros i v habs
   have hi : (ℓ i).fst ⊑ (ℓ' i).fst := by
     exact congrArg (fun ρ => (ρ i).fst) h
@@ -431,10 +431,10 @@ theorem mono_absorb_corr_self
   simp only [max] at hi
   generalize heq : ℓ i = x at hi
   grind
-theorem mono_absorb_corr_impl
+theorem mono_absorb_coh_impl
     {ℓ ℓ' : Fact locs} {σ : State} (h : ℓ ⊑ ℓ')
-    (hcorr : corr_impl ℓ σ) : corr_impl ℓ' σ := by
-  simp only [corr_impl] at *
+    (hcoh : coh_impl ℓ σ) : coh_impl ℓ' σ := by
+  simp only [coh_impl] at *
   intro i j n v habs
   have hi : (ℓ i).snd ⊑ (ℓ' i).snd := by
     exact congrArg (fun ρ => (ρ i).snd) h
@@ -443,11 +443,11 @@ theorem mono_absorb_corr_impl
   simp only [max] at hi
   generalize heq : (ℓ i).snd j = x at hi
   cases x <;> grind
-theorem mono_absorb_corr
+theorem mono_absorb_coh
     {ℓ ℓ' : Fact locs} {σ : State} (h : ℓ ⊑ ℓ')
-    (hcorr : corr ℓ σ) : corr ℓ' σ := by
-  unfold corr at *
-  grind [mono_absorb_corr_self, mono_absorb_corr_impl]
+    (hcoh : coh ℓ σ) : coh ℓ' σ := by
+  unfold coh at *
+  grind [mono_absorb_coh_self, mono_absorb_coh_impl]
 
 
 /-! ## Bundled Nullability analysis -/
@@ -464,7 +464,7 @@ def analysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
     fhL          := _
     llL          := (inferInstance : LatticeLike (Fact locs))
     semantics    := semantics cfg hnd
-    mono_absorb  := mono_absorb_corr
+    mono_absorb  := mono_absorb_coh
     transferMono := instTransferMono cfg }
 
 /-- Wrapper around `Flow.analyze`: run the bundled Nullability
@@ -482,7 +482,7 @@ theorem reachable_correct
     (cfg : WFCFG) :
     ∀ {n : NodeID} {σ : State},
       Flow.Analysis.Generic.Reachable cfg.analysis n σ State.isInit ->
-      corr ((analyzeCFG hnd cfg).inFacts n) σ := by
+      coh ((analyzeCFG hnd cfg).inFacts n) σ := by
   intro n σ hreach
   let A := analysis hnd cfg
   let R := analyzeCFG hnd cfg

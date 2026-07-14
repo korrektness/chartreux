@@ -1,7 +1,7 @@
 import Flow.Analysis.Lattice
 import Mathlib.Order.Notation
 
-variable {A : Type} [Max A] [Bot A]
+variable {L : Type} [Max L] [Bot L]
 variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
 
 section Dataflow
@@ -35,28 +35,28 @@ def succOf (g : AnalysisCFG Node Edge) (n : NodeOf g) : List (NodeOf g) :=
 end AnalysisCFG
 
 /-- analysis result: finite map from nodes of `g` to element of the analysis Lattice. -/
-abbrev StateN (g : AnalysisCFG Node Edge) (A : Type) := NodeOf g -> A
+abbrev StateN (g : AnalysisCFG Node Edge) (L : Type) := NodeOf g -> L
 
 namespace StateN
 
-def empty {g : AnalysisCFG Node Edge} : StateN g A := fun _ => ⊥
-def update {g : AnalysisCFG Node Edge} (f : StateN g A)
-    (n : NodeOf g) (v : A) : StateN g A :=
+def empty {g : AnalysisCFG Node Edge} : StateN g L := fun _ => ⊥
+def update {g : AnalysisCFG Node Edge} (f : StateN g L)
+    (n : NodeOf g) (v : L) : StateN g L :=
   fun m => if m = n then v else f m
 
-omit [Bot A] in
-private lemma gmap_height_update_eq [FiniteHeight A]
+omit [Bot L] in
+private lemma gmap_height_update_eq [FiniteHeight L]
     {g : AnalysisCFG Node Edge}
-    (nodes : List (NodeOf g)) (outF : StateN g A) (node : NodeOf g) (newOut : A) :
+    (nodes : List (NodeOf g)) (outF : StateN g L) (node : NodeOf g) (newOut : L) :
     (nodes.map (fun x => FiniteHeight.remainingHeight (StateN.update outF node newOut x))) =
        (nodes.map (fun x => if x = node then FiniteHeight.remainingHeight newOut
         else FiniteHeight.remainingHeight (outF x))) := by
   congr 1; ext x; simp [StateN.update]; split <;> rfl
 
-omit [Bot A] in
-private lemma gmap_update_sum_lt [FiniteHeight A]
+omit [Bot L] in
+private lemma gmap_update_sum_lt [FiniteHeight L]
     {g : AnalysisCFG Node Edge}
-    (nodes : List (NodeOf g)) (outF : StateN g A) (node : NodeOf g) (newOut : A)
+    (nodes : List (NodeOf g)) (outF : StateN g L) (node : NodeOf g) (newOut : L)
     (hn : node ∈ nodes)
     (hlt : FiniteHeight.remainingHeight newOut < FiniteHeight.remainingHeight (outF node)) :
     (nodes.map (fun x => FiniteHeight.remainingHeight (StateN.update outF node newOut x))).sum
@@ -67,23 +67,23 @@ private lemma gmap_update_sum_lt [FiniteHeight A]
     (FiniteHeight.remainingHeight newOut) hn hlt
 
 /- pointwise instances of max/bot/le -/
-instance {g : AnalysisCFG Node Edge} : Max (StateN g A) where
+instance {g : AnalysisCFG Node Edge} : Max (StateN g L) where
   max f g := fun n => f n ⊔ g n
 
-instance {g : AnalysisCFG Node Edge} : Bot (StateN g A) where
+instance {g : AnalysisCFG Node Edge} : Bot (StateN g L) where
   bot := empty
 
-def le {g : AnalysisCFG Node Edge} (f₁ f₂ : StateN g A) : Prop :=
+def le {g : AnalysisCFG Node Edge} (f₁ f₂ : StateN g L) : Prop :=
   ∀ n, (f₁ n) ⊑ (f₂ n)
 
-omit [Bot A] in
+omit [Bot L] in
 /-- height of a `StateN`, termination condition for the worklist algorithm. -/
-def height [fh : FiniteHeight A] (g : AnalysisCFG Node Edge) (f : StateN g A) : Nat :=
+def height [fh : FiniteHeight L] (g : AnalysisCFG Node Edge) (f : StateN g L) : Nat :=
     (g.nodes.attach.map (fun x => fh.remainingHeight (f x))).sum
 
-omit [Bot A] in
-theorem height_update_decreases [FiniteHeight A]
-    (g : AnalysisCFG Node Edge) (outF : StateN g A) (node : NodeOf g) (newOut : A)
+omit [Bot L] in
+theorem height_update_decreases [FiniteHeight L]
+    (g : AnalysisCFG Node Edge) (outF : StateN g L) (node : NodeOf g) (newOut : L)
     (hlt : FiniteHeight.remainingHeight newOut < FiniteHeight.remainingHeight (outF node)) :
     StateN.height g (StateN.update outF node newOut) < StateN.height g outF := by
   have hn : node ∈ g.nodes.attach := List.mem_attach _ _
@@ -91,15 +91,15 @@ theorem height_update_decreases [FiniteHeight A]
   unfold StateN.height
   omega
 
-lemma le_trans {g : AnalysisCFG Node Edge} [FiniteHeight A]
-    [LatticeLike A]
-    (f1 f2 f3 : StateN g A) (h12 : StateN.le f1 f2) (h23 : StateN.le f2 f3) :
+lemma le_trans {g : AnalysisCFG Node Edge} [FiniteHeight L]
+    [LatticeLike L]
+    (f1 f2 f3 : StateN g L) (h12 : StateN.le f1 f2) (h23 : StateN.le f2 f3) :
     StateN.le f1 f3 :=
   fun n => join_ge_trans _ _ _ (h12 n) (h23 n)
 
-lemma le_update_join {g : AnalysisCFG Node Edge} [FiniteHeight A]
-    [ll : LatticeLike A]
-    (outF : StateN g A) (n : NodeOf g) (v : A) :
+lemma le_update_join {g : AnalysisCFG Node Edge} [FiniteHeight L]
+    [ll : LatticeLike L]
+    (outF : StateN g L) (n : NodeOf g) (v : L) :
     StateN.le outF (outF.update n (outF n ⊔ v)) := by
   intro m; simp only [StateN.update]
   split

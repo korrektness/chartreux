@@ -32,8 +32,8 @@ theorem reachable_in_bounds (cfg : WFCFG) {n : NodeID} {σ : State}
 theorem eval_expr_progress {locs : List Loc}
     {nℓ : Nullability.Fact locs} {iℓ : Initialization.Fact locs}
     {σ : State} (e : Expr)
-    (hn : Nullability.corr_self nℓ σ)
-    (hi : Initialization.corr iℓ σ)
+    (hn : Nullability.coh_self nℓ σ)
+    (hi : Initialization.coh iℓ σ)
     (hcn : Nullability.checkExpr nℓ e)
     (hci : Initialization.checkExpr iℓ e) :
     ∃ v, EvalExpr σ e v := by
@@ -45,7 +45,7 @@ theorem eval_expr_progress {locs : List Loc}
     split at hci <;> try contradiction
     rename_i i hget
     simp only [List.finIdxOf?_eq_some_iff, Fin.getElem_fin] at hget
-    simp only [Initialization.corr, Option.isSome_iff_exists] at hi
+    simp only [Initialization.coh, Option.isSome_iff_exists] at hi
     have ⟨v, hv⟩ := hi i hci
     use v
     constructor
@@ -96,8 +96,8 @@ lemma eval_node_safe (cfg : WFCFG) {locs : List Loc}
     (hreach : Flow.Analysis.Generic.Reachable cfg.analysis n σ State.isInit)
     (hexit : n ≠ cfg.val.exit)
     (hkind : cfg.val.nodeKind n = some kind)
-    (hn : Nullability.corr_self nℓ σ)
-    (hi : Initialization.corr iℓ σ)
+    (hn : Nullability.coh_self nℓ σ)
+    (hi : Initialization.coh iℓ σ)
     (hcn : Nullability.checkNode nℓ kind)
     (hci : Initialization.checkNode iℓ kind) :
     match kind with
