@@ -29,25 +29,25 @@ def formatFact (locs : List Loc) (ℓ : Fact locs) : String :=
 
 /-! ## CFG transition functions -/
 
-def evalExpr (locs : List Loc) (ρ : Fact locs) : Expr → Bool
+def evalExpr (locs : List Loc) (ℓ : Fact locs) : Expr → Bool
   | .Null => false
   | .Int _ => false
   | .Var x =>
       match locs.finIdxOf? x with
       | none   => true
-      | some i => ρ i
-  | .IsNull e => evalExpr locs ρ e
-  | .Not e => evalExpr locs ρ e
-  | .BinOp _ e₁ e₂ => evalExpr locs ρ e₁ ⊔ evalExpr locs ρ e₂
+      | some i => ℓ i
+  | .IsNull e => evalExpr locs ℓ e
+  | .Not e => evalExpr locs ℓ e
+  | .BinOp _ e₁ e₂ => evalExpr locs ℓ e₁ ⊔ evalExpr locs ℓ e₂
 
 def nodeTransfer (locs : List Loc) (g : CFG) (n : NodeID) :
-    Fact locs -> Fact locs := fun ρ =>
+    Fact locs -> Fact locs := fun ℓ =>
   match g.nodeKind n with
   | some (.Assign x _) =>
     match locs.finIdxOf? x with
-    | none   => ρ
-    | some i => fun j => if j = i then false else ρ j
-  | some (.Assume _) | some .Skip | none => ρ
+    | none   => ℓ
+    | some i => fun j => if j = i then false else ℓ j
+  | some (.Assume _) | some .Skip | none => ℓ
 
 def edgeTransfer (vars : List String) : Edge -> Fact vars -> Fact vars :=
   fun _ a => a
@@ -62,9 +62,9 @@ variable {locs : List Loc}
 
 private lemma nodeTransfer_mono (n : NodeID) :
     mono_f (nodeTransfer locs cfg n) := by
-  intro ρ₁ ρ₂ hxy
+  intro ℓ₁ ℓ₂ hxy
   funext j
-  change (nodeTransfer locs cfg n ρ₁) j ⊑ (nodeTransfer locs cfg n ρ₂) j
+  change (nodeTransfer locs cfg n ℓ₁) j ⊑ (nodeTransfer locs cfg n ℓ₂) j
   simp only
   unfold nodeTransfer
   generalize hk : cfg.val.nodeKind n = nk

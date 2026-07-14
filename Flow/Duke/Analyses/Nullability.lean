@@ -83,31 +83,31 @@ def formatFact (locs : List Loc) (ℓ : Fact locs) : String :=
       s!"{locs.get i}={v}" ++ if conss.isEmpty then "" else s!" ⇒ {formatConsequents conss}"
   "[" ++ String.intercalate ", " parts ++ "]"
 
-def nonNullAssumption (locs : List Loc) (inFacts : Fact locs) (e : Expr) : List Loc :=
+def nonNullAssumption (locs : List Loc) (ℓ : Fact locs) (e : Expr) : List Loc :=
   match e with
-  | .BinOp .and e₁ e₂ => nonNullAssumption locs inFacts e₁ ++ nonNullAssumption locs inFacts e₂
+  | .BinOp .and e₁ e₂ => nonNullAssumption locs ℓ e₁ ++ nonNullAssumption locs ℓ e₂
   | .Not (.IsNull (.Var x)) => [x]
   | .Var x =>
       match locs.finIdxOf? x with
       | none   => []
-      | some i => inFacts i |>.snd |> extractConsequents locs
+      | some i => ℓ i |>.snd |> extractConsequents locs
   | _ => []
 
 /-- What is the consequent of this expression being true? -/
-def exprConsequent (locs : List Loc) (inFacts : Fact locs) (e : Expr) : Consequent locs :=
-  let nonNull := nonNullAssumption locs inFacts e |>.filterMap locs.finIdxOf?
+def exprConsequent (locs : List Loc) (ℓ : Fact locs) (e : Expr) : Consequent locs :=
+  let nonNull := nonNullAssumption locs ℓ e |>.filterMap locs.finIdxOf?
   fun j => if nonNull.contains j then .nonnull else .top
 
-def evalExpr (locs : List Loc) (ρ : Fact locs) : Expr → NVal
+def evalExpr (locs : List Loc) (ℓ : Fact locs) : Expr → NVal
   | .Null => .top
   | .Int _ => .nonnull
   | .Var x =>
       match locs.finIdxOf? x with
       | none   => .top
-      | some i => ρ i |>.fst
+      | some i => ℓ i |>.fst
   | .IsNull _ => .nonnull
   | .Not _ => .nonnull
-  | .BinOp _ e₁ e₂ => evalExpr locs ρ e₁ ⊔ evalExpr locs ρ e₂
+  | .BinOp _ e₁ e₂ => evalExpr locs ℓ e₁ ⊔ evalExpr locs ℓ e₂
 
 def nodeTransfer (locs : List Loc) (g : CFG) (n : NodeID) :
     Fact locs -> Fact locs := fun ρ =>
@@ -154,9 +154,9 @@ private lemma extractConsequents_incl (ρ₁ ρ₂ : Consequent locs)
   generalize h2 : ρ₂ i = x₂ at *
   cases x₁ <;> cases x₂ <;> trivial
 
-private lemma nonNullAssumption_incl (ρ₁ ρ₂ : Fact locs)
-    (hρ : ρ₁ ⊑ ρ₂) (e : Expr) (l : Loc) :
-    l ∈ nonNullAssumption locs ρ₂ e -> l ∈ nonNullAssumption locs ρ₁ e := by
+private lemma nonNullAssumption_incl (ℓ₁ ℓ₂ : Fact locs)
+    (hρ : ℓ₁ ⊑ ℓ₂) (e : Expr) (l : Loc) :
+    l ∈ nonNullAssumption locs ℓ₂ e -> l ∈ nonNullAssumption locs ℓ₁ e := by
   induction e generalizing l with try grind [nonNullAssumption]
   | Not e => unfold nonNullAssumption at *; grind
   | BinOp op e₁ e₂ ih₁ ih₂ =>
@@ -167,11 +167,11 @@ private lemma nonNullAssumption_incl (ρ₁ ρ₂ : Fact locs)
     split <;> try grind
     rename_i i _
     apply extractConsequents_incl
-    exact congrArg (fun ρ => (ρ i).snd) hρ
+    exact congrArg (fun ℓ => (ℓ i).snd) hρ
 
-private lemma exprConsequent_mono (ρ₁ ρ₂ : Fact locs)
-    (hρ : ρ₁ ⊑ ρ₂) (e : Expr) :
-    exprConsequent locs ρ₁ e ⊑ exprConsequent locs ρ₂ e := by
+private lemma exprConsequent_mono (ℓ₁ ℓ₂ : Fact locs)
+    (hρ : ℓ₁ ⊑ ℓ₂) (e : Expr) :
+    exprConsequent locs ℓ₁ e ⊑ exprConsequent locs ℓ₂ e := by
   unfold exprConsequent
   simp only
   funext j
@@ -182,28 +182,28 @@ private lemma exprConsequent_mono (ρ₁ ρ₂ : Fact locs)
   rw [List.contains_iff_mem, List.mem_filterMap] at *
   grind [nonNullAssumption_incl]
 
-private lemma evalExpr_mono (ρ₁ ρ₂ : Fact locs)
-    (hρ : ρ₁ ⊑ ρ₂) (e : Expr) :
-    evalExpr locs ρ₁ e ⊑ evalExpr locs ρ₂ e := by
+private lemma evalExpr_mono (ℓ₁ ℓ₂ : Fact locs)
+    (hρ : ℓ₁ ⊑ ℓ₂) (e : Expr) :
+    evalExpr locs ℓ₁ e ⊑ evalExpr locs ℓ₂ e := by
   induction e with (simp only [evalExpr]; try grind [LatticeLike.join_idem])
   | Var x =>
     split <;> try rfl
     rename_i i _
-    exact congrArg (fun ρ => (ρ i).fst) hρ
+    exact congrArg (fun ℓ => (ℓ i).fst) hρ
   | BinOp op e₁ e₂ ih₁ ih₂ =>
-    cases ha₁ : evalExpr locs ρ₁ e₁ <;>
-      cases hb₁ : evalExpr locs ρ₁ e₂ <;>
-      cases ha₂ : evalExpr locs ρ₂ e₁ <;>
-      cases hb₂ : evalExpr locs ρ₂ e₂ <;>
+    cases ha₁ : evalExpr locs ℓ₁ e₁ <;>
+      cases hb₁ : evalExpr locs ℓ₁ e₂ <;>
+      cases ha₂ : evalExpr locs ℓ₂ e₁ <;>
+      cases hb₂ : evalExpr locs ℓ₂ e₂ <;>
       rw [ha₁, ha₂] at ih₁ <;>
       rw [hb₁, hb₂] at ih₂ <;>
       simp_all [Max.max]
 
 private lemma nodeTransfer_mono (n : NodeID) :
     mono_f (nodeTransfer locs cfg n) := by
-  intro ρ₁ ρ₂ hxy
+  intro ℓ₁ ℓ₂ hxy
   funext j
-  change (nodeTransfer locs cfg n ρ₁) j ⊑ (nodeTransfer locs cfg n ρ₂) j
+  change (nodeTransfer locs cfg n ℓ₁) j ⊑ (nodeTransfer locs cfg n ℓ₂) j
   unfold nodeTransfer
   simp only
   generalize hk : cfg.val.nodeKind n = nk
@@ -226,18 +226,18 @@ private lemma nodeTransfer_mono (n : NodeID) :
           apply exprConsequent_mono
           assumption
       · ext
-        case fst => exact congrArg (fun ρ => (ρ j).fst) hxy
+        case fst => exact congrArg (fun ℓ => (ℓ j).fst) hxy
         case h k => rfl
     | Assume e =>
       ext
       case fst =>
-        have hw_mono := Domain.ord_distr (exprConsequent_mono ρ₁ ρ₂ hxy e) (i := j)
-        generalize hw1 : exprConsequent locs ρ₁ e j = w₁ at *
-        generalize hw2 : exprConsequent locs ρ₂ e j = w₂ at *
+        have hw_mono := Domain.ord_distr (exprConsequent_mono ℓ₁ ℓ₂ hxy e) (i := j)
+        generalize hw1 : exprConsequent locs ℓ₁ e j = w₁ at *
+        generalize hw2 : exprConsequent locs ℓ₂ e j = w₂ at *
         cases w₁ <;> cases w₂ <;> simp [Max.max] at * <;> grind
       case h i =>
         apply Domain.ord_distr
-        exact congrArg (fun ρ => (ρ j).snd) hxy
+        exact congrArg (fun ℓ => (ℓ j).snd) hxy
 
 private lemma edgeTransfer_mono :
     ∀ e, mono_f (edgeTransfer locs e) := fun _ _ _ h => h
