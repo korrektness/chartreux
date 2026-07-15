@@ -1,5 +1,4 @@
 import Flow.Analysis.Lattice
-import Mathlib.Order.Notation
 
 variable {L : Type} [Max L] [Bot L]
 variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
@@ -51,7 +50,7 @@ def update {g : AnalysisCFG Node Edge} (f : StateN g L)
   fun m => if m = n then v else f m
 
 omit [Bot L] in
-private lemma gmap_height_update_eq [FiniteHeight L]
+private theorem gmap_height_update_eq [FiniteHeight L]
     {g : AnalysisCFG Node Edge}
     (nodes : List (NodeOf g)) (outF : StateN g L) (node : NodeOf g) (newOut : L) :
     (nodes.map (fun x => FiniteHeight.remainingHeight (StateN.update outF node newOut x))) =
@@ -60,7 +59,7 @@ private lemma gmap_height_update_eq [FiniteHeight L]
   congr 1; ext x; simp [StateN.update]; split <;> rfl
 
 omit [Bot L] in
-private lemma gmap_update_sum_lt [FiniteHeight L]
+private theorem gmap_update_sum_lt [FiniteHeight L]
     {g : AnalysisCFG Node Edge}
     (nodes : List (NodeOf g)) (outF : StateN g L) (node : NodeOf g) (newOut : L)
     (hn : node ∈ nodes)
@@ -97,13 +96,13 @@ theorem height_update_decreases [FiniteHeight L]
   unfold StateN.height
   omega
 
-lemma le_trans {g : AnalysisCFG Node Edge} [FiniteHeight L]
+theorem le_trans {g : AnalysisCFG Node Edge} [FiniteHeight L]
     [LatticeLike L]
     (f1 f2 f3 : StateN g L) (h12 : StateN.le f1 f2) (h23 : StateN.le f2 f3) :
-    StateN.le f1 f3 :=
-  fun n => join_ge_trans _ _ _ (h12 n) (h23 n)
+    StateN.le f1 f3 := by
+  exact fun n => join_ge_trans _ _ _ (h12 n) (h23 n)
 
-lemma le_update_join {g : AnalysisCFG Node Edge} [FiniteHeight L]
+theorem le_update_join {g : AnalysisCFG Node Edge} [FiniteHeight L]
     [ll : LatticeLike L]
     (outF : StateN g L) (n : NodeOf g) (v : L) :
     StateN.le outF (outF.update n (outF n ⊔ v)) := by

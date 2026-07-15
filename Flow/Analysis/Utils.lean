@@ -1,4 +1,3 @@
-import Mathlib.Tactic.Lemma
 import Mathlib.Data.List.Nodup
 
 namespace Utils

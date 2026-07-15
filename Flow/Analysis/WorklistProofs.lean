@@ -7,12 +7,12 @@ variable {Node Edge : Type} [DecidableEq Node] [DecidableEq Edge]
 variable {L : Type}
 
 section Helpers
-private lemma ite_decEq_irrel {α : Type} {p : Prop}
+private theorem ite_decEq_irrel {α : Type} {p : Prop}
     (d1 d2 : Decidable p) (a b : α) :
     @ite α p d1 a b = @ite α p d2 a b := by
   cases d1 <;> cases d2 <;> simp_all
 
-private lemma foldl_join_eT_update
+private theorem foldl_join_eT_update
     [Bot L] [Max L]
     (g : AnalysisCFG Node Edge)
     (edgeTransfer : Edge -> L -> L) (outF : StateN g L)
@@ -35,7 +35,7 @@ private lemma foldl_join_eT_update
     simp only [StateN.update, hne, if_false]
     exact ih (fun e' he' => hnoedge e' (List.mem_cons_of_mem e he')) _
 
-private lemma joinPredEdges_update_non_pred
+private theorem joinPredEdges_update_non_pred
     [Bot L] [Max L]
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> L -> L) (outF : StateN g L)
     (n : NodeOf g) (v : L) (m : NodeOf g)
@@ -46,7 +46,7 @@ private lemma joinPredEdges_update_non_pred
   exact foldl_join_eT_update g edgeTransfer outF n v m (g.inEdges m.val).attach
     (fun e _ => hnoedge e.val e.property) ⊥
 
-private lemma not_succ_no_in_edge
+private theorem not_succ_no_in_edge
     (g : AnalysisCFG Node Edge) (n m : NodeOf g) (h : m ∉ g.succOf n) :
     ∀ e ∈ g.inEdges m.val, g.srcOf e ≠ n.val := by
   intro e he hsrc
@@ -57,7 +57,7 @@ private lemma not_succ_no_in_edge
   simp only [List.any_eq_true, decide_eq_true_eq]
   exact ⟨e, he, hsrc⟩
 
-private lemma expectedIn_update_non_pred
+private theorem expectedIn_update_non_pred
     [Bot L] [Max L]
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> L -> L) (outF : StateN g L)
     (entryInit : L) (n : NodeOf g) (v : L) (m : NodeOf g) (h : m ∉ g.succOf n) :
@@ -84,7 +84,7 @@ def IsForwardPostFixpoint [Bot L] [Max L]
   ∀ n : NodeOf g,
     (nodeTransfer n.val (expectedIn g edgeTransfer entryInit outF n)) ⊑ outF n
 
-private lemma foldl_join_eT_mono
+private theorem foldl_join_eT_mono
     [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> L -> L)
     (edge_mono : ∀ e, mono_f (edgeTransfer e))
@@ -106,7 +106,7 @@ private lemma foldl_join_eT_mono
     let e_mem : NodeOf g := ⟨g.srcOf e.val, g.inEdges_src_mem m.val e.val e.property⟩
     grind [edge_mono e.val _ _ (hle e_mem), ll.join_assoc, ll.join_comm]
 
-private lemma joinPredEdges_mono
+private theorem joinPredEdges_mono
     [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> L -> L)
     (edge_mono : ∀ e, mono_f (edgeTransfer e))
@@ -116,7 +116,7 @@ private lemma joinPredEdges_mono
   exact foldl_join_eT_mono g edgeTransfer edge_mono
     outF1 outF2 hle n (g.inEdges n.val).attach ⊥ ⊥ (ll.join_idem ⊥)
 
-private lemma expectedIn_mono
+private theorem expectedIn_mono
     [Bot L] [Max L] [FiniteHeight L]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
     (entryInit : L)
@@ -130,7 +130,7 @@ private lemma expectedIn_mono
     <;> grind [ll.join_assoc, ll.join_idem, ll.join_comm,
                joinPredEdges_mono g edgeTransfer tm.edge_mono outF1 outF2 hle n]
 
-private lemma T_postfix_of_postfix
+private theorem T_postfix_of_postfix
     [Bot L] [Max L] [FiniteHeight L]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
     (entryInit : L) (f : StateN g L)
@@ -280,7 +280,7 @@ theorem worklistForward_sound_fixpoint
       wl0 _ hpostT hbase
   grind [hleast n, hpostres n, ll.join_comm]
 
-private lemma foldl_join_absorb
+private theorem foldl_join_absorb
     [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
     {α : Type} (f : α -> L) (x : L) :
     ∀ (l : List α) (acc : L), x ⊑ acc ->
@@ -291,7 +291,7 @@ private lemma foldl_join_absorb
     apply foldl_join_absorb f x tl
     rw [<-ll.join_assoc, h]
 
-private lemma foldl_ge_of_mem
+private theorem foldl_ge_of_mem
     [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
     {α : Type} (f : α -> L)
     (l : List α) (a : α) (ha : a ∈ l) (init : L) :
@@ -307,7 +307,7 @@ private lemma foldl_ge_of_mem
       rw [ll.join_comm, ll.join_assoc, ll.join_idem]
     | inr htl => exact ih htl _
 
-private lemma joinPredEdges_ge_edge
+private theorem joinPredEdges_ge_edge
     [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> L -> L)
     (ρ : StateN g L) (n : NodeOf g)
