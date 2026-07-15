@@ -61,16 +61,16 @@ end LSteps
 
 /-- Logical semantics linking the DFA to the abstract LangSem relation -/
 structure DFASemantics (A : DFA Node Edge) where
-  Corr : A.L -> State -> Prop
+  Coh : A.L -> State -> Prop
   isInit : State -> Prop
   preserve_entry :
-    ∀ {σ : State}, isInit σ -> Corr A.entry σ
+    ∀ {σ : State}, isInit σ -> Coh A.entry σ
   preserve_step :
     ∀ {e : EdgeOf g} {σ σ' : State} {ℓ : A.L},
-      LangSem.LStep e σ σ' -> Corr ℓ σ -> Corr (A.transferAlong g e ℓ) σ'
+      LangSem.LStep e σ σ' -> Coh ℓ σ -> Coh (A.transferAlong g e ℓ) σ'
   preserve_stutter :
     ∀ {n : Node} {σ σ' : State} {ℓ : A.L},
-      LangSem.LStutter g n σ σ' -> Corr ℓ σ -> Corr ℓ σ'
+      LangSem.LStutter g n σ σ' -> Coh ℓ σ -> Coh ℓ σ'
 
 /-- a node-indexed labelling is a post-fixpoint of `A`'s transfer if,
     for every `e`, the fact at `srcOf e` after transfer is absorbed
@@ -81,32 +81,32 @@ def PostFixpoint (A : DFA Node Edge) (rd : Node -> A.L) [Max A.L] : Prop :=
 
 /-- step preservation of analysis correctness -/
 theorem step_preserves_corr
-    {A : DFA Node Edge} (S : DFASemantics g A) [Max A.L]
-    (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State}, ℓ ⊑ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
+    {A : DFA Node Edge} (D : DFASemantics g A) [Max A.L]
+    (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State}, ℓ ⊑ ℓ' -> D.Coh ℓ σ -> D.Coh ℓ' σ)
     {rd : Node -> A.L} (hpf : PostFixpoint g A rd)
     {e : EdgeOf g} {σ σ' : State}
     (hstep : LangSem.LStep e σ σ')
-    (hcorr : S.Corr (rd (g.srcOf e)) σ) :
-    S.Corr (rd (g.dstOf e)) σ' :=
-  mono_absorb (hpf e) (S.preserve_step hstep hcorr)
+    (hcorr : D.Coh (rd (g.srcOf e)) σ) :
+    D.Coh (rd (g.dstOf e)) σ' :=
+  mono_absorb (hpf e) (D.preserve_step hstep hcorr)
 
 /-- lift of step preservation through the multi-step closure of the step relation. -/
 theorem steps_preserves_corr
-    {A : DFA Node Edge} (S : DFASemantics g A) [Max A.L]
-    (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State}, ℓ ⊑ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
+    {A : DFA Node Edge} (D : DFASemantics g A) [Max A.L]
+    (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State}, ℓ ⊑ ℓ' -> D.Coh ℓ σ -> D.Coh ℓ' σ)
     {rd : Node -> A.L} (hpf : PostFixpoint g A rd)
     {n n' : Node} {σ σ' : State}
     (hsteps : LSteps g n σ n' σ')
-    (hcorr : S.Corr (rd n) σ) :
-    S.Corr (rd n') σ' := by
+    (hcorr : D.Coh (rd n) σ) :
+    D.Coh (rd n') σ' := by
   induction hsteps with
   | refl _ _ => exact hcorr
   | @step e n_src n'' σ_src σ' σ'' hstep _ hsrc ih =>
     apply ih
     simpa [hsrc, hcorr] using
-      (step_preserves_corr g S mono_absorb hpf hstep)
+      (step_preserves_corr g D mono_absorb hpf hstep)
   | stut hstut _ ih =>
-    exact ih (S.preserve_stutter hstut hcorr)
+    exact ih (D.preserve_stutter hstut hcorr)
 
 /-- State `σ` is `Reachable` if there's an initial state `σ₀` such that a
     chain of steps exists from `σ₀` to `σ`. -/
@@ -117,16 +117,16 @@ def Reachable (n : Node) (σ : State) (isInit : State -> Prop) : Prop :=
     corresponding to it is correct.
     Direct application of `steps_preserves_corr` -/
 theorem reachable_corr
-    {A : DFA Node Edge} (S : DFASemantics g A) [Max A.L]
-    (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State}, ℓ ⊑ ℓ' -> S.Corr ℓ σ -> S.Corr ℓ' σ)
+    {A : DFA Node Edge} (D : DFASemantics g A) [Max A.L]
+    (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State}, ℓ ⊑ ℓ' -> D.Coh ℓ σ -> D.Coh ℓ' σ)
     {rd : Node -> A.L} (hpf : PostFixpoint g A rd)
     (hentry : A.entry ⊑ (rd g.entry))
     {n : Node} {σ : State}
-    (hreach : Reachable g n σ S.isInit) :
-    S.Corr (rd n) σ := by
+    (hreach : Reachable g n σ D.isInit) :
+    D.Coh (rd n) σ := by
   obtain ⟨σ₀, hinit, hsteps⟩ := hreach
-  have h_entry : S.Corr A.entry σ₀ := S.preserve_entry hinit
-  have h_rd0   : S.Corr (rd g.entry) σ₀ := mono_absorb hentry h_entry
-  exact steps_preserves_corr g S mono_absorb hpf hsteps h_rd0
+  have h_entry : D.Coh A.entry σ₀ := D.preserve_entry hinit
+  have h_rd0   : D.Coh (rd g.entry) σ₀ := mono_absorb hentry h_entry
+  exact steps_preserves_corr g D mono_absorb hpf hsteps h_rd0
 
 end Flow.Analysis.Generic

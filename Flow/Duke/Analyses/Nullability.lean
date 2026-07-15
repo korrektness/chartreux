@@ -51,102 +51,100 @@ instance : LatticeLike NVal where
 
 /-! ## CFG transition functions -/
 
-/-- A nullability witness for other variables -/
-abbrev NWitness (locs : List Loc) : Type := Domain locs.length NVal
-def emptyWitness (locs : List Loc) : NWitness locs := fun _ => .top
+/-- Nullability consequent for other variables -/
+abbrev Consequent (locs : List Loc) : Type := Domain locs.length NVal
+def emptyConsequent (locs : List Loc) : Consequent locs := fun _ => .top
 
 /-- A nullability fact for a program with location `locs`
     is a `Domain` over
-    * `NVal` - am I null?
-    * `NWitness` - do I carry the proof that others are null?
+    * `NVal` - am I nonnull?
+    * `Consequent` - do I witness that others are nonnull?
 -/
-abbrev NFact (locs : List Loc) : Type := Domain locs.length (NVal × NWitness locs)
+abbrev Fact (locs : List Loc) : Type := Domain locs.length (NVal × Consequent locs)
 
-def extractWitnesses (locs : List Loc) (wit : NWitness locs) : List Loc :=
+def extractConsequents (locs : List Loc) (cons : Consequent locs) : List Loc :=
   (List.finRange locs.length).filterMap (
-    fun i => match wit i with
+    fun i => match cons i with
              | .nonnull => some (locs.get i)
              | _ => none
   )
 
-/-- Pretty-print a witness map using variable names: the set of locations
-    that this witness currently proves to be non-null. -/
-def formatNWitness (witnesses : List Loc) : String :=
-  "{" ++ String.intercalate ", " witnesses ++ "}"
+def formatConsequents (consequents : List Loc) : String :=
+  "{" ++ String.intercalate ", " consequents ++ "}"
 
 /-- Pretty-print a nullability fact using variable names. For each tracked
     variable we show its abstract nullability value and the set of variables
-    it witnesses as non-null. -/
-def formatNFact (locs : List Loc) (ℓ : NFact locs) : String :=
+    it witnesses as nonnull. -/
+def formatFact (locs : List Loc) (ℓ : Fact locs) : String :=
   let parts : List String :=
     (List.finRange locs.length).map fun i =>
-      let (v, wit) := ℓ i
-      let witnesses := extractWitnesses locs wit
-      s!"{locs.get i}={v}" ++ if witnesses.isEmpty then "" else s!" ⇒ {formatNWitness witnesses}"
+      let (v, cons) := ℓ i
+      let conss := extractConsequents locs cons
+      s!"{locs.get i}={v}" ++ if conss.isEmpty then "" else s!" ⇒ {formatConsequents conss}"
   "[" ++ String.intercalate ", " parts ++ "]"
 
-def nonNullAssumption (locs : List Loc) (inFacts : NFact locs) (e : Expr) : List Loc :=
+def nonNullAssumption (locs : List Loc) (ℓ : Fact locs) (e : Expr) : List Loc :=
   match e with
-  | .BinOp .and e₁ e₂ => nonNullAssumption locs inFacts e₁ ++ nonNullAssumption locs inFacts e₂
+  | .BinOp .and e₁ e₂ => nonNullAssumption locs ℓ e₁ ++ nonNullAssumption locs ℓ e₂
   | .Not (.IsNull (.Var x)) => [x]
   | .Var x =>
       match locs.finIdxOf? x with
       | none   => []
-      | some i => inFacts i |>.snd |> extractWitnesses locs
+      | some i => ℓ i |>.snd |> extractConsequents locs
   | _ => []
 
-/-- What does this expression witness? -/
-def exprWitness (locs : List Loc) (inFacts : NFact locs) (e : Expr) : NWitness locs :=
-  let nonNull := nonNullAssumption locs inFacts e |>.filterMap locs.finIdxOf?
+/-- What is the consequent of this expression being true? -/
+def exprConsequent (locs : List Loc) (ℓ : Fact locs) (e : Expr) : Consequent locs :=
+  let nonNull := nonNullAssumption locs ℓ e |>.filterMap locs.finIdxOf?
   fun j => if nonNull.contains j then .nonnull else .top
 
-def evalExpr (locs : List Loc) (ρ : NFact locs) : Expr → NVal
+def evalExpr (locs : List Loc) (ℓ : Fact locs) : Expr → NVal
   | .Null => .top
   | .Int _ => .nonnull
   | .Var x =>
       match locs.finIdxOf? x with
       | none   => .top
-      | some i => ρ i |>.fst
+      | some i => ℓ i |>.fst
   | .IsNull _ => .nonnull
   | .Not _ => .nonnull
-  | .BinOp _ e₁ e₂ => evalExpr locs ρ e₁ ⊔ evalExpr locs ρ e₂
+  | .BinOp _ e₁ e₂ => evalExpr locs ℓ e₁ ⊔ evalExpr locs ℓ e₂
 
-def nTransfer (locs : List Loc) (g : CFG) (n : NodeID) :
-    NFact locs -> NFact locs := fun ρ =>
+def nodeTransfer (locs : List Loc) (g : CFG) (n : NodeID) :
+    Fact locs -> Fact locs := fun ρ =>
   match g.nodeKind n with
   | some (.Assign l e) =>
     match locs.finIdxOf? l with
     | none   => ρ
     | some i =>
         let v := evalExpr locs ρ e
-        let wit := exprWitness locs ρ e
-        -- mutation might have invalidated some of the witnesses
+        let cons := exprConsequent locs ρ e
+        -- mutation might have invalidated some of the implications
         -- we could be smart about just invalidating relevant ones,
         -- but for now we just invalidate all of them.
         -- TODO: invalidate only relevant bits
-        fun j => if j = i then (v, wit) else (ρ j |>.fst, emptyWitness locs)
+        fun j => if j = i then (v, cons) else (ρ j |>.fst, emptyConsequent locs)
   | some (.Assume e) =>
-    let wit := exprWitness locs ρ e
-    -- we preserve the witnesses from before, but update the nullability status
-    fun i => (if wit i == .nonnull then .nonnull else ρ i |>.fst, ρ i |>.snd)
+    let cons := exprConsequent locs ρ e
+    -- we preserve the implications from before, but update the nullability status
+    fun i => (if cons i == .nonnull then .nonnull else ρ i |>.fst, ρ i |>.snd)
   | some .Skip | none => ρ
 
 /-- Edge transfer for forward nullability is the identity. -/
-def nEdgeTransfer (vars : List String) : Edge -> NFact vars -> NFact vars :=
+def edgeTransfer (vars : List String) : Edge -> Fact vars -> Fact vars :=
   fun _ a => a
 
-/-- The default initial fact: every tracked variable is `nonnull` and carries witnesses. -/
-def nEntryInit (locs : List Loc) : NFact locs := fun _ => (.nonnull, emptyWitness locs)
+/-- The default initial fact: every tracked variable is `nonnull` and witnesses nothing. -/
+def entryInit (locs : List Loc) : Fact locs := fun _ => (.nonnull, emptyConsequent locs)
 
 /-! ### Transfer function monotonicity -/
 
 variable (cfg : WFCFG)
 variable {locs : List Loc}
 
-private lemma extractWitnesses_incl (ρ₁ ρ₂ : NWitness locs)
+private lemma extractConsequents_incl (ρ₁ ρ₂ : Consequent locs)
     (hρ : ρ₁ ⊑ ρ₂) (l : Loc) :
-    l ∈ extractWitnesses locs ρ₂ -> l ∈ extractWitnesses locs ρ₁ := by
-  unfold extractWitnesses
+    l ∈ extractConsequents locs ρ₂ -> l ∈ extractConsequents locs ρ₁ := by
+  unfold extractConsequents
   intro h
   rw [List.mem_filterMap] at *
   have ⟨i, hin, heq⟩ := h
@@ -156,9 +154,9 @@ private lemma extractWitnesses_incl (ρ₁ ρ₂ : NWitness locs)
   generalize h2 : ρ₂ i = x₂ at *
   cases x₁ <;> cases x₂ <;> trivial
 
-private lemma nonNullAssumption_incl (ρ₁ ρ₂ : NFact locs)
-    (hρ : ρ₁ ⊑ ρ₂) (e : Expr) (l : Loc) :
-    l ∈ nonNullAssumption locs ρ₂ e -> l ∈ nonNullAssumption locs ρ₁ e := by
+private lemma nonNullAssumption_incl (ℓ₁ ℓ₂ : Fact locs)
+    (hρ : ℓ₁ ⊑ ℓ₂) (e : Expr) (l : Loc) :
+    l ∈ nonNullAssumption locs ℓ₂ e -> l ∈ nonNullAssumption locs ℓ₁ e := by
   induction e generalizing l with try grind [nonNullAssumption]
   | Not e => unfold nonNullAssumption at *; grind
   | BinOp op e₁ e₂ ih₁ ih₂ =>
@@ -168,13 +166,13 @@ private lemma nonNullAssumption_incl (ρ₁ ρ₂ : NFact locs)
     simp [nonNullAssumption]
     split <;> try grind
     rename_i i _
-    apply extractWitnesses_incl
-    exact congrArg (fun ρ => (ρ i).snd) hρ
+    apply extractConsequents_incl
+    exact congrArg (fun ℓ => (ℓ i).snd) hρ
 
-private lemma exprWitness_mono (ρ₁ ρ₂ : NFact locs)
-    (hρ : ρ₁ ⊑ ρ₂) (e : Expr) :
-    exprWitness locs ρ₁ e ⊑ exprWitness locs ρ₂ e := by
-  unfold exprWitness
+private lemma exprConsequent_mono (ℓ₁ ℓ₂ : Fact locs)
+    (hρ : ℓ₁ ⊑ ℓ₂) (e : Expr) :
+    exprConsequent locs ℓ₁ e ⊑ exprConsequent locs ℓ₂ e := by
+  unfold exprConsequent
   simp only
   funext j
   rw [Domain.max_app]
@@ -184,29 +182,29 @@ private lemma exprWitness_mono (ρ₁ ρ₂ : NFact locs)
   rw [List.contains_iff_mem, List.mem_filterMap] at *
   grind [nonNullAssumption_incl]
 
-private lemma evalExpr_mono (ρ₁ ρ₂ : NFact locs)
-    (hρ : ρ₁ ⊑ ρ₂) (e : Expr) :
-    evalExpr locs ρ₁ e ⊑ evalExpr locs ρ₂ e := by
+private lemma evalExpr_mono (ℓ₁ ℓ₂ : Fact locs)
+    (hρ : ℓ₁ ⊑ ℓ₂) (e : Expr) :
+    evalExpr locs ℓ₁ e ⊑ evalExpr locs ℓ₂ e := by
   induction e with (simp only [evalExpr]; try grind [LatticeLike.join_idem])
   | Var x =>
     split <;> try rfl
     rename_i i _
-    exact congrArg (fun ρ => (ρ i).fst) hρ
+    exact congrArg (fun ℓ => (ℓ i).fst) hρ
   | BinOp op e₁ e₂ ih₁ ih₂ =>
-    cases ha₁ : evalExpr locs ρ₁ e₁ <;>
-      cases hb₁ : evalExpr locs ρ₁ e₂ <;>
-      cases ha₂ : evalExpr locs ρ₂ e₁ <;>
-      cases hb₂ : evalExpr locs ρ₂ e₂ <;>
+    cases ha₁ : evalExpr locs ℓ₁ e₁ <;>
+      cases hb₁ : evalExpr locs ℓ₁ e₂ <;>
+      cases ha₂ : evalExpr locs ℓ₂ e₁ <;>
+      cases hb₂ : evalExpr locs ℓ₂ e₂ <;>
       rw [ha₁, ha₂] at ih₁ <;>
       rw [hb₁, hb₂] at ih₂ <;>
       simp_all [Max.max]
 
-private lemma nTransfer_mono (n : NodeID) :
-    mono_f (nTransfer locs cfg n) := by
-  intro ρ₁ ρ₂ hxy
+private lemma nodeTransfer_mono (n : NodeID) :
+    mono_f (nodeTransfer locs cfg n) := by
+  intro ℓ₁ ℓ₂ hxy
   funext j
-  change (nTransfer locs cfg n ρ₁) j ⊑ (nTransfer locs cfg n ρ₂) j
-  unfold nTransfer
+  change (nodeTransfer locs cfg n ℓ₁) j ⊑ (nodeTransfer locs cfg n ℓ₂) j
+  unfold nodeTransfer
   simp only
   generalize hk : cfg.val.nodeKind n = nk
   cases nk with
@@ -225,40 +223,40 @@ private lemma nTransfer_mono (n : NodeID) :
           assumption
         case h k =>
           apply Domain.ord_distr
-          apply exprWitness_mono
+          apply exprConsequent_mono
           assumption
       · ext
-        case fst => exact congrArg (fun ρ => (ρ j).fst) hxy
+        case fst => exact congrArg (fun ℓ => (ℓ j).fst) hxy
         case h k => rfl
     | Assume e =>
       ext
       case fst =>
-        have hw_mono := Domain.ord_distr (exprWitness_mono ρ₁ ρ₂ hxy e) (i := j)
-        generalize hw1 : exprWitness locs ρ₁ e j = w₁ at *
-        generalize hw2 : exprWitness locs ρ₂ e j = w₂ at *
+        have hw_mono := Domain.ord_distr (exprConsequent_mono ℓ₁ ℓ₂ hxy e) (i := j)
+        generalize hw1 : exprConsequent locs ℓ₁ e j = w₁ at *
+        generalize hw2 : exprConsequent locs ℓ₂ e j = w₂ at *
         cases w₁ <;> cases w₂ <;> simp [Max.max] at * <;> grind
       case h i =>
         apply Domain.ord_distr
-        exact congrArg (fun ρ => (ρ j).snd) hxy
+        exact congrArg (fun ℓ => (ℓ j).snd) hxy
 
-private lemma nEdgeTransfer_mono :
-    ∀ e, mono_f (nEdgeTransfer locs e) := fun _ _ _ h => h
+private lemma edgeTransfer_mono :
+    ∀ e, mono_f (edgeTransfer locs e) := fun _ _ _ h => h
 
-instance instTransferMonoN :
-    TransferMono (nTransfer locs cfg) (nEdgeTransfer locs) where
-  node_mono := nTransfer_mono cfg
-  edge_mono := nEdgeTransfer_mono
+instance instTransferMono :
+    TransferMono (nodeTransfer locs cfg) (edgeTransfer locs) where
+  node_mono := nodeTransfer_mono cfg
+  edge_mono := edgeTransfer_mono
 
-/-! ## Correspondence predicate for concrete and abstract states -/
+/-! ## Coherence predicate for concrete and abstract states -/
 
 /-- For each variable, if the analysis tells us it is not null, the concrete value is not null -/
-def ncorr_self (ℓ : NFact locs) (σ : State) : Prop :=
+def coh_self (ℓ : Fact locs) (σ : State) : Prop :=
   ∀ i v,
     (ℓ i).fst = .nonnull ->
     σ (locs.get i) = some v ->
     v ≠ .Null
 /-- Variable `i` is the witness that variable `j` is not null -/
-def ncorr_wit (ℓ : NFact locs) (σ : State) : Prop :=
+def coh_impl (ℓ : Fact locs) (σ : State) : Prop :=
   ∀ i j n v,
     (ℓ i).snd j = .nonnull ->
     σ (locs.get i) = some (.Int n) ->
@@ -266,31 +264,31 @@ def ncorr_wit (ℓ : NFact locs) (σ : State) : Prop :=
     σ (locs.get j) = some v ->
     v ≠ .Null
 
-def ncorr (ℓ : NFact locs) (σ : State) : Prop := ncorr_self ℓ σ ∧ ncorr_wit ℓ σ
+def coh (ℓ : Fact locs) (σ : State) : Prop := coh_self ℓ σ ∧ coh_impl ℓ σ
 
 /-- The DFA closure for nullability, parameterised by the underlying CFG.
     The CFG is needed to read `nodeKind`. -/
 @[reducible]
-def nDFA (locs : List Loc) : DFA NodeID Edge where
-  L            := NFact locs
-  nodeTransfer := nTransfer locs cfg
-  edgeTransfer := nEdgeTransfer locs
-  entry        := nEntryInit locs
+def DFA (locs : List Loc) : DFA NodeID Edge where
+  L            := Fact locs
+  nodeTransfer := nodeTransfer locs cfg
+  edgeTransfer := edgeTransfer locs
+  entry        := entryInit locs
 
-lemma evalExpr_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : Expr} {v : Val}
-    (hcorr : ncorr_self ℓ σ)
+lemma evalExpr_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {expr : Expr} {v : Val}
+    (hcoh : coh_self ℓ σ)
     (heval : EvalExpr σ expr v)
     (h_abs : evalExpr locs ℓ expr = NVal.nonnull) : v ≠ Val.Null := by
   induction heval with simp! [evalExpr] at *
   | @var x v h =>
     split at h_abs <;> try contradiction
     rename_i hi
-    apply hcorr <;> try trivial
+    apply hcoh <;> try trivial
     grind [List.finIdxOf?_eq_some_iff]
 
-lemma nonNullAssumption_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : Expr} {n : Int}
+lemma nonNullAssumption_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {expr : Expr} {n : Int}
     {i : Fin locs.length}
-    (hcorr : ncorr ℓ σ)
+    (hcoh : coh ℓ σ)
     (heval : EvalExpr σ expr (Val.Int n))
     (htruthy : n ≠ 0)
     (hget : σ (locs.get i) = some Val.Null) :
@@ -319,7 +317,7 @@ lemma nonNullAssumption_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} 
         simp! [nonNullAssumption] at hass
         cases hass <;> grind
   | Var x =>
-    simp! [nonNullAssumption, extractWitnesses] at hass
+    simp! [nonNullAssumption, extractConsequents] at hass
     split at hass <;> try trivial
     rename_i j hin
     have ⟨rfl, _⟩ := List.finIdxOf?_eq_some_iff.mp hin
@@ -328,54 +326,54 @@ lemma nonNullAssumption_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} 
       simp only [List.mem_filterMap, List.mem_finRange, true_and] at hass
       obtain ⟨a, ha⟩ := hass
       cases h_snd : (ℓ j).snd a <;> simp [h_snd] at ha
-      apply hcorr.right <;> try trivial
+      apply hcoh.right <;> try trivial
       grind
 
-lemma exprWitness_sound {locs : List Loc} {ℓ : NFact locs} {σ : State} {expr : Expr} {n : Int}
-    (hcorr : ncorr ℓ σ)
+lemma exprConsequent_sound {locs : List Loc} {ℓ : Fact locs} {σ : State} {expr : Expr} {n : Int}
+    (hcoh : coh ℓ σ)
     (heval : EvalExpr σ expr (Val.Int n))
     (htruthy : n ≠ 0) :
-    ncorr_self (fun i => (
-      if exprWitness locs ℓ expr i = NVal.nonnull then NVal.nonnull else (ℓ i).fst,
+    coh_self (fun i => (
+      if exprConsequent locs ℓ expr i = NVal.nonnull then NVal.nonnull else (ℓ i).fst,
       (ℓ i).snd
     )) σ := by
   intro i v h henv rfl
-  apply hcorr.left <;> try trivial
-  simp! [exprWitness] at h
+  apply hcoh.left <;> try trivial
+  simp! [exprConsequent] at h
   apply h
   intro hass
   absurd hass
   apply nonNullAssumption_sound <;> trivial
 
-private lemma n_preserve_update_none (ℓ : NFact locs)
-    (hnone : locs.finIdxOf? x = none) (hcorr : ncorr ℓ σ) :
-    ncorr ℓ (σ.updated x v) := by
-  simp only [ncorr, ncorr_self, ncorr_wit, State.updated] at *
+private lemma preserve_update_none (ℓ : Fact locs)
+    (hnone : locs.finIdxOf? x = none) (hcoh : coh ℓ σ) :
+    coh ℓ (σ.updated x v) := by
+  simp only [coh, coh_self, coh_impl, State.updated] at *
   grind [List.finIdxOf?_eq_none_iff]
 
-@[simp] private lemma nDFA_transferAlong (cfg : WFCFG)
-    (e : EdgeOf cfg.analysis) (ℓ : NFact locs) :
-    (nDFA cfg locs).transferAlong cfg.analysis e ℓ =
-    nTransfer locs cfg e.val.src ℓ := rfl
+@[simp] private lemma DFA_transferAlong (cfg : WFCFG)
+    (e : EdgeOf cfg.analysis) (ℓ : Fact locs) :
+    (DFA cfg locs).transferAlong cfg.analysis e ℓ =
+    nodeTransfer locs cfg e.val.src ℓ := rfl
 
 /-- The nullability `DFASemantics` for a fixed CFG. The three preservation
     fields directly consume the abstract `LangSem` transitions. -/
-def nSemantics (hnd : locs.Nodup) :
-    DFASemantics (ls := dukeLangSem cfg) cfg.analysis (nDFA cfg locs) :=
-  { Corr := ncorr
+def semantics (hnd : locs.Nodup) :
+    DFASemantics (ls := dukeLangSem cfg) cfg.analysis (DFA cfg locs) :=
+  { Coh := coh
     isInit := State.isInit
     preserve_entry := by
       intro σ hinit
       cases hinit
-      simp [ncorr, ncorr_self, ncorr_wit, State.empty]
+      simp [coh, coh_self, coh_impl, State.empty]
     preserve_step := by
-      intro e σ σ' ℓ hstep hcorr
-      simp only [nDFA_transferAlong, nTransfer]
+      intro e σ σ' ℓ hstep hcoh
+      simp only [DFA_transferAlong, nodeTransfer]
       cases hstep with simp only [*]
       | assign _ heval _ =>
         rename_i x expr v _ _
         split
-        · apply n_preserve_update_none <;> trivial
+        · apply preserve_update_none <;> trivial
         · rename_i i hi
           split_ands
           · intro j v' h hupd rfl
@@ -385,11 +383,11 @@ def nSemantics (hnd : locs.Nodup) :
               have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
               rw [Fin.getElem_fin] at hget
               rw [List.get_eq_getElem, hget, State.updated_eq σ x v] at hupd
-              have h_v_not_null : v ≠ Val.Null := evalExpr_sound hcorr.left heval h
+              have h_v_not_null : v ≠ Val.Null := evalExpr_sound hcoh.left heval h
               grind
             · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
               rw [State.updated_neq] at hupd <;> try trivial
-              apply hcorr.left <;> trivial
+              apply hcoh.left <;> trivial
           · intro j k n v' hupd1 habs hn hupd2 rfl
             simp only at hupd1
             split_ifs at hupd1 <;> simp only at hupd1
@@ -406,26 +404,26 @@ def nSemantics (hnd : locs.Nodup) :
                 contradiction
               · have h_x_neq : x ≠ locs.get k := by apply List.finIdxOf?_nodup <;> trivial
                 rw [State.updated_neq] at hupd2 <;> try trivial
-                apply exprWitness_sound hcorr heval hn k .Null <;> grind
+                apply exprConsequent_sound hcoh heval hn k .Null <;> grind
             · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
               rw [State.updated_neq] at habs <;> try trivial
       | @assum _ _ n _ _ _ heval htruthy _ =>
         have : n ≠ 0 := by grind
-        simp only [ncorr, beq_iff_eq]
+        simp only [coh, beq_iff_eq]
         split_ands
-        · apply exprWitness_sound <;> trivial
-        · apply hcorr.right
+        · apply exprConsequent_sound <;> trivial
+        · apply hcoh.right
     preserve_stutter := by
-      intro _n σ σ' ℓ hstut hcorr
+      intro _n σ σ' ℓ hstut hcoh
       simp only [LangSem.LStutter] at hstut
       subst hstut
       assumption
   }
 
-theorem mono_absorb_corr_self
-    {ℓ ℓ' : NFact locs} {σ : State} (h : ℓ ⊑ ℓ')
-    (hcorr : ncorr_self ℓ σ) : ncorr_self ℓ' σ := by
-  simp only [ncorr_self] at *
+theorem mono_absorb_coh_self
+    {ℓ ℓ' : Fact locs} {σ : State} (h : ℓ ⊑ ℓ')
+    (hcoh : coh_self ℓ σ) : coh_self ℓ' σ := by
+  simp only [coh_self] at *
   intros i v habs
   have hi : (ℓ i).fst ⊑ (ℓ' i).fst := by
     exact congrArg (fun ρ => (ρ i).fst) h
@@ -433,10 +431,10 @@ theorem mono_absorb_corr_self
   simp only [max] at hi
   generalize heq : ℓ i = x at hi
   grind
-theorem mono_absorb_corr_wit
-    {ℓ ℓ' : NFact locs} {σ : State} (h : ℓ ⊑ ℓ')
-    (hcorr : ncorr_wit ℓ σ) : ncorr_wit ℓ' σ := by
-  simp only [ncorr_wit] at *
+theorem mono_absorb_coh_impl
+    {ℓ ℓ' : Fact locs} {σ : State} (h : ℓ ⊑ ℓ')
+    (hcoh : coh_impl ℓ σ) : coh_impl ℓ' σ := by
+  simp only [coh_impl] at *
   intro i j n v habs
   have hi : (ℓ i).snd ⊑ (ℓ' i).snd := by
     exact congrArg (fun ρ => (ρ i).snd) h
@@ -445,11 +443,11 @@ theorem mono_absorb_corr_wit
   simp only [max] at hi
   generalize heq : (ℓ i).snd j = x at hi
   cases x <;> grind
-theorem mono_absorb_corr
-    {ℓ ℓ' : NFact locs} {σ : State} (h : ℓ ⊑ ℓ')
-    (hcorr : ncorr ℓ σ) : ncorr ℓ' σ := by
-  unfold ncorr at *
-  grind [mono_absorb_corr_self, mono_absorb_corr_wit]
+theorem mono_absorb_coh
+    {ℓ ℓ' : Fact locs} {σ : State} (h : ℓ ⊑ ℓ')
+    (hcoh : coh ℓ σ) : coh ℓ' σ := by
+  unfold coh at *
+  grind [mono_absorb_coh_self, mono_absorb_coh_impl]
 
 
 /-! ## Bundled Nullability analysis -/
@@ -457,37 +455,37 @@ theorem mono_absorb_corr
 /-- A bundled `Flow.Analysis` for nullability, parameterized by
     the variable list, a `Nodup` proof, and the underlying CFG. -/
 @[reducible]
-def nAnalysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
+def analysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
     Flow.Analysis (ls := dukeLangSem cfg) NodeID Edge State :=
-  { dfa          := nDFA cfg locs
+  { dfa          := DFA cfg locs
     botL         := _
     maxL         := _
-    decEqL       := (inferInstance : DecidableEq (NFact locs))
+    decEqL       := (inferInstance : DecidableEq (Fact locs))
     fhL          := _
-    llL          := (inferInstance : LatticeLike (NFact locs))
-    semantics    := nSemantics cfg hnd
-    mono_absorb  := mono_absorb_corr
-    transferMono := instTransferMonoN cfg }
+    llL          := (inferInstance : LatticeLike (Fact locs))
+    semantics    := semantics cfg hnd
+    mono_absorb  := mono_absorb_coh
+    transferMono := instTransferMono cfg }
 
 /-- Wrapper around `Flow.analyze`: run the bundled Nullability
     analysis directly on a `CFG`. -/
-def nAnalyzeCFG {locs : List Loc} (hnd : locs.Nodup)
+def analyzeCFG {locs : List Loc} (hnd : locs.Nodup)
     (cfg : WFCFG) :
-    Flow.AnalysisResult (nAnalysis hnd cfg) :=
-  Flow.analyze (nAnalysis hnd cfg)
+    Flow.AnalysisResult (analysis hnd cfg) :=
+  Flow.analyze (analysis hnd cfg)
 
 /-- Turn-key correctness for the bundled nullability analysis: at every reachable
     program point, the computed in fact correctly approximates the
     concrete state. -/
-theorem nreachable_correct
+theorem reachable_correct
     {locs : List Loc} (hnd : locs.Nodup)
     (cfg : WFCFG) :
     ∀ {n : NodeID} {σ : State},
       Flow.Analysis.Generic.Reachable cfg.analysis n σ State.isInit ->
-      ncorr ((nAnalyzeCFG hnd cfg).inFacts n) σ := by
+      coh ((analyzeCFG hnd cfg).inFacts n) σ := by
   intro n σ hreach
-  let A := nAnalysis hnd cfg
-  let R := nAnalyzeCFG hnd cfg
+  let A := analysis hnd cfg
+  let R := analyzeCFG hnd cfg
   letI := A.maxL
   exact Flow.Analysis.Generic.reachable_corr
     cfg.analysis
@@ -497,7 +495,7 @@ theorem nreachable_correct
     R.inFacts_entry
     hreach
 
-def checkExpr {locs : List Loc} (ℓ : NFact locs) : Expr -> Bool
+def checkExpr {locs : List Loc} (ℓ : Fact locs) : Expr -> Bool
   | .Null => true
   | .Int _ => true
   | .Var _ => true
@@ -508,14 +506,14 @@ def checkExpr {locs : List Loc} (ℓ : NFact locs) : Expr -> Bool
       checkExpr ℓ e₁ && checkExpr ℓ e₂ &&
       (evalExpr locs ℓ e₁ == NVal.nonnull) && (evalExpr locs ℓ e₂ == NVal.nonnull)
 
-def checkNode {locs : List Loc} (ℓ : NFact locs) : NodeKind -> Bool
+def checkNode {locs : List Loc} (ℓ : Fact locs) : NodeKind -> Bool
   | .Skip => true
   | .Assign _ e => checkExpr ℓ e
   | .Assume e => checkExpr ℓ e && (evalExpr locs ℓ e == NVal.nonnull)
 
 def checkCFG (cfg : WFCFG) : Bool :=
   let locs := vars cfg
-  let res := (nAnalyzeCFG locs.prop cfg).inFacts
+  let res := (analyzeCFG locs.prop cfg).inFacts
   (List.range cfg.val.nodes.length).all fun n =>
     match cfg.val.nodeKind n with
     | none => false

@@ -1,25 +1,25 @@
 import Flow.Analysis.Utils
 import Mathlib.Order.Notation
 
-variable {A : Type} [Max A] [Bot A]
+variable {L : Type} [Max L] [Bot L]
 
 section Basics
 infix:90 " ⊑ " => fun x y => x ⊔ y = y
 
 /-- a function is monotone if it maintains ordering of inputs. -/
-def mono_f (f : A -> A) : Prop :=
+def mono_f (f : L -> L) : Prop :=
   ∀ x y, x ⊑ y -> f x ⊑ f y
 
 /-- encoding of the finite height requirement on lattices to ensure termination
     of Kildall's algorithm. -/
-class FiniteHeight (A : Type) [Max A] where
-  remainingHeight : A -> Nat
+class FiniteHeight (L : Type) [Max L] where
+  remainingHeight : L -> Nat
   height_join : ∀ a b, a ⊔ b ≠ a -> remainingHeight (a ⊔ b) < remainingHeight a
 
 namespace FiniteHeight
 
-omit [Bot A] in
-theorem height_le_of_join [FiniteHeight A] (a b : A) :
+omit [Bot L] in
+theorem height_le_of_join [FiniteHeight L] (a b : L) :
     remainingHeight (a ⊔ b) ≤ remainingHeight a := by
   by_cases h : a ⊔ b = a
   · rw [h]; apply Nat.le_refl
@@ -29,21 +29,21 @@ end FiniteHeight
 
 /-- a type is `LatticeLike` if it has `FiniteHeight`, a bottom element `⊥`,
     and its join operation satisfies the properties of lattices. -/
-class LatticeLike (A : Type) [Max A] [Bot A] [FiniteHeight A] where
-  join_comm : ∀ a b : A, a ⊔ b = b ⊔ a
-  join_assoc : ∀ a b c : A, (a ⊔ b) ⊔ c = a ⊔ (b ⊔ c)
-  join_idem : ∀ a : A, a ⊔ a = a
-  bot_le : ∀ a : A, ⊥ ⊑ a
+class LatticeLike (L : Type) [Max L] [Bot L] [FiniteHeight L] where
+  join_comm : ∀ a b : L, a ⊔ b = b ⊔ a
+  join_assoc : ∀ a b c : L, (a ⊔ b) ⊔ c = a ⊔ (b ⊔ c)
+  join_idem : ∀ a : L, a ⊔ a = a
+  bot_le : ∀ a : L, ⊥ ⊑ a
 
-lemma join_ge_trans [FiniteHeight A] [ll : LatticeLike A]
-    (a b c : A) (hab : a ⊑ b) (hbc : b ⊑ c) :
+lemma join_ge_trans [FiniteHeight L] [ll : LatticeLike L]
+    (a b c : L) (hab : a ⊑ b) (hbc : b ⊑ c) :
     a ⊑ c := by
   calc a ⊔ c = a ⊔ (b ⊔ c) := by rw [hbc]
     _ = (a ⊔ b) ⊔ c := (ll.join_assoc a b c).symm
     _ = b ⊔ c := by rw [hab]
     _ = c := hbc
 
-instance JoinLeRefl [FiniteHeight A] [LatticeLike A] : Std.Refl (α := A) (· ⊑ ·) where
+instance JoinLeRefl [FiniteHeight L] [LatticeLike L] : Std.Refl (α := L) (· ⊑ ·) where
   refl := LatticeLike.join_idem
 
 
@@ -59,37 +59,37 @@ abbrev Domain (n : Nat) (A : Type) := Fin n -> A
 
 /-- its bottom element is the function that maps every variable to the
     bottom element of `A`. -/
-instance : Bot (Domain n A) where
+instance : Bot (Domain n L) where
   bot := fun _ => ⊥
 
 /-- the lub is computed pointwise. -/
-instance : Max (Domain n A) where
+instance : Max (Domain n L) where
   max ρ₁ ρ₂ := fun i => ρ₁ i ⊔ ρ₂ i
 
 -- decidable equality instances
 @[simp]
-private def domainBEq [DecidableEq A] (ρ₁ ρ₂ : Domain n A) : Bool :=
+private def domainBEq [DecidableEq L] (ρ₁ ρ₂ : Domain n L) : Bool :=
   List.finRange n |> (·.all (fun i => ρ₁ i = ρ₂ i))
 
-omit [Max A] [Bot A] in
-private theorem domainBEq_iff [DecidableEq A] (ρ₁ ρ₂ : Domain n A) :
+omit [Max L] [Bot L] in
+private theorem domainBEq_iff [DecidableEq L] (ρ₁ ρ₂ : Domain n L) :
     domainBEq ρ₁ ρ₂ = true <-> ρ₁ = ρ₂ := by
   grind [domainBEq]
 
 /-- if A has a decidable equality instance, so does Domain n A -/
-instance [DecidableEq A] : DecidableEq (Domain n A) := fun ρ₁ ρ₂ =>
+instance [DecidableEq L] : DecidableEq (Domain n L) := fun ρ₁ ρ₂ =>
   if h : domainBEq ρ₁ ρ₂ then
     isTrue ((domainBEq_iff ρ₁ ρ₂).mp h)
   else
     isFalse (fun h' => h ((domainBEq_iff ρ₁ ρ₂).mpr h'))
 
 @[simp]
-def domRemainingHeight [fh : FiniteHeight A] (ρ : Domain n A) : Nat :=
+def domRemainingHeight [fh : FiniteHeight L] (ρ : Domain n L) : Nat :=
   (List.finRange n |>.map fun i => fh.remainingHeight (ρ i)) |>.sum
 
 /-- If `A` is a `FiniteHeight` type, the finite map `Domain n A` is also
     `FiniteHeight`. -/
-instance [fh : FiniteHeight A] : FiniteHeight (Domain n A) where
+instance [fh : FiniteHeight L] : FiniteHeight (Domain n L) where
   remainingHeight := domRemainingHeight
   height_join ρ₁ ρ₂ h := by
     have ⟨i, hi₁, hi₂⟩ : ∃ i, i ∈ List.finRange n ∧ ρ₁ i ⊔ ρ₂ i ≠ ρ₁ i := by
@@ -127,8 +127,8 @@ instance [fh : FiniteHeight A] : FiniteHeight (Domain n A) where
 
 /-- If `A` is a `LatticeLike` type, the finite map `Domain n A` is also
     `LatticeLike`. -/
-instance [FiniteHeight A]
-    [ll : LatticeLike A] : LatticeLike (Domain n A) where
+instance [FiniteHeight L]
+    [ll : LatticeLike L] : LatticeLike (Domain n L) where
   join_comm a b := by funext i; exact ll.join_comm (a i) (b i)
   join_assoc a b c := by funext i; exact ll.join_assoc (a i) (b i) (c i)
   join_idem a := by funext i; exact ll.join_idem (a i)
@@ -136,12 +136,12 @@ instance [FiniteHeight A]
 
 namespace Domain
 -- function application distributes over lub
-omit [Bot A] in
-lemma max_app {x y : Domain n A} {i : Fin n} :
+omit [Bot L] in
+lemma max_app {x y : Domain n L} {i : Fin n} :
   (x ⊔ y) i = x i ⊔ y i := by rfl
 
-omit [Bot A] in
-lemma ord_distr {x y : Domain n A} {i : Fin n} (h : x ⊑ y) : x i ⊑ y i := by
+omit [Bot L] in
+lemma ord_distr {x y : Domain n L} {i : Fin n} (h : x ⊑ y) : x i ⊑ y i := by
   simp only
   nth_rw 2 [<-h]
   rw [max_app]
@@ -185,7 +185,6 @@ end Product
 -- A optional lattice `Option L`
 section Option
 
-variable {L : Type} [Max L] [Bot L]
 variable [fh : FiniteHeight L] [ll : LatticeLike L]
 
 instance : Max (Option L) where

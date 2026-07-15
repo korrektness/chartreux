@@ -40,7 +40,7 @@ def Corr (R : SetState) (σ : State) : Prop :=
 def CollectingSem
     (cfg : WFCFG) :
     DFASemantics (State := State) cfg.analysis (Collecting cfg) :=
-  { Corr := Corr
+  { Coh := Corr
     isInit := State.isInit
     preserve_entry := by intros σ hσ; cases hσ; simp [Corr, Collecting]
     preserve_step := by
