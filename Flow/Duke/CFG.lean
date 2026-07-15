@@ -24,8 +24,6 @@ structure CFG where
   exit  : NodeID
 deriving DecidableEq, Repr
 
-def CFG.inEdges (g : CFG) (n : NodeID) : List Edge :=
-  g.edges.filter (·.dst = n)
 def CFG.nodeKind (g : CFG) (n : NodeID) : Option NodeKind :=
   g.nodes[n]?
 
@@ -254,15 +252,10 @@ def DukeAnalysisCFG (g : CFG) (hg : g.WellFormed) :
   entry     := g.entry
   srcOf e   := e.src
   dstOf e   := e.dst
-  inEdges n := g.inEdges n
-  inEdges_src_mem := by
-    intros n e he
-    obtain ⟨he, -⟩ := List.mem_filter.mp he
-    have hsrc := hg.2.1
-    grind [List.mem_range.mpr, hsrc e he]
-  edges_mem_inEdges := by
+  srcOf_mem := by
     intros e he
-    simp [CFG.inEdges, List.mem_filter, he]
+    have hsrc := hg.2.1
+    exact List.mem_range.mpr (hsrc e he)
   dstOf_mem := by
     intros e he
     have hdst := hg.2.2.1
