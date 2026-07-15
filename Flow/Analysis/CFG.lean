@@ -12,19 +12,25 @@ class AnalysisCFG (Node Edge : Type) [DecidableEq Node] [DecidableEq Edge] where
   entry : Node
   srcOf : Edge -> Node
   dstOf : Edge -> Node
-  inEdges : Node -> List Edge
-  inEdges_src_mem :
-    ∀ n e, e ∈ inEdges n -> srcOf e ∈ nodes
-  edges_mem_inEdges :
-    ∀ e, e ∈ edges -> e ∈ inEdges (dstOf e)
+  srcOf_mem :
+    ∀ e ∈ edges, srcOf e ∈ nodes
   dstOf_mem :
-    ∀ e, e ∈ edges -> dstOf e ∈ nodes
+    ∀ e ∈ edges, dstOf e ∈ nodes
   entry_mem : entry ∈ nodes
 
 abbrev NodeOf (g : AnalysisCFG Node Edge) := {n // n ∈ g.nodes}
 abbrev EdgeOf (g : AnalysisCFG Node Edge) := {e // e ∈ g.edges}
 
 namespace AnalysisCFG
+/-- All in-edges of a node -/
+def inEdges (g : AnalysisCFG Node Edge) (n : Node) : List Edge :=
+  g.edges.filter (g.dstOf · = n)
+
+def inEdges_src_mem (g : AnalysisCFG Node Edge) :
+    ∀ n e, e ∈ inEdges g n -> g.srcOf e ∈ g.nodes := by grind [inEdges, g.srcOf_mem]
+def edges_mem_inEdges (g : AnalysisCFG Node Edge) :
+    ∀ e, e ∈ g.edges -> e ∈ g.inEdges (g.dstOf e) := by grind [inEdges, g.dstOf_mem]
+
 /-- the list of all nodes in `g`, packaged as `NodeOf g`. -/
 def nodes_mem (g : AnalysisCFG Node Edge) : List (NodeOf g) :=
   g.nodes.attach

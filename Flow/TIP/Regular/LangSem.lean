@@ -19,9 +19,6 @@ open Flow.Analysis Flow.Analysis.Generic Flow.Eval.Refinement
 
 /-! ## Adapter: `CFG` ↪ `AnalysisCFG NodeID Edge` -/
 
-def inEdges (g : CFG) (n : NodeID) : List Edge :=
-  g.edges.filter (fun e => e.dst = n)
-
 abbrev WFCFG := { cfg : CFG // cfg.WellFormed }
 
 @[reducible]
@@ -35,14 +32,9 @@ def forCFG (g : CFG)
   entry := g.entry
   srcOf e := e.src
   dstOf e := e.dst
-  inEdges n := inEdges g n
-  inEdges_src_mem := by
-    intro n e he
-    have hin : e ∈ g.edges := (List.mem_filter.mp he).1
-    exact List.mem_range.mpr (hsrc e hin)
-  edges_mem_inEdges := by
+  srcOf_mem := by
     intro e he
-    simp [inEdges, List.mem_filter, he]
+    exact List.mem_range.mpr (hsrc e he)
   dstOf_mem := by
     intro e he
     exact List.mem_range.mpr (hdst e he)
