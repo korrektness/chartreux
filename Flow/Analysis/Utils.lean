@@ -1,8 +1,6 @@
-import Mathlib.Data.List.Nodup
-
 namespace Utils
 
-lemma sum_map_update_le {B : Type} [DecidableEq B]
+theorem sum_map_update_le {B : Type} [DecidableEq B]
       (l : List B) (f : B -> Nat) (n : B) (nv : Nat) (hle : nv ≤ f n) :
       (l.map (fun x => if x = n then nv else f x)).sum ≤ (l.map f).sum := by
   induction l with
@@ -13,7 +11,7 @@ lemma sum_map_update_le {B : Type} [DecidableEq B]
     case pos => simpa [h'] using Nat.add_le_add hle ih
     case neg => simpa [h'] using ih
 
-lemma sum_map_update_lt {B : Type} [DecidableEq B]
+theorem sum_map_update_lt {B : Type} [DecidableEq B]
       (l : List B) (f : B -> Nat) (n : B) (nv : Nat)
       (hin : n ∈ l) (hlt : nv < f n) :
    (l.map (fun x => if x = n then nv else f x)).sum < (l.map f).sum := by
@@ -32,10 +30,12 @@ theorem List.eraseDups_nodup {α} [BEq α] [LawfulBEq α] :
   | [] => by exact List.nodup_nil
   | h :: t => by
     rw [List.eraseDups_cons]
-    refine List.Nodup.cons ?_ (List.eraseDups_nodup _)
-    intro hmem
-    rw [List.mem_eraseDups, List.mem_filter] at hmem
-    grind
+    refine List.nodup_cons.2 ?_
+    refine ⟨?_, ?_⟩
+    · intro hmem
+      obtain ⟨-, a⟩ := List.mem_filter.1 (List.mem_eraseDups.1 hmem)
+      grind
+    · apply List.eraseDups_nodup
 termination_by l => l.length
 decreasing_by grind [List.length_filter_le]
 
