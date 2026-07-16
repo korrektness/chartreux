@@ -1,3 +1,4 @@
+import Batteries.Tactic.Init
 import Flow.Duke.Defs
 import Flow.Duke.Eval
 import Flow.Analysis.CFG
@@ -264,7 +265,7 @@ def DukeAnalysisCFG (g : CFG) (hg : g.WellFormed) :
 
 @[reducible]
 def WFCFG.analysis (g : WFCFG) : AnalysisCFG NodeID Edge :=
-  DukeAnalysisCFG g g.prop
+  DukeAnalysisCFG g g.property
 
 /-- All variables appearing in the program , de-duplicated, with a `Nodup` witness. -/
 def vars (g : CFG) : { l : List String // l.Nodup } :=

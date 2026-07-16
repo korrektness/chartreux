@@ -1,9 +1,13 @@
 import Flow.Analysis.Utils
-import Mathlib.Order.Notation
+
+class Bot (α : Type) where
+  bot : α
+notation "⊥" => Bot.bot
 
 variable {L : Type} [Max L] [Bot L]
 
 section Basics
+infix:90 " ⊔ " => Max.max
 infix:90 " ⊑ " => fun x y => x ⊔ y = y
 
 /-- a function is monotone if it maintains ordering of inputs. -/
@@ -35,7 +39,7 @@ class LatticeLike (L : Type) [Max L] [Bot L] [FiniteHeight L] where
   join_idem : ∀ a : L, a ⊔ a = a
   bot_le : ∀ a : L, ⊥ ⊑ a
 
-lemma join_ge_trans [FiniteHeight L] [ll : LatticeLike L]
+theorem join_ge_trans [FiniteHeight L] [ll : LatticeLike L]
     (a b c : L) (hab : a ⊑ b) (hbc : b ⊑ c) :
     a ⊑ c := by
   calc a ⊔ c = a ⊔ (b ⊔ c) := by rw [hbc]
@@ -137,14 +141,13 @@ instance [FiniteHeight L]
 namespace Domain
 -- function application distributes over lub
 omit [Bot L] in
-lemma max_app {x y : Domain n L} {i : Fin n} :
+theorem max_app {x y : Domain n L} {i : Fin n} :
   (x ⊔ y) i = x i ⊔ y i := by rfl
 
 omit [Bot L] in
-lemma ord_distr {x y : Domain n L} {i : Fin n} (h : x ⊑ y) : x i ⊑ y i := by
+theorem ord_distr {x y : Domain n L} {i : Fin n} (h : x ⊑ y) : x i ⊑ y i := by
   simp only
-  nth_rw 2 [<-h]
-  rw [max_app]
+  rw [<-max_app, h]
 end Domain
 
 end Domain

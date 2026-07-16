@@ -5,13 +5,15 @@ namespace List
 variable {α : Type} (x : α) (l : List α)
 variable [DecidableEq α]
 
-lemma finIdxOf?_nodup (hnd : l.Nodup)
+theorem finIdxOf?_nodup (hnd : l.Nodup)
     (i j : Fin l.length) (hi : l.finIdxOf? x = some i) (hneq : j ≠ i) :
     x ≠ l.get j := by
   intro h_eq
   have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
   subst h_eq
-  apply List.not_nodup_of_get_eq_of_ne (h := hget) <;> grind
+  rw [List.get_eq_getElem] at *
+  have := (List.getElem_inj hnd).1 hget
+  grind
 
 end List
 
