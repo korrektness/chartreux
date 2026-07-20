@@ -55,7 +55,9 @@ def edgeTransfer (vars : List String) : Edge -> Fact vars -> Fact vars :=
 /-- The default initial fact: every tracked variable is uninitialized. -/
 def entryInit (locs : List Loc) : Fact locs := fun _ => true
 
-/-! ### Transfer function monotonicity -/
+/-! ### Transfer function monotonicity
+    Technically not needed. But it being true implies that the result is the least post-fixpoint
+-/
 
 variable (cfg : WFCFG)
 variable {locs : List Loc}
@@ -83,11 +85,6 @@ private lemma nodeTransfer_mono (n : NodeID) :
 
 private lemma edgeTransfer_mono :
     ∀ e, mono_f (edgeTransfer locs e) := fun _ _ _ h => h
-
-instance instTransferMonoN :
-    TransferMono (nodeTransfer locs cfg) (edgeTransfer locs) where
-  node_mono := nodeTransfer_mono cfg
-  edge_mono := edgeTransfer_mono
 
 /-! ## Coherence predicate for concrete and abstract states -/
 
@@ -178,7 +175,7 @@ def analysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
     llL          := (inferInstance : LatticeLike (Fact locs))
     semantics    := semantics cfg hnd
     mono_absorb  := mono_absorb_coh
-    transferMono := instTransferMonoN cfg }
+    edge_mono    := edgeTransfer_mono }
 
 /-- Wrapper around `Flow.analyze`: run the bundled
     analysis directly on a `CFG`. -/

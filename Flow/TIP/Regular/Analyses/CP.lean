@@ -223,11 +223,6 @@ private lemma cpTransfer_mono (vars : List String) (g : CFG) (n : NodeID) :
 private lemma cpEdgeTransfer_mono (vars : List String) :
     ∀ e, mono_f (cpEdgeTransfer vars e) := fun _ _ _ h => h
 
-instance instTransferMonoCP (vars : List String) (cfg : WFCFG) :
-  TransferMono (cpTransfer vars cfg) (cpEdgeTransfer vars) where
-    node_mono := cpTransfer_mono vars cfg
-    edge_mono := cpEdgeTransfer_mono vars
-
 section Corr
 variable {vars : List String}
 
@@ -483,7 +478,7 @@ def cpAnalysis (vars : List String) (hnd : vars.Nodup) (cfg : WFCFG) :
     llL          := (inferInstance : LatticeLike (CPFact vars))
     semantics    := cpSemantics vars hnd cfg
     mono_absorb  := mono_absorb_cp
-    transferMono := instTransferMonoCP vars cfg}
+    edge_mono    := cpEdgeTransfer_mono vars }
 
 /-- TIP-facing wrapper around `Flow.analyze`: run the bundled CP
     analysis directly on a TIP `CFG`. -/
