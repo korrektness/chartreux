@@ -419,7 +419,6 @@ private lemma cp_preserve_branch_case (vars : List String) (cfg : CFG)
 def cpSemantics (vars : List String) (hnd : vars.Nodup) (cfg : WFCFG) :
     DFASemantics (ls := tipLangSem cfg) cfg.analysis (cpDFA vars cfg) :=
   { Coh := cpβ_corr
-    isInit := State.isInit
     preserve_entry := by
       intro σ hinit
       cases hinit

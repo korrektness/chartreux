@@ -13,6 +13,7 @@ variable (g : AnalysisCFG Node Edge)
 class LangSem where
   LStep : EdgeOf g -> State -> State -> Prop
   LStutter : Node -> State -> State -> Prop
+  IsInit : State -> Prop
 
 structure DFA where
   L : Type
@@ -62,9 +63,8 @@ end LSteps
 /-- Logical semantics linking the DFA to the abstract LangSem relation -/
 structure DFASemantics (A : DFA Node Edge) where
   Coh : A.L -> State -> Prop
-  isInit : State -> Prop
   preserve_entry :
-    ∀ {σ : State}, isInit σ -> Coh A.entry σ
+    ∀ {σ : State}, LangSem.IsInit (g:=g) σ -> Coh A.entry σ
   preserve_step :
     ∀ {e : EdgeOf g} {σ σ' : State} {ℓ : A.L},
       LangSem.LStep e σ σ' -> Coh ℓ σ -> Coh (A.transferAlong g e ℓ) σ'
@@ -122,7 +122,7 @@ theorem reachable_corr
     {rd : Node -> A.L} (hpf : PostFixpoint g A rd)
     (hentry : A.entry ⊑ (rd g.entry))
     {n : Node} {σ : State}
-    (hreach : Reachable g n σ D.isInit) :
+    (hreach : Reachable g n σ (LangSem.IsInit (g:=g))) :
     D.Coh (rd n) σ := by
   obtain ⟨σ₀, hinit, hsteps⟩ := hreach
   have h_entry : D.Coh A.entry σ₀ := D.preserve_entry hinit
