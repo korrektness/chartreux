@@ -145,7 +145,7 @@ private theorem T_postfix_of_postfix
   intro m
   simpa [ll.join_comm] using hpost m
 
-/-- the result of the worklist algorithm is always ⊑ the initial facts. -/
+/-- the result of the worklist algorithm is always ⊒ the initial facts. -/
 theorem worklistForward_mono
     [Bot L] [Max L] [DecidableEq L] [FiniteHeight L]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
@@ -205,7 +205,7 @@ theorem worklistForward_sound_postfixpoint
     [Bot L] [Max L] [DecidableEq L] [FiniteHeight L]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
     (entryInit : L) (ρ : StateN g L) (wl0 : List (NodeOf g))
-    [ll : LatticeLike L] [TransferMono nodeTransfer edgeTransfer]
+    [ll : LatticeLike L]
     (hinv0 : ∀ m : NodeOf g, m ∉ wl0 ->
         nodeTransfer m.val (expectedIn g edgeTransfer entryInit ρ m) ⊑ ρ m) :
     let res := worklistForward g nodeTransfer edgeTransfer entryInit ρ wl0
@@ -230,7 +230,7 @@ theorem worklistForward_sound_postfixpoint
       rw [ho_m]
       grind [List.mem_cons.mp]
 
-/-- Lleast post-fixpoint completeness, derived via the invariant combinator. -/
+/-- Least post-fixpoint completeness, derived via the invariant combinator. -/
 theorem worklistForward_complete_least_postfixpoint
     [Bot L] [Max L] [DecidableEq L] [FiniteHeight L]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
@@ -334,7 +334,7 @@ variable [ls : LangSem Node Edge State g]
 theorem postFixpoint_of_isForwardPostFixpoint
     [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
     (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
-    [tm : TransferMono nodeTransfer edgeTransfer]
+    (edge_mono : ∀ e, mono_f (edgeTransfer e))
     (entryInit : L) (ρ : StateN g L)
     (hpost : IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit ρ) :
     Generic.PostFixpoint g
@@ -364,7 +364,7 @@ theorem postFixpoint_of_isForwardPostFixpoint
   have h_edge : edgeTransfer e
                   (nodeTransfer (g.srcOf e)
                     (expectedIn g edgeTransfer entryInit ρ m_src)) ⊑ edgeTransfer e (ρ m_src)
-    := tm.edge_mono e _ _ h_node
+    := edge_mono e _ _ h_node
   have h_outF_eq : ρ ⟨g.srcOf e, g.inEdges_src_mem m_dst.val e he_in⟩ = ρ m_src := rfl
   have h_join_ge :
       edgeTransfer e (ρ m_src) ⊑ joinPredEdges g edgeTransfer ρ m_dst := by
@@ -398,8 +398,7 @@ structure Analysis (Node Edge State : Type)
   mono_absorb :
     ∀ {ℓ ℓ' : dfa.L} {σ : State},
       ℓ ⊑ ℓ' -> semantics.Coh ℓ σ -> semantics.Coh ℓ' σ
-  transferMono :
-      TransferMono dfa.nodeTransfer dfa.edgeTransfer
+  edge_mono : ∀ e, mono_f (dfa.edgeTransfer e)
 
 structure AnalysisResult {Node Edge State : Type}
     [DecidableEq Node] [DecidableEq Edge]
@@ -422,7 +421,6 @@ def analyze {Node Edge State : Type}
   letI := a.decEqL
   letI := a.fhL
   letI := a.llL
-  letI := a.transferMono
   let entryInit := a.dfa.entry
   let nT : Node -> a.dfa.L -> a.dfa.L := a.dfa.nodeTransfer
   let eT : Edge -> a.dfa.L -> a.dfa.L := a.dfa.edgeTransfer
@@ -437,7 +435,8 @@ def analyze {Node Edge State : Type}
     worklistForward_sound_postfixpoint g nT eT entryInit (fun _ => ⊥)
       g.nodes_mem (by intro m hm; exact absurd (List.mem_attach _ m) hm)
   have hpf : Generic.PostFixpoint g a.dfa inFacts := by
-    apply postFixpoint_of_isForwardPostFixpoint; assumption
+    apply postFixpoint_of_isForwardPostFixpoint (edge_mono := a.edge_mono)
+    assumption
   have hentry : a.dfa.entry ⊑ (inFacts g.entry) := by
     change a.dfa.entry ⊑
       (if hn : g.entry ∈ g.nodes then
