@@ -113,10 +113,12 @@ instance : FiniteHeight CPVal where
           exact CPVal.join_idem _
         · simp [remainingHeight, Max.max, join, hab]
 
-instance : LatticeLike CPVal where
+instance : SemiLattice CPVal where
   join_comm  := join_comm
   join_assoc := join_assoc
   join_idem  := join_idem
+
+instance : Bounded CPVal where
   bot_le     := bot_le
 
 end CPVal
@@ -475,7 +477,7 @@ def cpAnalysis (vars : List String) (hnd : vars.Nodup) (cfg : WFCFG) :
     maxL         := (inferInstance : Max (CPFact vars))
     decEqL       := (inferInstance : DecidableEq (CPFact vars))
     fhL          := (inferInstance : FiniteHeight (CPFact vars))
-    llL          := (inferInstance : LatticeLike (CPFact vars))
+    llL          := (inferInstance : SemiLattice (CPFact vars))
     semantics    := cpSemantics vars hnd cfg
     mono_absorb  := mono_absorb_cp
     edge_mono    := cpEdgeTransfer_mono vars }

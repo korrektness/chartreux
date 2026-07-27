@@ -96,14 +96,16 @@ theorem height_update_decreases [FiniteHeight L]
   unfold StateN.height
   omega
 
+omit [Bot L] in
 theorem le_trans {g : AnalysisCFG Node Edge} [FiniteHeight L]
-    [LatticeLike L]
+    [SemiLattice L]
     (f1 f2 f3 : StateN g L) (h12 : StateN.le f1 f2) (h23 : StateN.le f2 f3) :
     StateN.le f1 f3 := by
   exact fun n => join_ge_trans _ _ _ (h12 n) (h23 n)
 
+omit [Bot L] in
 theorem le_update_join {g : AnalysisCFG Node Edge} [FiniteHeight L]
-    [ll : LatticeLike L]
+    [ll : SemiLattice L]
     (outF : StateN g L) (n : NodeOf g) (v : L) :
     StateN.le outF (outF.update n (outF n ⊔ v)) := by
   intro m; simp only [StateN.update]
