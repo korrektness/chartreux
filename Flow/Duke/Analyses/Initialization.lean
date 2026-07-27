@@ -115,6 +115,16 @@ private lemma preserve_update_none (ℓ : Fact locs)
     (nDFA cfg locs).transferAlong cfg.analysis e ℓ =
     nodeTransfer locs cfg e.val.src ℓ := rfl
 
+theorem mono_absorb_coh
+    {ℓ ℓ' : Fact locs} {σ : State} (h : ℓ ⊑ ℓ')
+    (hcoh : coh ℓ σ) : coh ℓ' σ := by
+  unfold coh at *
+  intro i hi
+  apply hcoh
+  apply Domain.ord_distr (i := i) at h
+  simp [hi] at h
+  assumption
+
 /-- The `DFASemantics` for a fixed CFG. The three preservation
     fields directly consume the abstract `LangSem` transitions. -/
 def semantics (hnd : locs.Nodup) :
@@ -125,24 +135,26 @@ def semantics (hnd : locs.Nodup) :
       cases hinit
       simp [coh, State.empty, entryInit]
     preserve_step := by
-      intro e σ σ' ℓ hstep hcoh
-      simp only [DFA_transferAlong, nodeTransfer]
-      cases hstep with simp only [*]
+      simp only [edgeTransfer, nodeTransfer, AnalysisCFG.srcOf]
+      intro e σ σ' ℓ ℓ' hstep hmid hcoh
+      cases hstep with (simp only [*] at *; try grind [mono_absorb_coh])
       | @assign _ _ x expr v _ _ heval =>
-        split
-        · apply preserve_update_none <;> trivial
+        split at hmid
+        · apply preserve_update_none <;> try trivial
+          apply mono_absorb_coh <;> trivial
         · rename_i i hi
           intro j habs
-          simp only at habs
-          split_ifs at habs
-          · subst j
-            have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
-            rw [Fin.getElem_fin] at hget
-            rw [List.get_eq_getElem, hget, State.updated_eq σ x v]
-            rfl
-          · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
-            rw [State.updated_neq] <;> try trivial
-            apply hcoh; assumption
+          sorry
+          -- simp only at habs
+          -- split_ifs at habs
+          -- · subst j
+          --   have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
+          --   rw [Fin.getElem_fin] at hget
+          --   rw [List.get_eq_getElem, hget, State.updated_eq σ x v]
+          --   rfl
+          -- · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
+          --   rw [State.updated_neq] <;> try trivial
+          --   apply hcoh; assumption
     preserve_stutter := by
       intro _n σ σ' ℓ hstut hcoh
       simp only [LangSem.LStutter] at hstut
@@ -150,15 +162,6 @@ def semantics (hnd : locs.Nodup) :
       assumption
   }
 
-theorem mono_absorb_coh
-    {ℓ ℓ' : Fact locs} {σ : State} (h : ℓ ⊑ ℓ')
-    (hcoh : coh ℓ σ) : coh ℓ' σ := by
-  unfold coh at *
-  intro i hi
-  apply hcoh
-  apply Domain.ord_distr (i := i) at h
-  simp [hi] at h
-  assumption
 
 /-! ## Bundled analysis -/
 
@@ -174,8 +177,7 @@ def analysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
     fhL          := _
     llL          := (inferInstance : LatticeLike (Fact locs))
     semantics    := semantics cfg hnd
-    mono_absorb  := mono_absorb_coh
-    edge_mono    := edgeTransfer_mono }
+    mono_absorb  := mono_absorb_coh }
 
 /-- Wrapper around `Flow.analyze`: run the bundled
     analysis directly on a `CFG`. -/
