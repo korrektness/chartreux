@@ -16,7 +16,7 @@ Implemented so far :
 ## Structure of this project
 
 ```
-Flow/
+Chartreux/
   Analysis/
     Generic.lean                       (generic correctness of the algorithm)
     Lattice.lean                       (FiniteHeight, LatticeLike, Domain, StateN)
