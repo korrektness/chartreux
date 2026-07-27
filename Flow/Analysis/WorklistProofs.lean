@@ -334,7 +334,6 @@ variable [ls : LangSem Node Edge State g]
 theorem postFixpoint_of_isForwardPostFixpoint
     [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
     (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
-    (edge_mono : ∀ e, mono_f (edgeTransfer e))
     (entryInit : L) (ρ : StateN g L)
     (hpost : IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit ρ) :
     Generic.PostFixpoint g
@@ -345,37 +344,27 @@ theorem postFixpoint_of_isForwardPostFixpoint
       (fun n =>
         if h : n ∈ g.nodes then
           expectedIn g edgeTransfer entryInit ρ ⟨n, h⟩
-        else ⊥) := by
-  intro ⟨e, he⟩
-  have he_in : e ∈ g.inEdges (g.dstOf e) := g.edges_mem_inEdges e he
-  have hdst_mem : g.dstOf e ∈ g.nodes := g.dstOf_mem e he
-  have hsrc_mem : g.srcOf e ∈ g.nodes := g.inEdges_src_mem _ e he_in
-  let m_src : NodeOf g := ⟨g.srcOf e, hsrc_mem⟩
-  let m_dst : NodeOf g := ⟨g.dstOf e, hdst_mem⟩
-  change edgeTransfer e (nodeTransfer (g.srcOf e)
-              (if h : g.srcOf e ∈ g.nodes then
-                 expectedIn g edgeTransfer entryInit ρ ⟨g.srcOf e, h⟩
-               else ⊥))
-        ⊑ (if h : g.dstOf e ∈ g.nodes then expectedIn g edgeTransfer entryInit ρ ⟨g.dstOf e, h⟩
-          else ⊥)
-  rw [dif_pos hsrc_mem, dif_pos hdst_mem]
-  have h_node : nodeTransfer (g.srcOf e)
-                    (expectedIn g edgeTransfer entryInit ρ m_src) ⊑ ρ m_src := hpost m_src
-  have h_edge : edgeTransfer e
-                  (nodeTransfer (g.srcOf e)
-                    (expectedIn g edgeTransfer entryInit ρ m_src)) ⊑ edgeTransfer e (ρ m_src)
-    := edge_mono e _ _ h_node
-  have h_outF_eq : ρ ⟨g.srcOf e, g.inEdges_src_mem m_dst.val e he_in⟩ = ρ m_src := rfl
-  have h_join_ge :
-      edgeTransfer e (ρ m_src) ⊑ joinPredEdges g edgeTransfer ρ m_dst := by
-    have h := joinPredEdges_ge_edge g edgeTransfer ρ m_dst e he_in
-    rw [h_outF_eq] at h
-    exact h
-  have h_expIn_ge :
-    joinPredEdges g edgeTransfer ρ m_dst ⊑ expectedIn g edgeTransfer entryInit ρ m_dst := by
-    unfold expectedIn
-    split <;> grind [ll.join_assoc, ll.join_comm, ll.join_idem]
-  exact join_ge_trans _ _ _ h_edge (join_ge_trans _ _ _ h_join_ge h_expIn_ge)
+        else ⊥)
+      (fun n => if h : n ∈ g.nodes then ρ ⟨n, h⟩ else ⊥) := by
+  constructor
+  · intro n hn
+    simp only [hn, dif_pos]
+    exact hpost ⟨n, hn⟩
+  · intro e he
+    have hdst_mem : g.dstOf e ∈ g.nodes := g.dstOf_mem e he
+    have hsrc_mem : g.srcOf e ∈ g.nodes := g.inEdges_src_mem _ e (g.edges_mem_inEdges e he)
+    simp only [hsrc_mem, hdst_mem, dif_pos]
+    let m_dst : NodeOf g := ⟨g.dstOf e, hdst_mem⟩
+    have he_in : e ∈ g.inEdges m_dst.val := g.edges_mem_inEdges e he
+
+    have h_join_ge : edgeTransfer e (ρ ⟨g.srcOf e, hsrc_mem⟩) ⊑ joinPredEdges g edgeTransfer ρ m_dst :=
+      joinPredEdges_ge_edge g edgeTransfer ρ m_dst e he_in
+
+    have h_expIn_ge : joinPredEdges g edgeTransfer ρ m_dst ⊑ expectedIn g edgeTransfer entryInit ρ m_dst := by
+      unfold expectedIn
+      split <;> grind [ll.join_assoc, ll.join_comm, ll.join_idem]
+
+    exact join_ge_trans _ _ _ h_join_ge h_expIn_ge
 
 end Flow.Analysis
 
@@ -398,7 +387,6 @@ structure Analysis (Node Edge State : Type)
   mono_absorb :
     ∀ {ℓ ℓ' : dfa.L} {σ : State},
       ℓ ⊑ ℓ' -> semantics.Coh ℓ σ -> semantics.Coh ℓ' σ
-  edge_mono : ∀ e, mono_f (dfa.edgeTransfer e)
 
 structure AnalysisResult {Node Edge State : Type}
     [DecidableEq Node] [DecidableEq Edge]
@@ -407,7 +395,7 @@ structure AnalysisResult {Node Edge State : Type}
     (a : Analysis (ls := ls) Node Edge State) where
   inFacts : Node -> a.dfa.L
   outFacts : Node -> a.dfa.L
-  isPostFix : letI := a.maxL; Generic.PostFixpoint g a.dfa inFacts
+  isPostFix : letI := a.maxL; Generic.PostFixpoint g a.dfa inFacts outFacts
   inFacts_entry : letI := a.maxL; a.dfa.entry ⊑ (inFacts g.entry)
 
 def analyze {Node Edge State : Type}
@@ -434,9 +422,9 @@ def analyze {Node Edge State : Type}
   have hpost : IsForwardPostFixpoint g nT eT entryInit res.2 :=
     worklistForward_sound_postfixpoint g nT eT entryInit (fun _ => ⊥)
       g.nodes_mem (by intro m hm; exact absurd (List.mem_attach _ m) hm)
-  have hpf : Generic.PostFixpoint g a.dfa inFacts := by
-    apply postFixpoint_of_isForwardPostFixpoint (edge_mono := a.edge_mono)
-    assumption
+  have hpf : Generic.PostFixpoint g a.dfa inFacts outFacts := by
+    apply postFixpoint_of_isForwardPostFixpoint; assumption
+
   have hentry : a.dfa.entry ⊑ (inFacts g.entry) := by
     change a.dfa.entry ⊑
       (if hn : g.entry ∈ g.nodes then

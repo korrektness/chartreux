@@ -61,13 +61,16 @@ theorem trans {n n₁ n' : Node} {σ σ₁ σ' : State}
 end LSteps
 
 /-- Logical semantics linking the DFA to the abstract LangSem relation -/
-structure DFASemantics (A : DFA Node Edge) where
+structure DFASemantics (A : DFA Node Edge) [Max A.L] where
   Coh : A.L -> State -> Prop
   preserve_entry :
     ∀ {σ : State}, LangSem.IsInit (g:=g) σ -> Coh A.entry σ
   preserve_step :
-    ∀ {e : EdgeOf g} {σ σ' : State} {ℓ : A.L},
-      LangSem.LStep e σ σ' -> Coh ℓ σ -> Coh (A.transferAlong g e ℓ) σ'
+    ∀ {e : EdgeOf g} {σ σ' : State} {ℓ ℓ' : A.L},
+      LangSem.LStep e σ σ' ->
+      A.nodeTransfer (g.srcOf e) ℓ ⊑ ℓ' ->
+      Coh ℓ σ ->
+      Coh (A.edgeTransfer e ℓ') σ'
   preserve_stutter :
     ∀ {n : Node} {σ σ' : State} {ℓ : A.L},
       LangSem.LStutter g n σ σ' -> Coh ℓ σ -> Coh ℓ σ'
@@ -75,30 +78,32 @@ structure DFASemantics (A : DFA Node Edge) where
 /-- a node-indexed labelling is a post-fixpoint of `A`'s transfer if,
     for every `e`, the fact at `srcOf e` after transfer is absorbed
     by the fact at `dstOf e`. -/
-def PostFixpoint (A : DFA Node Edge) (rd : Node -> A.L) [Max A.L] : Prop :=
-  ∀ e : EdgeOf g,
-    (A.transferAlong g e (rd (g.srcOf e))) ⊑ (rd (g.dstOf e))
+def PostFixpoint (A : DFA Node Edge) (inFacts outFacts : Node -> A.L) [Max A.L] : Prop :=
+  (∀ n ∈ g.nodes, A.nodeTransfer n (inFacts n) ⊑ outFacts n) ∧
+  (∀ e ∈ g.edges, A.edgeTransfer e (outFacts (g.srcOf e)) ⊑ inFacts (g.dstOf e))
 
 /-- step preservation of analysis correctness -/
 theorem step_preserves_corr
-    {A : DFA Node Edge} (D : DFASemantics g A) [Max A.L]
+    {A : DFA Node Edge} [Max A.L] (D : DFASemantics g A)
     (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State}, ℓ ⊑ ℓ' -> D.Coh ℓ σ -> D.Coh ℓ' σ)
-    {rd : Node -> A.L} (hpf : PostFixpoint g A rd)
+    {inFacts outFacts : Node -> A.L} (hpf : PostFixpoint g A inFacts outFacts)
     {e : EdgeOf g} {σ σ' : State}
     (hstep : LangSem.LStep e σ σ')
-    (hcorr : D.Coh (rd (g.srcOf e)) σ) :
-    D.Coh (rd (g.dstOf e)) σ' :=
-  mono_absorb (hpf e) (D.preserve_step hstep hcorr)
+    (hcorr : D.Coh (inFacts (g.srcOf e)) σ) :
+    D.Coh (inFacts (g.dstOf e)) σ' :=
+  mono_absorb
+    (hpf.2 e.val e.property)
+    (D.preserve_step hstep (hpf.1 (g.srcOf e) (g.srcOf_mem e.val e.property)) hcorr)
 
 /-- lift of step preservation through the multi-step closure of the step relation. -/
 theorem steps_preserves_corr
-    {A : DFA Node Edge} (D : DFASemantics g A) [Max A.L]
+    {A : DFA Node Edge} [Max A.L] (D : DFASemantics g A)
     (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State}, ℓ ⊑ ℓ' -> D.Coh ℓ σ -> D.Coh ℓ' σ)
-    {rd : Node -> A.L} (hpf : PostFixpoint g A rd)
+    {inFacts outFacts : Node -> A.L} (hpf : PostFixpoint g A inFacts outFacts)
     {n n' : Node} {σ σ' : State}
     (hsteps : LSteps g n σ n' σ')
-    (hcorr : D.Coh (rd n) σ) :
-    D.Coh (rd n') σ' := by
+    (hcorr : D.Coh (inFacts n) σ) :
+    D.Coh (inFacts n') σ' := by
   induction hsteps with
   | refl _ _ => exact hcorr
   | @step e n_src n'' σ_src σ' σ'' hstep _ hsrc ih =>
@@ -117,16 +122,16 @@ def Reachable (n : Node) (σ : State) (isInit : State -> Prop) : Prop :=
     corresponding to it is correct.
     Direct application of `steps_preserves_corr` -/
 theorem reachable_corr
-    {A : DFA Node Edge} (D : DFASemantics g A) [Max A.L]
+    {A : DFA Node Edge} [Max A.L] (D : DFASemantics g A)
     (mono_absorb : ∀ {ℓ ℓ' : A.L} {σ : State}, ℓ ⊑ ℓ' -> D.Coh ℓ σ -> D.Coh ℓ' σ)
-    {rd : Node -> A.L} (hpf : PostFixpoint g A rd)
-    (hentry : A.entry ⊑ (rd g.entry))
+    {inFacts outFacts : Node -> A.L} (hpf : PostFixpoint g A inFacts outFacts)
+    (hentry : A.entry ⊑ (inFacts g.entry))
     {n : Node} {σ : State}
     (hreach : Reachable g n σ (LangSem.IsInit (g:=g))) :
-    D.Coh (rd n) σ := by
+    D.Coh (inFacts n) σ := by
   obtain ⟨σ₀, hinit, hsteps⟩ := hreach
   have h_entry : D.Coh A.entry σ₀ := D.preserve_entry hinit
-  have h_rd0   : D.Coh (rd g.entry) σ₀ := mono_absorb hentry h_entry
+  have h_rd0   : D.Coh (inFacts g.entry) σ₀ := mono_absorb hentry h_entry
   exact steps_preserves_corr g D mono_absorb hpf hsteps h_rd0
 
 end Flow.Analysis.Generic
