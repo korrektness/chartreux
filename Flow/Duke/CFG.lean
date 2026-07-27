@@ -300,3 +300,4 @@ open Flow.Analysis.Generic in
 instance dukeLangSem (cfg : WFCFG) : LangSem NodeID Edge State cfg.analysis where
   LStep e σ σ' := Step cfg ⟨e.val.src, σ⟩ ⟨e.val.dst, σ'⟩
   LStutter _ σ σ' := σ = σ'
+  IsInit := State.isInit

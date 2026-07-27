@@ -41,7 +41,6 @@ def CollectingSem
     (cfg : WFCFG) :
     DFASemantics (State := State) cfg.analysis (Collecting cfg) :=
   { Coh := Corr
-    isInit := State.isInit
     preserve_entry := by intros σ hσ; cases hσ; simp [Corr, Collecting]
     preserve_step := by
       intro e σ σ' R hstep hR

@@ -77,6 +77,7 @@ def tipLStutter (σ σ' : State) : Prop :=
 instance tipLangSem (cfg : WFCFG) : LangSem NodeID Edge State cfg.analysis where
   LStep := fun e σ σ' => tipLStep cfg e σ σ'
   LStutter := fun _ σ σ' => tipLStutter σ σ'
+  IsInit := State.isInit
 
 /-! ## Bridge: TIP's `StepsN` -> generic `LSteps` -/
 

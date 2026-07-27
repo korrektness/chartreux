@@ -361,7 +361,6 @@ private lemma preserve_update_none (ℓ : Fact locs)
 def semantics (hnd : locs.Nodup) :
     DFASemantics (ls := dukeLangSem cfg) cfg.analysis (DFA cfg locs) :=
   { Coh := coh
-    isInit := State.isInit
     preserve_entry := by
       intro σ hinit
       cases hinit
