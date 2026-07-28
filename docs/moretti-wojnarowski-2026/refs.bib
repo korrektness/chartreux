@@ -1,0 +1,314 @@
+@inproceedings{Kildall73,
+  author    = {Kildall, Gary A.},
+  title     = {A unified approach to global program optimization},
+  year      = {1973},
+  isbn      = {9781450373494},
+  publisher = {Association for Computing Machinery},
+  address   = {New York, NY, USA},
+  url       = {https://doi.org/10.1145/512927.512945},
+  doi       = {10.1145/512927.512945},
+  abstract  = {A technique is presented for global analysis of program structure in order to perform compile time optimization of object code generated for expressions. The global expression optimization presented includes constant propagation, common subexpression elimination, elimination of redundant register load operations, and live expression analysis. A general purpose program flow analysis algorithm is developed which depends upon the existence of an "optimizing function." The algorithm is defined formally using a directed graph model of program flow structure, and is shown to be correct. Several optimizing functions are defined which, when used in conjunction with the flow analysis algorithm, provide the various forms of code optimization. The flow analysis algorithm is sufficiently general that additional functions can easily be defined for other forms of global code optimization.},
+  booktitle = {Proceedings of the 1st Annual ACM SIGACT-SIGPLAN Symposium on Principles of Programming Languages},
+  pages     = {194-206},
+  numpages  = {13},
+  location  = {Boston, Massachusetts},
+  series    = {POPL '73}
+}
+
+@book{PPA,
+  address   = {Berlin, Heidelberg},
+  title     = {Principles of Program Analysis},
+  rights    = {http://www.springer.com/tdm},
+  isbn      = {978-3-642-08474-4},
+  url       = {http://link.springer.com/10.1007/978-3-662-03811-6},
+  doi       = {10.1007/978-3-662-03811-6},
+  publisher = {Springer Berlin Heidelberg},
+  author    = {Nielson, Flemming and Nielson, Hanne Riis and Hankin, Chris},
+  year      = {1999},
+  language  = {en}
+}
+
+@inproceedings{Verasco,
+  author    = {Jourdan, Jacques-Henri and Laporte, Vincent and Blazy, Sandrine and Leroy, Xavier and Pichardie, David},
+  title     = {A Formally-Verified C Static Analyzer},
+  year      = {2015},
+  isbn      = {9781450333009},
+  publisher = {Association for Computing Machinery},
+  address   = {New York, NY, USA},
+  url       = {https://doi.org/10.1145/2676726.2676966},
+  doi       = {10.1145/2676726.2676966},
+  abstract  = {This paper reports on the design and soundness proof, using the Coq proof assistant, of Verasco, a static analyzer based on abstract interpretation for most of the ISO C 1999 language (excluding recursion and dynamic allocation). Verasco establishes the absence of run-time errors in the analyzed programs. It enjoys a modular architecture that supports the extensible combination of multiple abstract domains, both relational and non-relational. Verasco integrates with the CompCert formally-verified C compiler so that not only the soundness of the analysis results is guaranteed with mathematical certitude, but also the fact that these guarantees carry over to the compiled code.},
+  booktitle = {Proceedings of the 42nd Annual ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages},
+  pages     = {247–259},
+  numpages  = {13},
+  keywords  = {static analysis, soundness proofs, proof assistants, abstract interpretation},
+  location  = {Mumbai, India},
+  series    = {POPL '15}
+}
+
+@inproceedings{CompCert,
+  author    = {Xavier Leroy and Sandrine Blazy and Daniel K\"astner
+               and Bernhard Schommer and Markus Pister and Christian Ferdinand},
+  title     = {CompCert -- A Formally Verified Optimizing Compiler},
+  booktitle = {ERTS 2016: Embedded Real Time Software and Systems},
+  publisher = {SEE},
+  year      = 2016,
+  url       = {http://xavierleroy.org/publi/erts2016_compcert.pdf},
+  hal       = {https://hal.science/hal-01238879},
+  xtopic    = {compcert},
+  abstract  = {CompCert is the first commercially available
+               optimizing compiler that is formally verified, using machine-assisted
+               mathematical proofs, to be exempt from mis-compilation.
+               The executable code it produces is proved
+               to behave exactly as specified by the semantics of the
+               source C program. This article gives an overview of
+               the design of CompCert and its proof concept and then
+               focuses on aspects relevant for industrial application.
+               We briefly summarize practical experience and give an
+               overview of recent CompCert development aiming at industrial usage.
+               CompCert’s intended use is the compilation of life-critical
+               and mission-critical software meeting high levels of assurance.
+               In this context tool qualification is of paramount importance. We
+               summarize the confidence argument of CompCert and give an overview of
+               relevant qualification strategies.}
+}
+
+@article{Jinja06,
+  author     = {Klein, Gerwin and Nipkow, Tobias},
+  title      = {A machine-checked model for a Java-like language, virtual machine, and compiler},
+  year       = {2006},
+  issue_date = {July 2006},
+  publisher  = {Association for Computing Machinery},
+  address    = {New York, NY, USA},
+  volume     = {28},
+  number     = {4},
+  issn       = {0164-0925},
+  url        = {https://doi.org/10.1145/1146809.1146811},
+  doi        = {10.1145/1146809.1146811},
+  abstract   = {We introduce Jinja, a Java-like programming language with a formal semantics designed to exhibit core features of the Java language architecture. Jinja is a compromise between the realism of the language and the tractability and clarity of its formal semantics. The following aspects are formalised: a big and a small step operational semantics for Jinja and a proof of their equivalence, a type system and a definite initialisation analysis, a type safety proof of the small step semantics, a virtual machine (JVM), its operational semantics and its type system, a type safety proof for the JVM; a bytecode verifier, that is, a data flow analyser for the JVM, a correctness proof of the bytecode verifier with respect to the type system, and a compiler and a proof that it preserves semantics and well-typedness. The emphasis of this work is not on particular language features but on providing a unified model of the source language, the virtual machine, and the compiler. The whole development has been carried out in the theorem prover Isabelle/HOL.},
+  journal    = {ACM Trans. Program. Lang. Syst.},
+  month      = jul,
+  pages      = {619–695},
+  numpages   = {77},
+  keywords   = {theorem proving, operational semantics, Java}
+}
+
+@inproceedings{LaSpina25,
+  title       = {{Formal Verification of WTO-based Dataflow Solvers}},
+  author      = {La Spina, Rom{\'e}o and Demange, Delphine and Blazy, Sandrine},
+  url         = {https://hal.science/hal-04851724},
+  booktitle   = {{Programming Languages and Systems}},
+  address     = {Hamilton, Canada},
+  pages       = {1-27},
+  year        = {2025},
+  month       = May,
+  keywords    = {compiler optimization ; verified compilation ; static analysis},
+  pdf         = {https://hal.science/hal-04851724v1/file/paper.pdf},
+  hal_id      = {hal-04851724},
+  hal_version = {v1}
+}
+
+@manual{racket-occurrence-typing,
+  title        = {The Typed Racket Guide},
+  author       = {{The Racket Team}},
+  organization = {Racket},
+  year         = {2026},
+  url          = {https://docs.racket-lang.org/ts-guide/occurrence-typing.html},
+  note         = {Section 5: Occurrence Typing}
+}
+
+@manual{typescript-narrowing,
+  title        = {TypeScript: Documentation - Narrowing},
+  author       = {{Microsoft Corporation}},
+  organization = {TypeScript},
+  year         = {2026},
+  url          = {https://www.typescriptlang.org/docs/handbook/2/narrowing.html},
+  note         = {Accessed: July 9, 2026}
+}
+
+@manual{kotlin-smart-casts,
+  title        = {Type checks and casts | Kotlin Documentation},
+  author       = {{JetBrains s.r.o.}},
+  organization = {Kotlin},
+  year         = {2026},
+  url          = {https://kotlinlang.org/docs/typecasts.html#smart-casts},
+  note         = {Accessed: July 9, 2026}
+}
+
+@article{Modular,
+  author     = {Keidel, Sven and Erdweg, Sebastian},
+  title      = {Sound and reusable components for abstract interpretation},
+  year       = {2019},
+  issue_date = {October 2019},
+  publisher  = {Association for Computing Machinery},
+  address    = {New York, NY, USA},
+  volume     = {3},
+  number     = {OOPSLA},
+  url        = {https://doi.org/10.1145/3360602},
+  doi        = {10.1145/3360602},
+  abstract   = {Abstract interpretation is a methodology for defining sound static analysis. Yet, building sound static analyses for modern programming languages is difficult, because these static analyses need to combine sophisticated abstractions for values, environments, stores, etc. However, static analyses often tightly couple these abstractions in the implementation, which not only complicates the implementation, but also makes it hard to decide which parts of the analyses can be proven sound independently from each other. Furthermore, this coupling makes it hard to combine soundness lemmas for parts of the analysis to a soundness proof of the complete analysis. To solve this problem, we propose to construct static analyses modularly from reusable analysis components. Each analysis component encapsulates a single analysis concern and can be proven sound independently from the analysis where it is used. We base the design of our analysis components on arrow transformers, which allows us to compose analysis components. This composition preserves soundness, which guarantees that a static analysis is sound, if all its analysis components are sound. This means that analysis developers do not have to worry about soundness as long as they reuse sound analysis components. To evaluate our approach, we developed a library of 13 reusable analysis components in Haskell. We use these components to define a k-CFA analysis for PCF and an interval and reaching definition analysis for a While language.},
+  journal    = {Proc. ACM Program. Lang.},
+  month      = oct,
+  articleno  = {176},
+  numpages   = {28},
+  keywords   = {Static Analysis, Soundness, Abstract Interpretation}
+}
+
+@article{Compiling,
+  author     = {Lesbre, Dorian and Lemerre, Matthieu},
+  title      = {Compiling with Abstract Interpretation},
+  year       = {2024},
+  issue_date = {June 2024},
+  publisher  = {Association for Computing Machinery},
+  address    = {New York, NY, USA},
+  volume     = {8},
+  number     = {PLDI},
+  url        = {https://doi.org/10.1145/3656392},
+  doi        = {10.1145/3656392},
+  abstract   = {Rewriting and static analyses are mutually beneficial techniques: program transformations change the inten- sional aspects of the program, and can thus improve analysis precision, while some efficient transformations are enabled by specific knowledge of some program invariants. Despite the strong interaction between these techniques, they are usually considered distinct. In this paper, we demonstrate that we can turn abstract interpreters into compilers, using a simple free algebra over the standard signature of abstract domains. Functor domains correspond to compiler passes, for which soundness is translated to a proof of forward simulation, and completeness to backward simulation. We achieve translation to SSA using an abstract domain with a non-standard SSA signature. Incorporating such an SSA translation to an abstract interpreter improves its precision; in particular we show that an SSA-based non-relational domain is always more precise than a standard non-relational domain for similar time and memory complexity. Moreover, such a domain allows recovering from precision losses that occur when analyzing low-level machine code instead of source code. These results help implement analyses or compilation passes where symbolic and semantic methods simultaneously refine each other, and improves precision when compared to doing the passes in sequence.CCS Concepts: • Software and its engineering → Compilers; Formal Software verification; • Theory of computation → Program analysis; Program verification; Abstraction; Equational logic and rewriting.},
+  journal    = {Proc. ACM Program. Lang.},
+  month      = jun,
+  articleno  = {162},
+  numpages   = {26},
+  keywords   = {Compilers, Abstract Interpretation, Static Single Assignment(SSA)}
+}
+
+@inbook{LiSA,
+  author    = {Negrini, Luca
+               and Ferrara, Pietro
+               and Arceri, Vincenzo
+               and Cortesi, Agostino},
+  editor    = {Arceri, Vincenzo
+               and Cortesi, Agostino
+               and Ferrara, Pietro
+               and Olliaro, Martina},
+  title     = {LiSA: A Generic Framework for Multilanguage Static Analysis},
+  booktitle = {Challenges of Software Verification},
+  year      = {2023},
+  publisher = {Springer Nature Singapore},
+  address   = {Singapore},
+  pages     = {19--42},
+  abstract  = {Modern software engineering revolves around distributed applications. From IoT networks to client-server infrastructures, the application code is increasingly being divided into separate sub-programs interacting with each other. As they are completely independent from each other, each such program is likely to be developed in a separate programming language, choosing the best fit for the task to at hand. From a static program analysis perspective, taking on a mixture of languages is challenging. This paper defines a generic framework where modular multilanguage static analyses can be defined through the abstract interpretation theory. The framework has been implemented in LiSA (Library for Static Analysis), an open-source Java library that provides the complete infrastructure necessary for developing static analyzers. LiSA strives to be modular, ensuring that all components taking part in the analysis are both easy to develop and highly interchangeable. LiSA also ensures that components are parametric to all language-specific features: semantics, execution model, and memory model are not directly encoded within the components themselves. A proof-of-concept instantiation is provided, demonstrating LiSA's capability to analyze multiple languages in a single analysis through the discovery of an IoT vulnerability spanning C++ and Java code.},
+  isbn      = {978-981-19-9601-6},
+  doi       = {10.1007/978-981-19-9601-6_2},
+  url       = {https://doi.org/10.1007/978-981-19-9601-6_2}
+}
+
+@inproceedings{Cousots,
+  author    = {Cousot, Patrick and Cousot, Radhia},
+  title     = {Abstract interpretation: a unified lattice model for static analysis of programs by construction or approximation of fixpoints},
+  year      = {1977},
+  isbn      = {9781450373500},
+  publisher = {Association for Computing Machinery},
+  address   = {New York, NY, USA},
+  url       = {https://doi.org/10.1145/512950.512973},
+  doi       = {10.1145/512950.512973},
+  abstract  = {A program denotes computations in some universe of objects. Abstract interpretation of programs consists in using that denotation to describe computations in another universe of abstract objects, so that the results of abstract execution give some information on the actual computations. An intuitive example (which we borrow from Sintzoff [72]) is the rule of signs. The text -1515 * 17 may be understood to denote computations on the abstract universe {(+), (-), (±)} where the semantics of arithmetic operators is defined by the rule of signs. The abstract execution -1515 * 17 → -(+) * (+) → (-) * (+) → (-), proves that -1515 * 17 is a negative number. Abstract interpretation is concerned by a particular underlying structure of the usual universe of computations (the sign, in our example). It gives a summary of some facets of the actual executions of a program. In general this summary is simple to obtain but inaccurate (e.g. -1515 + 17 → -(+) + (+) → (-) + (+) → (±)). Despite its fundamentally incomplete results abstract interpretation allows the programmer or the compiler to answer questions which do not need full knowledge of program executions or which tolerate an imprecise answer, (e.g. partial correctness proofs of programs ignoring the termination problems, type checking, program optimizations which are not carried in the absence of certainty about their feasibility, …).},
+  booktitle = {Proceedings of the 4th ACM SIGACT-SIGPLAN Symposium on Principles of Programming Languages},
+  pages     = {238–252},
+  numpages  = {15},
+  location  = {Los Angeles, California},
+  series    = {POPL '77}
+}
+
+@inproceedings{Astree,
+  author    = {Cousot, Patrick
+               and Cousot, Radhia
+               and Feret, Jer{\^o}me
+               and Mauborgne, Laurent
+               and Min{\'e}, Antoine
+               and Monniaux, David
+               and Rival, Xavier},
+  editor    = {Sagiv, Mooly},
+  title     = {The ASTRE{\'E} Analyzer},
+  booktitle = {Programming Languages and Systems},
+  year      = {2005},
+  publisher = {Springer Berlin Heidelberg},
+  address   = {Berlin, Heidelberg},
+  pages     = {21--30},
+  abstract  = {ASTR{\'E}E is an abstract interpretation-based static program analyzer aiming at proving automatically the absence of run time errors in programs written in the C programming language. It has been applied with success to large embedded control-command safety critical real-time software generated automatically from synchronous specifications, producing a correctness proof for complex software without any false alarm in a few hours of computation.},
+  isbn      = {978-3-540-31987-0}
+}
+
+@inproceedings{SootUp,
+  author = {Karakaya, Kadiray and Schott, Stefan and Klauke, Jonas and Bodden, Eric and Schmidt, Markus and Luo, Linghui and He, Dongjie},
+  doi    = {10.1007/978-3-031-57246-3\_13},
+  pages  = {229--247},
+  title  = {{SootUp: A Redesign of the Soot Static Analysis Framework}},
+  year   = {2024}
+}
+
+@article{iTree,
+  author     = {Michelland, S\'{e}bastien and Zakowski, Yannick and Gonnord, Laure},
+  title      = {Abstract Interpreters: A Monadic Approach to Modular Verification},
+  year       = {2024},
+  issue_date = {August 2024},
+  publisher  = {Association for Computing Machinery},
+  address    = {New York, NY, USA},
+  volume     = {8},
+  number     = {ICFP},
+  url        = {https://doi.org/10.1145/3674646},
+  doi        = {10.1145/3674646},
+  abstract   = {We argue that monadic interpreters built as layers of handlers stacked atop the free monad, as advocated notably by the ITree library, also constitute a promising way to implement and verify abstract interpreters in dependently-typed theories such as the one underlying the Coq proof assistant.The approach enables both code reuse across projects and modular proofs of soundness of the resulting interpreters. We provide generic abstract control flow combinators proven correct once and for all against their concrete counterpart. We demonstrate how to relate concrete handlers implementing effects to abstract variants of these handlers, essentially capturing the traditional soundness of transfer functions in the context of monadic interpreters. Finally, we provide generic results to lift soundness statements via the interpretation of stateful and failure effects.We formalize all the aforementioned combinators and theories into a Coq library, and demonstrate their benefits by implementing and proving correct two illustrative abstract interpreters respectively for a structured imperative language and a toy assembly.},
+  journal    = {Proc. ACM Program. Lang.},
+  month      = aug,
+  articleno  = {257},
+  numpages   = {28},
+  keywords   = {Monadic Semantics, Abstract Interpretation, Formal Verification}
+}
+
+@misc{Kotlin,
+  title        = {Kotlin Programming Language},
+  author       = {{JetBrains}},
+  year         = {2011},
+  howpublished = {\url{https://kotlinlang.org/}},
+  note         = {Accessed: 2026-07-23}
+}
+
+@phdthesis{picha2005,
+  url    = {http://www.theses.fr/2005REN1S183},
+  title  = {Interprétation abstraite en logique intuitionniste : extraction d'analyseurs Java certifiés},
+  author = {Pichardie, David},
+  year   = {2005},
+  pages  = {1 vol. (199 p.)},
+  note   = {Thèse de doctorat dirigée par Jensen, Thomas Informatique Rennes 1 2005},
+  note   = {2005REN1S183}
+}
+
+ @article{10.1145/2578855.2535841,
+  author     = {Kumar, Ramana and Myreen, Magnus O. and Norrish, Michael and Owens, Scott},
+  title      = {CakeML: a verified implementation of ML},
+  year       = {2014},
+  issue_date = {January 2014},
+  publisher  = {Association for Computing Machinery},
+  address    = {New York, NY, USA},
+  volume     = {49},
+  number     = {1},
+  issn       = {0362-1340},
+  url        = {https://doi.org/10.1145/2578855.2535841},
+  doi        = {10.1145/2578855.2535841},
+  abstract   = {We have developed and mechanically verified an ML system called CakeML, which supports a substantial subset of Standard ML. CakeML is implemented as an interactive read-eval-print loop (REPL) in x86-64 machine code. Our correctness theorem ensures that this REPL implementation prints only those results permitted by the semantics of CakeML. Our verification effort touches on a breadth of topics including lexing, parsing, type checking, incremental and dynamic compilation, garbage collection, arbitrary-precision arithmetic, and compiler bootstrapping.Our contributions are twofold. The first is simply in building a system that is end-to-end verified, demonstrating that each piece of such a verification effort can in practice be composed with the others, and ensuring that none of the pieces rely on any over-simplifying assumptions. The second is developing novel approaches to some of the more challenging aspects of the verification. In particular, our formally verified compiler can bootstrap itself: we apply the verified compiler to itself to produce a verified machine-code implementation of the compiler. Additionally, our compiler proof handles diverging input programs with a lightweight approach based on logical timeout exceptions. The entire development was carried out in the HOL4 theorem prover.},
+  journal    = {SIGPLAN Not.},
+  month      = jan,
+  pages      = {179–191},
+  numpages   = {13},
+  keywords   = {ML, compiler bootstrapping, compiler verification, machine code verification, read-eval-print loop, verified garbage collection., verified parsing, verified type checking}
+}
+
+@inproceedings{cakeml,
+  author    = {Kumar, Ramana and Myreen, Magnus O. and Norrish, Michael and Owens, Scott},
+  title     = {CakeML: a verified implementation of ML},
+  year      = {2014},
+  isbn      = {9781450325448},
+  publisher = {Association for Computing Machinery},
+  address   = {New York, NY, USA},
+  url       = {https://doi.org/10.1145/2535838.2535841},
+  doi       = {10.1145/2535838.2535841},
+  abstract  = {We have developed and mechanically verified an ML system called CakeML, which supports a substantial subset of Standard ML. CakeML is implemented as an interactive read-eval-print loop (REPL) in x86-64 machine code. Our correctness theorem ensures that this REPL implementation prints only those results permitted by the semantics of CakeML. Our verification effort touches on a breadth of topics including lexing, parsing, type checking, incremental and dynamic compilation, garbage collection, arbitrary-precision arithmetic, and compiler bootstrapping.Our contributions are twofold. The first is simply in building a system that is end-to-end verified, demonstrating that each piece of such a verification effort can in practice be composed with the others, and ensuring that none of the pieces rely on any over-simplifying assumptions. The second is developing novel approaches to some of the more challenging aspects of the verification. In particular, our formally verified compiler can bootstrap itself: we apply the verified compiler to itself to produce a verified machine-code implementation of the compiler. Additionally, our compiler proof handles diverging input programs with a lightweight approach based on logical timeout exceptions. The entire development was carried out in the HOL4 theorem prover.},
+  booktitle = {Proceedings of the 41st ACM SIGPLAN-SIGACT Symposium on Principles of Programming Languages},
+  pages     = {179–191},
+  numpages  = {13},
+  keywords  = {ML, compiler bootstrapping, compiler verification, machine code verification, read-eval-print loop, verified garbage collection., verified parsing, verified type checking},
+  location  = {San Diego, California, USA},
+  series    = {POPL '14}
+}
