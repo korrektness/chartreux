@@ -43,10 +43,12 @@ instance : FiniteHeight NVal where
     cases a <;> cases b <;> try contradiction
     simp
 
-instance : LatticeLike NVal where
+instance : SemiLattice NVal where
   join_comm  := by intro a b; cases a <;> cases b <;> rfl
   join_assoc := by intro a b c; cases a <;> cases b <;> cases c <;> rfl
   join_idem  := by intro a; cases a <;> rfl
+
+instance : Bounded NVal where
   bot_le     := by intro a; cases a <;> rfl
 
 /-! ## CFG transition functions -/
@@ -187,7 +189,7 @@ private lemma exprConsequent_mono (ℓ₁ ℓ₂ : Fact locs)
 private lemma evalExpr_mono (ℓ₁ ℓ₂ : Fact locs)
     (hρ : ℓ₁ ⊑ ℓ₂) (e : Expr) :
     evalExpr locs ℓ₁ e ⊑ evalExpr locs ℓ₂ e := by
-  induction e with (simp only [evalExpr]; try grind [LatticeLike.join_idem])
+  induction e with (simp only [evalExpr]; try grind [SemiLattice.join_idem])
   | Var x =>
     split <;> try rfl
     rename_i i _
@@ -454,11 +456,11 @@ theorem mono_absorb_coh
 def analysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
     Chartreux.Analysis (ls := dukeLangSem cfg) NodeID Edge State :=
   { dfa          := DFA cfg locs
-    botL         := _
+    botL         := (inferInstance : Bot (Fact locs))
     maxL         := _
     decEqL       := (inferInstance : DecidableEq (Fact locs))
-    fhL          := _
-    llL          := (inferInstance : LatticeLike (Fact locs))
+    fhL          := (inferInstance : FiniteHeight (Fact locs))
+    llL          := (inferInstance : SemiLattice (Fact locs))
     semantics    := semantics cfg hnd
     mono_absorb  := mono_absorb_coh
     edge_mono    := edgeTransfer_mono }

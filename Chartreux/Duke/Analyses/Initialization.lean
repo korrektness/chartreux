@@ -168,11 +168,11 @@ theorem mono_absorb_coh
 def analysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
     Chartreux.Analysis (ls := dukeLangSem cfg) NodeID Edge State :=
   { dfa          := nDFA cfg locs
-    botL         := _
+    botL         := (inferInstance : Bot (Fact locs))
     maxL         := _
     decEqL       := (inferInstance : DecidableEq (Fact locs))
-    fhL          := _
-    llL          := (inferInstance : LatticeLike (Fact locs))
+    fhL          := (inferInstance : FiniteHeight (Fact locs))
+    llL          := (inferInstance : SemiLattice (Fact locs))
     semantics    := semantics cfg hnd
     mono_absorb  := mono_absorb_coh
     edge_mono    := edgeTransfer_mono }

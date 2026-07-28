@@ -85,7 +85,7 @@ def IsForwardPostFixpoint [Bot L] [Max L]
     (nodeTransfer n.val (expectedIn g edgeTransfer entryInit outF n)) ⊑ outF n
 
 private theorem foldl_join_eT_mono
-    [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
+    [Bot L] [Max L] [FiniteHeight L] [ll : SemiLattice L]
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> L -> L)
     (edge_mono : ∀ e, mono_f (edgeTransfer e))
     (outF1 outF2 : StateN g L) (hle : StateN.le outF1 outF2)
@@ -107,7 +107,7 @@ private theorem foldl_join_eT_mono
     grind [edge_mono e.val _ _ (hle e_mem), ll.join_assoc, ll.join_comm]
 
 private theorem joinPredEdges_mono
-    [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
+    [Bot L] [Max L] [FiniteHeight L] [ll : SemiLattice L]
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> L -> L)
     (edge_mono : ∀ e, mono_f (edgeTransfer e))
     (outF1 outF2 : StateN g L) (hle : StateN.le outF1 outF2) (n : NodeOf g) :
@@ -120,7 +120,7 @@ private theorem expectedIn_mono
     [Bot L] [Max L] [FiniteHeight L]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
     (entryInit : L)
-    [ll : LatticeLike L] [tm : TransferMono nodeTransfer edgeTransfer]
+    [ll : SemiLattice L] [tm : TransferMono nodeTransfer edgeTransfer]
     (outF1 outF2 : StateN g L)
     (hle : StateN.le outF1 outF2) (n : NodeOf g) :
     (expectedIn g edgeTransfer entryInit outF1 n) ⊑
@@ -134,7 +134,7 @@ private theorem T_postfix_of_postfix
     [Bot L] [Max L] [FiniteHeight L]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
     (entryInit : L) (f : StateN g L)
-    [ll : LatticeLike L] [tm : TransferMono nodeTransfer edgeTransfer]
+    [ll : SemiLattice L] [tm : TransferMono nodeTransfer edgeTransfer]
     (hpost : IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit f) :
     IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit
       (fun n => nodeTransfer n.val (expectedIn g edgeTransfer entryInit f n)) := by
@@ -150,7 +150,7 @@ theorem worklistForward_mono
     [Bot L] [Max L] [DecidableEq L] [FiniteHeight L]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
     (entryInit : L) (outF : StateN g L) (wl : List (NodeOf g))
-    [ll : LatticeLike L] :
+    [ll : SemiLattice L] :
     let res := worklistForward g nodeTransfer edgeTransfer entryInit outF wl
     StateN.le outF res := by
   induction outF, wl using worklistForward.induct g nodeTransfer edgeTransfer entryInit with
@@ -169,7 +169,7 @@ theorem worklistForward_mono
     if a predicate `P` on `(outF, wl)` holds initially and is preserved by
     both the "unchanged" and "changed" branches, then `P (result, [])` holds. -/
 private theorem worklistForward_invariant
-    [Bot L] [Max L] [DecidableEq L] [FiniteHeight L] [ll : LatticeLike L]
+    [Bot L] [Max L] [DecidableEq L] [FiniteHeight L] [ll : SemiLattice L]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
     (entryInit : L) (outF : StateN g L) (wl : List (NodeOf g))
     (P : StateN g L -> List (NodeOf g) -> Prop)
@@ -205,7 +205,7 @@ theorem worklistForward_sound_postfixpoint
     [Bot L] [Max L] [DecidableEq L] [FiniteHeight L]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
     (entryInit : L) (ρ : StateN g L) (wl0 : List (NodeOf g))
-    [ll : LatticeLike L]
+    [ll : SemiLattice L]
     (hinv0 : ∀ m : NodeOf g, m ∉ wl0 ->
         nodeTransfer m.val (expectedIn g edgeTransfer entryInit ρ m) ⊑ ρ m) :
     let res := worklistForward g nodeTransfer edgeTransfer entryInit ρ wl0
@@ -235,7 +235,7 @@ theorem worklistForward_complete_least_postfixpoint
     [Bot L] [Max L] [DecidableEq L] [FiniteHeight L]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
     (entryInit : L) (outF : StateN g L) (wl : List (NodeOf g))
-    [ll : LatticeLike L] [tm : TransferMono nodeTransfer edgeTransfer]
+    [ll : SemiLattice L] [tm : TransferMono nodeTransfer edgeTransfer]
     (post : StateN g L) (hpost : IsForwardPostFixpoint g nodeTransfer edgeTransfer entryInit post)
     (hinv : StateN.le outF post) :
     let res := worklistForward g nodeTransfer edgeTransfer entryInit outF wl
@@ -259,7 +259,7 @@ theorem worklistForward_sound_fixpoint
     [Bot L] [Max L] [DecidableEq L] [FiniteHeight L]
     (g : AnalysisCFG Node Edge) (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
     (entryInit : L) (ρ : StateN g L) (wl0 : List (NodeOf g))
-    [ll : LatticeLike L] [tm : TransferMono nodeTransfer edgeTransfer]
+    [ll : SemiLattice L] [tm : TransferMono nodeTransfer edgeTransfer]
     (hinv0 : ∀ m : NodeOf g, m ∉ wl0 ->
        nodeTransfer m.val (expectedIn g edgeTransfer entryInit ρ m) ⊑ ρ m)
     (hbot : ∀ (n : NodeOf g) v, ρ n ⊑ v) :
@@ -281,7 +281,7 @@ theorem worklistForward_sound_fixpoint
   grind [hleast n, hpostres n, ll.join_comm]
 
 private theorem foldl_join_absorb
-    [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
+    [Bot L] [Max L] [FiniteHeight L] [ll : SemiLattice L]
     {α : Type} (f : α -> L) (x : L) :
     ∀ (l : List α) (acc : L), x ⊑ acc ->
       x ⊑ (l.foldl (fun a y => a ⊔ f y) acc)
@@ -292,7 +292,7 @@ private theorem foldl_join_absorb
     rw [<-ll.join_assoc, h]
 
 private theorem foldl_ge_of_mem
-    [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
+    [Bot L] [Max L] [FiniteHeight L] [ll : SemiLattice L]
     {α : Type} (f : α -> L)
     (l : List α) (a : α) (ha : a ∈ l) (init : L) :
     f a ⊑ (l.foldl (fun acc x => acc ⊔ f x) init) := by
@@ -308,7 +308,7 @@ private theorem foldl_ge_of_mem
     | inr htl => exact ih htl _
 
 private theorem joinPredEdges_ge_edge
-    [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
+    [Bot L] [Max L] [FiniteHeight L] [ll : SemiLattice L]
     (g : AnalysisCFG Node Edge) (edgeTransfer : Edge -> L -> L)
     (ρ : StateN g L) (n : NodeOf g)
     (e : Edge) (he : e ∈ g.inEdges n.val) :
@@ -332,7 +332,7 @@ variable {g : AnalysisCFG Node Edge}
 variable [ls : LangSem Node Edge State g]
 
 theorem postFixpoint_of_isForwardPostFixpoint
-    [Bot L] [Max L] [FiniteHeight L] [ll : LatticeLike L]
+    [Bot L] [Max L] [FiniteHeight L] [ll : SemiLattice L]
     (nodeTransfer : Node -> L -> L) (edgeTransfer : Edge -> L -> L)
     (edge_mono : ∀ e, mono_f (edgeTransfer e))
     (entryInit : L) (ρ : StateN g L)
@@ -393,7 +393,7 @@ structure Analysis (Node Edge State : Type)
   maxL : Max dfa.L
   decEqL : DecidableEq dfa.L
   fhL : FiniteHeight dfa.L
-  llL : LatticeLike dfa.L
+  llL : SemiLattice dfa.L
   semantics : DFASemantics (ls := ls) g dfa
   mono_absorb :
     ∀ {ℓ ℓ' : dfa.L} {σ : State},

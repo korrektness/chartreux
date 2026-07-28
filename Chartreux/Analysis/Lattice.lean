@@ -31,15 +31,16 @@ theorem height_le_of_join [FiniteHeight L] (a b : L) :
 
 end FiniteHeight
 
-/-- a type is `LatticeLike` if it has `FiniteHeight`, a bottom element `⊥`,
-    and its join operation satisfies the properties of lattices. -/
-class LatticeLike (L : Type) [Max L] [Bot L] [FiniteHeight L] where
+class SemiLattice (L : Type) [Max L] where
   join_comm : ∀ a b : L, a ⊔ b = b ⊔ a
   join_assoc : ∀ a b c : L, (a ⊔ b) ⊔ c = a ⊔ (b ⊔ c)
   join_idem : ∀ a : L, a ⊔ a = a
+
+class Bounded (L : Type) [Max L] [Bot L] where
   bot_le : ∀ a : L, ⊥ ⊑ a
 
-theorem join_ge_trans [FiniteHeight L] [ll : LatticeLike L]
+omit [Bot L]
+theorem join_ge_trans [FiniteHeight L] [ll : SemiLattice L]
     (a b c : L) (hab : a ⊑ b) (hbc : b ⊑ c) :
     a ⊑ c := by
   calc a ⊔ c = a ⊔ (b ⊔ c) := by rw [hbc]
@@ -47,9 +48,8 @@ theorem join_ge_trans [FiniteHeight L] [ll : LatticeLike L]
     _ = b ⊔ c := by rw [hab]
     _ = c := hbc
 
-instance JoinLeRefl [FiniteHeight L] [LatticeLike L] : Std.Refl (α := L) (· ⊑ ·) where
-  refl := LatticeLike.join_idem
-
+instance JoinLeRefl [FiniteHeight L] [SemiLattice L] : Std.Refl (α := L) (· ⊑ ·) where
+  refl := SemiLattice.join_idem
 
 -- ## domains
 -- the goal of this section is to show that the type of a finite map from
@@ -129,14 +129,15 @@ instance [fh : FiniteHeight L] : FiniteHeight (Domain n L) where
         refine Nat.add_lt_add_of_le_of_lt ?_ (ih htl)
         exact FiniteHeight.height_le_of_join _ _
 
-/-- If `A` is a `LatticeLike` type, the finite map `Domain n A` is also
-    `LatticeLike`. -/
-instance [FiniteHeight L]
-    [ll : LatticeLike L] : LatticeLike (Domain n L) where
+/-- If `A` is a `SemiLattice` type, the finite map `Domain n A` is also
+    `SemiLattice`. -/
+instance [ll : SemiLattice L] : SemiLattice (Domain n L) where
   join_comm a b := by funext i; exact ll.join_comm (a i) (b i)
   join_assoc a b c := by funext i; exact ll.join_assoc (a i) (b i) (c i)
   join_idem a := by funext i; exact ll.join_idem (a i)
-  bot_le a := by funext i; exact ll.bot_le (a i)
+
+instance [Bounded L] : Bounded (Domain n L) where
+  bot_le a := by funext i; exact Bounded.bot_le (a i)
 
 namespace Domain
 -- function application distributes over lub
@@ -157,7 +158,8 @@ section Product
 
 variable {L₁ L₂ : Type} [Max L₁] [Max L₂] [Bot L₁] [Bot L₂]
 variable [fh₁ : FiniteHeight L₁] [fh₂ : FiniteHeight L₂]
-variable [ll₁ : LatticeLike L₁] [ll₂ : LatticeLike L₂]
+variable [sl₁ : SemiLattice L₁] [sl₂ : SemiLattice L₂]
+variable [b₁ : Bounded L₁] [b₂ : Bounded L₂]
 
 instance : Max (L₁ × L₂) where
   max
@@ -177,18 +179,20 @@ instance : FiniteHeight (L₁ × L₂) where
     | inl h => grind [fh₁.height_join _ _ h, fh₂.height_le_of_join b₁ b₂]
     | inr h => grind [fh₂.height_join _ _ h, fh₁.height_le_of_join a₁ a₂]
 
-instance : LatticeLike (L₁ × L₂) where
-  join_comm := by simp [max]; grind [ll₁.join_comm, ll₂.join_comm]
-  join_assoc := by simp [max]; grind [ll₁.join_assoc, ll₂.join_assoc]
-  join_idem := by simp [max]; grind [ll₁.join_idem, ll₂.join_idem]
-  bot_le := by simp [max]; grind [ll₁.bot_le, ll₂.bot_le]
+instance : SemiLattice (L₁ × L₂) where
+  join_comm := by simp [max]; grind [sl₁.join_comm, sl₂.join_comm]
+  join_assoc := by simp [max]; grind [sl₁.join_assoc, sl₂.join_assoc]
+  join_idem := by simp [max]; grind [sl₁.join_idem, sl₂.join_idem]
+
+instance : Bounded (L₁ × L₂) where
+  bot_le := by simp [max]; grind [b₁.bot_le, b₂.bot_le]
 
 end Product
 
 -- A optional lattice `Option L`
 section Option
 
-variable [fh : FiniteHeight L] [ll : LatticeLike L]
+variable [fh : FiniteHeight L] [sl : SemiLattice L]
 
 instance : Max (Option L) where
   max
@@ -199,7 +203,8 @@ instance : Max (Option L) where
 instance : Bot (Option L) where
   bot := none
 
-instance : FiniteHeight (Option L) where
+/-- Finite height of bounded lattices -/
+instance [Bounded L] : FiniteHeight (Option L) where
   remainingHeight
   | .none => FiniteHeight.remainingHeight ⊥ + 1
   | .some a => FiniteHeight.remainingHeight a
@@ -207,17 +212,35 @@ instance : FiniteHeight (Option L) where
     intro a b hmax
     cases a <;> cases b <;>
       simp only [max, ne_eq, not_true_eq_false, Option.some.injEq] at * <;> expose_names
-    · have h_bot : ⊥ ⊑ val := ll.bot_le val
+    · have h_bot : ⊥ ⊑ val := Bounded.bot_le val
       have h_le := fh.height_le_of_join ⊥ val
       rw [h_bot] at h_le
       omega
     · apply fh.height_join
       assumption
 
-instance : LatticeLike (Option L) where
-  join_comm := by simp [max]; grind [ll.join_comm]
-  join_assoc := by simp [max]; grind [ll.join_assoc]
-  join_idem := by simp [max]; grind [ll.join_idem]
+/-- Finite height of lattices with known max height -/
+instance
+  (maxHeight : Nat)
+  (max_height_le : ∀ a : L, FiniteHeight.remainingHeight a ≤ maxHeight)
+    : FiniteHeight (Option L) where
+  remainingHeight
+  | .none => maxHeight + 1
+  | .some a => FiniteHeight.remainingHeight a
+  height_join := by
+    intro a b hmax
+    cases a <;> cases b <;>
+      simp only [max, ne_eq, not_true_eq_false, Option.some.injEq] at * <;> expose_names
+    · exact Nat.lt_succ_of_le (max_height_le val)
+    · apply fh.height_join
+      assumption
+
+instance : SemiLattice (Option L) where
+  join_comm := by simp [max]; grind [sl.join_comm]
+  join_assoc := by simp [max]; grind [sl.join_assoc]
+  join_idem := by simp [max]; grind [sl.join_idem]
+
+instance : Bounded (Option L) where
   bot_le := by intro a; cases a <;> simp [max]; rfl
 
 end Option
@@ -235,10 +258,12 @@ instance : FiniteHeight Bool where
   remainingHeight a := if a then 0 else 1
   height_join := by simp! [max]
 
-instance : LatticeLike Bool where
+instance : SemiLattice Bool where
   join_comm := by simp [max]
   join_assoc := by simp [max]
   join_idem := by simp [max]
+
+instance : Bounded Bool where
   bot_le := by simp [max]
 
 end Bool
