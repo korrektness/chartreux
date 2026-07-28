@@ -1,59 +1,30 @@
-# Dataflow Analysis in Lean
+# Chartreux : Verified Dataflow Analysis in Lean
 
-Subset of TIP as defined in _Static Program Analysis_. Approach influenced by _Principles of Program Analysis_.
+Chartreux is a framework for specifying and verifying dataflow analyses on control flow graphs, implemented in Lean. It rests on abstract representations for CFGs, and a verified implementation of Kildall's algorithm, to derive analysis correctness with respect to language semantics.
 
-The goal is to develop complete, end-to-end proofs of dataflow soundness in Lean, establishing correctness of the procedure (fixpoint computation) as well as correctness wrt language semantics.
-
-Implemented so far : 
-
-- Subset of TIP : syntax and CEK semantics.
-- CFG builder
-- Kildall's Worklist algorithm (verified to be terminating and sound)
-- Generic dataflow framework
-- Decorated semantics over the CEK semantics, proven equivalent to the original
-- Implementation and correctness for Constant Propagation, over the original language
-
-## Structure of this project
+## Structure
 
 ```
 Chartreux/
   Analysis/
-    Generic.lean                       (generic correctness of the algorithm)
-    Lattice.lean                       (FiniteHeight, LatticeLike, Domain, StateN)
+    Generic.lean
+    Lattice.lean
     Utils.lean
-    Worklist.lean                      (algorithm)
-    WorklistProofs.lean                (mono/invariant/soundness/completeness)
-  TIP/
-    Defs.lean, Eval.lean               (syntax + cek semantics)
+    Worklist.lean
+    WorklistProofs.lean
+  Duke/
+    Analyses/
     Examples/
-    Regular/
-      CFG.lean, LangSem.lean
-      Analyses/
-        Collection.lean, CP.lean       (example analyses)
-      Correspondence/
-        Located.lean, Refinement.lean   (CEK <-> CFG semantic refinement)
-    Utils/ (dot printer)
+    Defs.lean, CFG.lean, ...
+README.md
 ```
 
-## Contributing
+The `Analysis/` directory contains the abstract framework and all of the relevant proofs of correctness that back it. A sample instantiation lives in `Duke/`, based on a minimal subset of the Kotlin programming language, and an analysis lifted from its compiler.
 
-You can add the following script to your `.git/hooks` folder, to check the CI for warnings before committing.
+## Background
 
-```sh
-#!/bin/sh
+A presentation of the framework and its applications to the Kotlin programming language can be found in the paper, a link to which will be provided shortly.
 
-set -u
+#### Namesake
 
-# build project
-lake build --fail-level=warning
-
-if [ $? -ne 0 ]
-then
-  cat <<\EOF
-    [[ PRE-COMMIT ]] Build failed.
-EOF
-  
-  exit 1
-fi
-```
-
+The framework is named after the [Chartreux](https://en.wikipedia.org/wiki/Chartreux) breed of cats, which seems to be the breed of the protagonist from the movie [Flow](https://en.wikipedia.org/wiki/Flow_(2024_film)). The ties between the movie's title and this work should be relatively straightforward.
