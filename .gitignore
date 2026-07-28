@@ -4,3 +4,5 @@
 !/lean_packages/manifest.json
 **/.DS_Store
 .mcp.json
+
+/docs/main.pdf
