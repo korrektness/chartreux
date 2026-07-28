@@ -15,7 +15,7 @@ lemma LSteps_bounds (cfg : WFCFG) {n n' : NodeID} {σ σ' : State}
   | refl => assumption
   | step hstep h_rest _hsrc ih =>
     apply ih
-    apply cfg.prop.2.2.1
+    apply cfg.property.2.2.1
     cases hstep <;> assumption
   | stut _ _ ih =>
     apply ih; trivial
@@ -26,7 +26,7 @@ theorem reachable_in_bounds (cfg : WFCFG) {n : NodeID} {σ : State}
     n < cfg.val.nodes.length := by
   have ⟨σ₀, _, hsteps⟩ := hreach
   apply LSteps_bounds <;> try trivial
-  apply cfg.prop.1
+  apply cfg.property.1
 
 /-- An analyzed expression can always step to a value -/
 theorem eval_expr_progress {locs : List Loc}
@@ -103,7 +103,7 @@ lemma eval_node_safe (cfg : WFCFG) {locs : List Loc}
     match kind with
     | .Assume c => ¬EvalExpr σ c (.Int 0) -> ∃ state, Step cfg ⟨n, σ⟩ state
     | _ => ∃ state, Step cfg ⟨n, σ⟩ state := by
-  have ⟨e, he⟩ := cfg.prop.2.2.2 n (reachable_in_bounds cfg hreach) hexit
+  have ⟨e, he⟩ := cfg.property.2.2.2 n (reachable_in_bounds cfg hreach) hexit
   cases kind with (simp! [Nullability.checkNode, Initialization.checkNode] at hcn hci ⊢)
   | Assume c =>
     intro heval
@@ -139,8 +139,8 @@ theorem duke_cfg_safety (cfg : WFCFG) {n : NodeID} {σ : State}
       ∃ c, cfg.val.nodeKind n = some (.Assume c) ∧ EvalExpr σ c (.Int 0) := by
   have hnode := reachable_in_bounds cfg hreach
   let vars := vars cfg
-  have hn := Nullability.reachable_correct vars.prop cfg hreach |>.left
-  have hi := Initialization.reachable_correct vars.prop cfg hreach
+  have hn := Nullability.reachable_correct vars.property cfg hreach |>.left
+  have hi := Initialization.reachable_correct vars.property cfg hreach
   simp! [Nullability.checkCFG] at hcn
   simp! [Initialization.checkCFG] at hci
   specialize hcn n hnode

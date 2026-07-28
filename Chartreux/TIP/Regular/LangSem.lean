@@ -42,7 +42,7 @@ def forCFG (g : CFG)
 
 @[reducible]
 def WFCFG.analysis (g : WFCFG) : AnalysisCFG NodeID Edge :=
-  forCFG g g.prop.2.1 g.prop.2.2 g.prop.1
+  forCFG g g.property.2.1 g.property.2.2 g.property.1
 
 /-! ## TIP `LangSem`, parameterised by the underlying TIP `CFG`
 

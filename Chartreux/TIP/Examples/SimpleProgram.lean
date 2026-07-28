@@ -31,15 +31,15 @@ instance instlangsem_simple : LangSem NodeID Edge State simpleWFCFG.analysis :=
 
 /-- The bundled CP analysis result on `simpleCFG`. -/
 def simpleResult :
-    Chartreux.AnalysisResult (cpAnalysis sv.val sv.prop simpleWFCFG) :=
-  cpAnalyzeCFG sv.val sv.prop simpleWFCFG
+    Chartreux.AnalysisResult (cpAnalysis sv.val sv.property simpleWFCFG) :=
+  cpAnalyzeCFG sv.val sv.property simpleWFCFG
 
 theorem cp_correct_reachable :
     ∀ {n : NodeID} {σ : State},
       Reachable simpleWFCFG.analysis n σ State.isInit ->
       cpβ_corr (simpleResult.inFacts n) σ := by
   intro n σ hreach
-  exact cp_reachable_correct sv.prop simpleWFCFG hreach
+  exact cp_reachable_correct sv.property simpleWFCFG hreach
 
 #eval IO.println (CFG.toDot simpleCFG)
 #eval IO.println
@@ -73,15 +73,15 @@ instance instlangsem_loopy : LangSem NodeID Edge State loopyWFCFG.analysis :=
   tipLangSem loopyWFCFG
 
 def loopyResult :
-    Chartreux.AnalysisResult (cpAnalysis loopyVars.val loopyVars.prop loopyWFCFG) :=
-  cpAnalyzeCFG loopyVars.val loopyVars.prop loopyWFCFG
+    Chartreux.AnalysisResult (cpAnalysis loopyVars.val loopyVars.property loopyWFCFG) :=
+  cpAnalyzeCFG loopyVars.val loopyVars.property loopyWFCFG
 
 theorem loopy_cp_correct :
     ∀ {n : NodeID} {σ : State},
       Reachable loopyWFCFG.analysis n σ State.isInit ->
       cpβ_corr (loopyResult.inFacts n) σ := by
   intro n σ hreach
-  exact cp_reachable_correct loopyVars.prop loopyWFCFG hreach
+  exact cp_reachable_correct loopyVars.property loopyWFCFG hreach
 
 #eval IO.println (CFG.toDot loopyCFG)
 #eval IO.println

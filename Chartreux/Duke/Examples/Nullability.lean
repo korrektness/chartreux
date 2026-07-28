@@ -31,8 +31,8 @@ def cfg := prog.wfcfg
 
 def sv : { l : List String // l.Nodup } := vars cfg
 
-def result : Chartreux.AnalysisResult (analysis sv.prop cfg) :=
-  analyzeCFG sv.prop cfg
+def result : Chartreux.AnalysisResult (analysis sv.property cfg) :=
+  analyzeCFG sv.property cfg
 
 #eval IO.println (cfg.val.toDotWithFn (A := String)
   (fun n => formatFact sv.val (result.inFacts n))

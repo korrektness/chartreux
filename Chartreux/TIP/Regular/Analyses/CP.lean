@@ -4,7 +4,7 @@ import Chartreux.Analysis.WorklistProofs
 import Chartreux.TIP.Eval
 import Chartreux.TIP.Regular.CFG
 import Chartreux.TIP.Regular.LangSem
-import Mathlib.Data.List.Nodup
+import Mathlib.Tactic.Common
 
 namespace Chartreux.Analysis.CP
 
@@ -392,7 +392,7 @@ private lemma cp_preserve_assign_case (vars : List String) (hnd : vars.Nodup)
         have : vars.get j = vars.get i := by rw [hgj, hgetx]
         have hji_eq : j = i := by
           apply Fin.eq_of_val_eq
-          exact (List.Nodup.getElem_inj_iff hnd).mp this
+          exact (List.getElem_inj hnd).mp this
         exact hji hji_eq
       have hβ : cpβ σ' j = cpβ σ j := by
         unfold cpβ
