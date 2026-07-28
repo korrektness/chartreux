@@ -1,7 +1,6 @@
 import Chartreux.TIP.Defs
 import Chartreux.Analysis.Utils
-import Mathlib.Tactic.Lemma
-import Mathlib.Data.List.Nodup
+import Mathlib.Tactic.Common
 
 inductive NodeKind where
 | Assign (x : String) (e : Expr)

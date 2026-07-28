@@ -4,7 +4,7 @@ import Chartreux.Analysis.WorklistProofs
 import Chartreux.Duke.Eval
 import Chartreux.Duke.CFG
 import Chartreux.Duke.Utils
-import Mathlib.Data.List.Nodup
+import Mathlib.Tactic.Common
 
 namespace Duke.Analysis.Nullability
 
@@ -511,7 +511,7 @@ def checkNode {locs : List Loc} (ℓ : Fact locs) : NodeKind -> Bool
 
 def checkCFG (cfg : WFCFG) : Bool :=
   let locs := vars cfg
-  let res := (analyzeCFG locs.prop cfg).inFacts
+  let res := (analyzeCFG locs.property cfg).inFacts
   (List.range cfg.val.nodes.length).all fun n =>
     match cfg.val.nodeKind n with
     | none => false
