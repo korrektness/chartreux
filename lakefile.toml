@@ -1,7 +1,7 @@
-name = "flow"
+name = "chartreux"
 version = "0.1.0"
 keywords = ["programs"]
-defaultTargets = ["Flow"]
+defaultTargets = ["Chartreux"]
 
 [leanOptions]
 pp.unicode.fun = true                 # pretty-prints `fun a ↦ b`
@@ -16,5 +16,5 @@ scope = "leanprover-community"
 rev = "v4.30.0"
 
 [[lean_lib]]
-name = "Flow"
-globs = ["Flow.+"]
+name = "Chartreux"
+globs = ["Chartreux.+"]
