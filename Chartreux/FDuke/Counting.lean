@@ -1,32 +1,19 @@
 import Chartreux.FDuke.Semantics
-import Chartreux.Analysis.Worklist
+import Chartreux.Analysis.WorklistProofs
 
 /-!
-# The counting analysis for κ
+# Counting analysis
 
-The dataflow analysis that verifies the `κ` contract of a `call f { s }` site:
-it counts (abstractly, in the three-point domain `{0, 1, ω}`) how many times a
-lambda body may have been `invoke`d along each path of the callee's CFG. The
-verdict at the callee's exit node decides whether the callee honours its `κ`
-(`CountVerdict`), which is exactly the side condition under which the κ-shaped
-plain edges emitted by `kappaEdges` are sound.
-
-The analysis runs on the *κ-graph* (`CFG.kappa`, see `Chartreux.FDuke.Semantics`):
-the callee CFG with its `.summary` edges removed, so the transfer functions
-never see an opaque call summary. Its concrete anchor is a *ghost-counter*
-semantics (`countingLangSem`): states are pairs `(σ, k)` of a store and the
-number of `invoke` steps taken so far, and correctness (`counting_correct`)
-says the abstraction `abs k` of the ghost counter is contained in the computed
-fact at every reachable node.
+Checks that a function body respects its declared contract.
 -/
 
 open Chartreux.Analysis Chartreux.Analysis.Generic
 
 namespace FDuke.Counting
 
--- # The `Cnt` lattice
+-- ## Powerset Lattice 
 
-/-- Abstract invocation counts: exactly zero, exactly one, or "many" (`ω`). -/
+/-- Abstract invocation counts -/
 abbrev CntElem := Fin 3
 
 @[simp]
@@ -75,7 +62,7 @@ theorem incr_mono : mono_f incr := by
 def cntTransfer (cfg : CFG) (n : NodeID) (s : Cnt) : Cnt :=
   if cfg.nodeKind n = some .Invoke then incr s else s
 
-/-- Edge transfer: the identity (the counting analysis is node-driven). -/
+/-- Edge transfer: the identity. -/
 def cntEdgeTransfer : Edge → Cnt → Cnt := fun _ s => s
 
 theorem cntTransfer_mono (cfg : CFG) (n : NodeID) :
@@ -91,8 +78,6 @@ instance instTransferMonoCnt (cfg : CFG) :
   node_mono := cntTransfer_mono cfg
   edge_mono _ _ _ h := h
 
-/-- The counting DFA over a callee CFG: at the entry nothing has been invoked
-    yet (`{0}`); each `Invoke` node bumps every possible count. -/
 @[reducible]
 def countingDFA (cfg : CFG) : DFA NodeID Edge where
   L := Cnt
@@ -100,30 +85,25 @@ def countingDFA (cfg : CFG) : DFA NodeID Edge where
   edgeTransfer := cntEdgeTransfer
   entry := fun i => i == 0
 
--- # The ghost-counter semantics
+-- ## The ghost-counter semantics
 
-/-- Ghost-counter states: a store paired with the number of `invoke` steps
-    taken so far. -/
+/-- Ghost-counter states: a store paired with the number of `invoke`s. -/
 abbrev CntState := State × Nat
 
-/-- One ghost step out of node `n`: the store takes a `KappaStep` (an ordinary
-    `IntraStep`, or the store-identity step of a `Call` node — the κ-graph's
-    only way through a call site), and the counter increments exactly when `n`
-    is an `Invoke` node. -/
+/-- Stepping: ordinary step through the semantics, + additional logging on
+    amount of invocations triggered. -/
 def CntStep (cfg : CFG) (n : NodeID) (c c' : CntState) : Prop :=
   KappaStep cfg n c.1 c'.1 ∧
   c'.2 = if cfg.nodeKind n = some .Invoke then c.2 + 1 else c.2
 
-/-- The ghost-counter `LangSem` over the κ-graph of a callee CFG. Every edge
-    of `cfg.kappa` is `.plain`, so `LStep` is always a `CntStep`; bookkeeping
-    is a stutter, which leaves both the store and the counter untouched. -/
+/-- LangSem over the previous step semantics. -/
 instance countingLangSem (cfg : WFCFG) :
     LangSem NodeID Edge CntState cfg.kappa.analysis where
   LStep e c c' := CntStep cfg.val e.val.src c c'
   LStutter _ c c' := c = c'
   IsInit c := c.1 = State.empty ∧ c.2 = 0
 
-/-- Correspondence: the abstraction of the ghost counter is a possible count. -/
+/-- Coherence: the current state of the counter is coherent with `s`. -/
 def cntCoh (s : Cnt) (c : CntState) : Prop := s (abs c.2) = true
 
 @[simp] theorem countingDFA_transferAlong (cfg : WFCFG)
@@ -131,8 +111,7 @@ def cntCoh (s : Cnt) (c : CntState) : Prop := s (abs c.2) = true
     (countingDFA cfg.val).transferAlong cfg.kappa.analysis e s =
       cntTransfer cfg.val e.val.src s := rfl
 
-/-- The counting `DFASemantics`: the DFA facts correctly track the ghost
-    counter along every ghost transition. -/
+/-- Proofs of preservation of coherence. -/
 def countingSemantics (cfg : WFCFG) :
     DFASemantics (ls := countingLangSem cfg)
       cfg.kappa.analysis (countingDFA cfg.val) where
@@ -156,7 +135,6 @@ def countingSemantics (cfg : WFCFG) :
     subst h
     exact hcorr
 
-/-- Absorption: growing the abstract fact preserves correspondence. -/
 theorem cnt_mono_absorb {s t : Cnt} {c : CntState}
     (h : s ⊑ t) (hcorr : cntCoh s c) : cntCoh t c := by
   unfold cntCoh at *
@@ -164,12 +142,25 @@ theorem cnt_mono_absorb {s t : Cnt} {c : CntState}
   rw [hpt, hcorr]
   simp
 
--- # Per-κ exit checks
+/-- Generic worklist solver interface. -/
+@[reducible]
+def analysis (cfg : WFCFG) :
+    Chartreux.Analysis (ls := countingLangSem cfg) NodeID Edge CntState :=
+  { dfa          := countingDFA cfg.val
+    botL         := (inferInstance : Bot Cnt)
+    maxL         := _
+    decEqL       := (inferInstance : DecidableEq Cnt)
+    fhL          := (inferInstance : FiniteHeight Cnt)
+    llL          := (inferInstance : SemiLattice Cnt)
+    semantics    := countingSemantics cfg
+    mono_absorb  := cnt_mono_absorb
+    edge_mono    := fun _ _ _ h => h }
 
-/-- The κ contract table on the counting fact `S` computed at the callee's
-    exit: `κ = 1` demands exactly one invocation (`S = {1}`), `κ = +` at least
-    one (`0 ∉ S`), `κ = ?` at most one (`ω ∉ S`), and `κ = ε` demands
-    nothing. -/
+def analyzeCFG (cfg : WFCFG) : Chartreux.AnalysisResult (analysis cfg) :=
+  Chartreux.analyze (analysis cfg)
+
+-- ## Validation 
+
 def CountVerdict : InvKind → Cnt → Prop
   | .none, _ => True
   | .once, S => S 0 = false /\ S ω = false /\ S 1 = true
@@ -179,12 +170,10 @@ def CountVerdict : InvKind → Cnt → Prop
 instance (κ : InvKind) (S : Cnt) : Decidable (CountVerdict κ S) := by
   cases κ <;> unfold CountVerdict <;> infer_instance
 
--- # Correctness
+-- ## Correctness
 
-/-- **Correctness of the counting analysis.** For any post-fixpoint `rd` of
-    the counting DFA on the κ-graph of `cfg`, every ghost-reachable
-    configuration `(σ, k)` at node `n` has its abstract count in `rd n`. A
-    direct application of the generic `reachable_corr`. -/
+/-- Every ghost-reachable configuration has coherent abstract count everywhere. 
+    By direct application of `reachable_corr`. -/
 theorem counting_correct (cfg : WFCFG)
     {rd : NodeID → Cnt}
     (hpf : PostFixpoint cfg.kappa.analysis (countingDFA cfg.val) rd)
