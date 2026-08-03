@@ -102,12 +102,7 @@ def addCallNodeWithLam (f : String) : Builder (NodeID × Nat) := do
 end Builder
 
 /-- funky CFG constructions due to κ. the summary edge is needed to guarantee
-    well-formedness and LSteps correctness.
-
-    ε ("no contract") gets the *most permissive* gadget — bypass `en → r` *and*
-    back-edge `exL → enL`, i.e. the union of the `+` and `?` shapes (`L*`):
-    with no contract every invocation count `k ≥ 0` is possible, so every such
-    path must exist on the κ-graph (cf. `UNSOUNDNESS.md`). -/
+    well-formedness and LSteps correctness. -/
 def kappaEdges (κ : InvKind) (en enL exL r : NodeID) : List Edge :=
   let summary : Edge := ⟨en, r, .summary⟩
   match κ with
@@ -208,8 +203,6 @@ theorem kappaEdges_summary_target_unique (κ : InvKind) (en enL exL r : NodeID)
   rw [kappaEdges_summary κ en enL exL r e₁ he₁ hk₁,
     kappaEdges_summary κ en enL exL r e₂ he₂ hk₂]
 
-/-- The invocation kind of a `call f { s }` site: `Φ.lookup f`'s kind, defaulting
-    to `ε` (`none`) when `f ∉ dom(Φ)`. -/
 def callKind (Φ : FunEnv) (f : String) : InvKind :=
   ((Φ.lookup f).map (·.1)).getD .none
 
@@ -801,21 +794,14 @@ theorem lowerStmt_root_call_gadget (Φ : FunEnv) (s : Stmt) (b : BState)
 
 -- # Builder equivariance: `lowerStmt` output shifts uniformly with the offsets
 
-/-- Shift both endpoints of an edge by `δ`. Used to relate a lowered fragment
-    to a copy of it emitted at a `nextID` offset `δ` higher. -/
+/-- Shift both endpoints of an edge by `δ`. -/
 def Edge.shift (δ : NodeID) (e : Edge) : Edge := ⟨e.src + δ, e.dst + δ, e.kind⟩
 
-/-- Shift the lambda id of a `Call` node by `δL`, leaving every other node
-    kind untouched. A `Call` node's `ℓ` is the only node payload that depends
-    on the builder's `nextLam`, so this is exactly how a node list changes when
-    the same statement is lowered at a higher `nextLam` offset. -/
+/-- Shift the lambda id of a `Call` node by `δL`. -/
 def NodeKind.shiftLam (δL : Nat) : NodeKind → NodeKind
   | .Call f ℓ => .Call f (ℓ + δL)
   | k => k
 
-/-- The inline copy of a call body's standalone lowering, as it occurs in a
-larger CFG.  Lambda identifiers agree because both lowerings start immediately
-after the call site's own identifier; only node identifiers are shifted. -/
 def CFG.HasInlineBodyFragment (Φ : FunEnv) (g : CFG) (site : CallGadget) : Prop :=
   (∀ e ∈ (site.body.generatedCFGFrom Φ (site.lamID + 1)).cfg.edges,
     e.shift site.enL ∈ g.edges) ∧
@@ -930,14 +916,7 @@ set_option maxHeartbeats 1600000 in
 /-- **Builder equivariance for `lowerStmt`.** Running
     `lowerStmt Φ s` from two builder states that differ only by a `nextID`
     offset `δ` and a `nextLam` offset `δL` produces the *same* CFG fragment up
-    to those two shifts: the returned entry/exit ids and the resulting
-    `nextID`/`nextLam` shift by `δ`/`δL`, the appended nodes agree after
-    `NodeKind.shiftLam δL` (only the lambda id of each nested `call` moves), and
-    the appended edges agree after `Edge.shift δ`. This is the structural fact
-    that lets the inlined copy of a lambda body inside a caller be identified
-    with the lambda's standalone CFG (built at a different offset), which any
-    proof of `Chartreux.FDuke.Refinement`'s projection obligation (`cek_projection`)
-    will need to transport lam-body CEK runs onto the caller's inline copy. -/
+    to those two shifts. -/
 theorem lowerStmt_equivariant (Φ : FunEnv) (s : Stmt) :
     ∀ (b₁ b₂ : BState) (δ δL : Nat),
     b₂.nextID = b₁.nextID + δ → b₂.nextLam = b₁.nextLam + δL →
@@ -1685,118 +1664,6 @@ theorem lowerStmt_callGadgets_collectLams (Φ : FunEnv) (s : Stmt) :
       Builder.addCallNodeWithLam, Builder.addCallGadget, id_bind, id_map, id_pure,
       *, List.append_assoc]
   all_goals grind
-  /-
-  intro b
-  induction s generalizing b with
-  | Skip | Decl | Assign | Invoke =>
-    change b.nextLam = b.nextLam ∧
-      b.callGadgets.map (fun site => (site.lamID, site.body)) =
-        b.callGadgets.map (fun site => (site.lamID, site.body)) ++ []
-    simp
-  | Seq s₁ s₂ ih₁ ih₂ =>
-    simp only [lowerStmt, StateT.run_bind, StateT.run_pure, collectLams]
-    change ((lowerStmt Φ s₂).run ((lowerStmt Φ s₁).run b).2).2.nextLam =
-        ((collectLams s₂).run ((collectLams s₁).run b.nextLam).2).2 ∧
-      ((lowerStmt Φ s₂).run ((lowerStmt Φ s₁).run b).2).2.callGadgets.map
-          (fun site => (site.lamID, site.body)) =
-        b.callGadgets.map (fun site => (site.lamID, site.body)) ++
-          ((collectLams s₁).run b.nextLam).1 ++
-          ((collectLams s₂).run ((collectLams s₁).run b.nextLam).2).1
-    rcases h₁ : StateT.run (lowerStmt Φ s₁) b with ⟨r₁, b₁⟩
-    rcases c₁ : StateT.run (collectLams s₁) b.nextLam with ⟨ls₁, n₁⟩
-    have H₁ := ih₁ b
-    rw [h₁, c₁] at H₁
-    simp only at H₁
-    rcases h₂ : StateT.run (lowerStmt Φ s₂) b₁ with ⟨r₂, b₂⟩
-    rcases c₂ : StateT.run (collectLams s₂) n₁ with ⟨ls₂, n₂⟩
-    have H₂ := ih₂ b₁
-    rw [H₁.1, h₂, c₂] at H₂
-    simp only at H₂
-    have result : b₂.nextLam = n₂ ∧
-        b₂.callGadgets.map (fun site => (site.lamID, site.body)) =
-          b.callGadgets.map (fun site => (site.lamID, site.body)) ++ ls₁ ++ ls₂ :=
-      ⟨H₂.1, by rw [H₂.2, H₁.2, List.append_assoc]⟩
-    rw [h₁, h₂, c₁, c₂]
-    exact result
-  | If c t f iht ihf =>
-    let b₀ : BState :=
-      { cfg := { nodes := b.cfg.nodes ++ [.Skip] ++ [.Assume c] ++ [.Assume (.Not c)],
-                 edges := b.cfg.edges, entry := b.cfg.entry, exit := b.cfg.exit },
-        nextID := b.nextID + 1 + 1 + 1, nextLam := b.nextLam,
-        callGadgets := b.callGadgets }
-    simp only [lowerStmt, StateT.run_bind, StateT.run_pure, addNode_run, addEdge_run,
-      collectLams]
-    change ((lowerStmt Φ f).run ((lowerStmt Φ t).run b₀).2).2.nextLam =
-        ((collectLams f).run ((collectLams t).run b.nextLam).2).2 ∧
-      ((lowerStmt Φ f).run ((lowerStmt Φ t).run b₀).2).2.callGadgets.map
-          (fun site => (site.lamID, site.body)) =
-        b.callGadgets.map (fun site => (site.lamID, site.body)) ++
-          ((collectLams t).run b.nextLam).1 ++
-          ((collectLams f).run ((collectLams t).run b.nextLam).2).1
-    rcases ht : StateT.run (lowerStmt Φ t) b₀ with ⟨rt, bt⟩
-    rcases ct : StateT.run (collectLams t) b.nextLam with ⟨lt, nt⟩
-    have Ht := iht b₀
-    rw [ht, ct] at Ht
-    simp only at Ht
-    rcases hf : StateT.run (lowerStmt Φ f) bt with ⟨rf, bf⟩
-    rcases cf : StateT.run (collectLams f) nt with ⟨lf, nf⟩
-    have Hf := ihf bt
-    rw [Ht.1, hf, cf] at Hf
-    simp only at Hf
-    have result : bf.nextLam = nf ∧
-        bf.callGadgets.map (fun site => (site.lamID, site.body)) =
-          b.callGadgets.map (fun site => (site.lamID, site.body)) ++ lt ++ lf :=
-      ⟨Hf.1, by rw [Hf.2, Ht.2, List.append_assoc]⟩
-    rw [ht, hf, ct, cf]
-    exact result
-  | While c body ih =>
-    let b₀ : BState :=
-      { cfg := { nodes := b.cfg.nodes ++ [.Skip] ++ [.Assume c] ++ [.Assume (.Not c)],
-                 edges := b.cfg.edges, entry := b.cfg.entry, exit := b.cfg.exit },
-        nextID := b.nextID + 1 + 1 + 1, nextLam := b.nextLam,
-        callGadgets := b.callGadgets }
-    change ((lowerStmt Φ body).run b₀).2.nextLam =
-        ((collectLams body).run b.nextLam).2 ∧
-      ((lowerStmt Φ body).run b₀).2.callGadgets.map (fun site => (site.lamID, site.body)) =
-        b.callGadgets.map (fun site => (site.lamID, site.body)) ++
-          ((collectLams body).run b.nextLam).1
-    rcases hb : StateT.run (lowerStmt Φ body) b₀ with ⟨rb, bb⟩
-    have Hb := ih b₀
-    rw [hb] at Hb
-    simp only at Hb
-    simpa [b₀] using Hb
-  | Call f body ih =>
-    let b₀ : BState :=
-      { cfg := { nodes := b.cfg.nodes ++ [.Call f b.nextLam], edges := b.cfg.edges,
-                 entry := b.cfg.entry, exit := b.cfg.exit },
-        nextID := b.nextID + 1, nextLam := b.nextLam + 1,
-        callGadgets := b.callGadgets }
-    change ((lowerStmt Φ body).run b₀).2.nextLam =
-        ((collectLams body).run (b.nextLam + 1)).2 ∧
-      (((lowerStmt Φ body).run b₀).2.callGadgets ++
-        [⟨b.nextID, f, b.nextLam, callKind Φ f,
-          ((lowerStmt Φ body).run b₀).1.1, ((lowerStmt Φ body).run b₀).1.2,
-          ((lowerStmt Φ body).run b₀).2.nextID, body⟩]).map
-          (fun site => (site.lamID, site.body)) =
-        b.callGadgets.map (fun site => (site.lamID, site.body)) ++
-          (b.nextLam, body) :: ((collectLams body).run (b.nextLam + 1)).1
-    rcases hb : StateT.run (lowerStmt Φ body) b₀ with ⟨rb, bb⟩
-    rcases cb : StateT.run (collectLams body) (b.nextLam + 1) with ⟨lb, nb⟩
-    have Hb := ih b₀
-    rw [hb, cb] at Hb
-    simp only at Hb
-    have result : bb.nextLam = nb ∧
-        (bb.callGadgets ++
-          [⟨b.nextID, f, b.nextLam, callKind Φ f, rb.1, rb.2, bb.nextID, body⟩]).map
-            (fun site => (site.lamID, site.body)) =
-          b.callGadgets.map (fun site => (site.lamID, site.body)) ++ (b.nextLam, body) :: lb := by
-      constructor
-      · exact Hb.1
-      · rw [List.map_append, List.map_cons, Hb.2]
-        simp [b₀, List.append_assoc]
-    rw [hb, cb]
-    exact result
-  -/
 
 /-- Every construction-time call-gadget certificate in a generated CFG is the
 lambda occurrence allocated by the matching collector run. -/
@@ -1910,11 +1777,9 @@ def Program.generatedFamily (p : Program) : GeneratedCFGFamily :=
     lamCFGs := (mainLams ++ funLams).map (fun (ℓ, body) =>
       (ℓ, (body ;; Stmt.Skip).certifiedGeneratedCFGFrom p.phi (ℓ + 1))) }
 
-/-
-Every function component accumulated by `generatedFamilyStep` is the
+/-- Every function component accumulated by `generatedFamilyStep` is the
 canonical certified lowering of its recorded source, environment, and lambda
-counter.
--/
+counter. -/
 private theorem generatedFamilyFold_components_canonical (p : Program) :
     ∀ (xs : FunEnv)
       (acc : List (String × InvKind × CertifiedGeneratedCFG) × List (Nat × Stmt) × Nat),
@@ -2017,9 +1882,7 @@ private theorem generatedFamilyFold_new_lam_ids (p : Program) :
       ((xs.foldl (generatedFamilyStep p) ([], [], start)).2.1).map Prod.fst =
         List.range' start ((xs.foldl (generatedFamilyStep p) ([], [], start)).2.1).length := by
   intro xs start
-  apply generatedFamilyFold_lam_ids p xs ([], [], start) start
-  · rfl
-  · rfl
+  apply generatedFamilyFold_lam_ids p xs ([], [], start) start <;> rfl
 
 private theorem generatedFamilyFold_gadget_mem (p : Program) :
     ∀ (xs : FunEnv)
@@ -2064,9 +1927,7 @@ private theorem generatedFamilyFold_lam_nested_mem (p : Program) :
           (ℓ', body') ∈ (xs.foldl (generatedFamilyStep p) acc).2.1 := by
   intro xs
   induction xs with
-  | nil =>
-    intro acc hacc ℓ body houter ℓ' body' hinner
-    exact hacc ℓ body houter ℓ' body' hinner
+  | nil => grind
   | cons hd tl ih =>
     intro acc hacc ℓ body houter ℓ' body' hinner
     simp only [List.foldl] at houter ⊢
@@ -2099,10 +1960,8 @@ def cfgAt? (fam : GeneratedCFGFamily) : CFGRef → Option CertifiedGeneratedCFG
 @[simp] theorem cfgAt_main (fam : GeneratedCFGFamily) :
     fam.cfgAt? .main = some fam.mainCFG := rfl
 
-/-
-A component resolved from a generated program family is exactly the
-canonical certified lowering recorded by its `source` and `startLam` fields.
--/
+/-- A component resolved from a generated program family is exactly the
+canonical certified lowering recorded by its `source` and `startLam` fields. -/
 theorem Program.generatedFamily_component_canonical (p : Program) {ref : CFGRef}
     {component : CertifiedGeneratedCFG}
     (hresolve : p.generatedFamily.cfgAt? ref = some component) :
@@ -2584,9 +2443,7 @@ def CFG.toDot (g : CFG) (name : String := "cfg") : String :=
   "digraph \"" ++ dotEscape name ++ "\" {\n  node [shape=box];\n" ++
     g.toDotStmts "n" "  " ++ "\n}\n"
 
-/-- Render an entire family of CFGs as one Graphviz `digraph`, placing each
-    function CFG `G_f` and the top-level CFG in its own `subgraph cluster_*`.
-    Node names are prefixed per cluster so per-CFG node IDs don't collide. -/
+/-- Render an entire family of CFGs as one Graphviz `digraph`. -/
 def CFGFamily.toDot (fam : CFGFamily) (name : String := "family") : String :=
   let lamClusters := fam.lamCFGs.mapIdx (fun i entry =>
     let (f, g) := entry
@@ -2603,6 +2460,25 @@ def CFGFamily.toDot (fam : CFGFamily) (name : String := "family") : String :=
       fam.mainCFG.val.toDotStmts "main_" "    " ++ "\n  }"
   "digraph \"" ++ dotEscape name ++ "\" {\n  node [shape=box];\n" ++
     String.intercalate "\n" (funClusters ++ lamClusters ++ [mainCluster]) ++ "\n}\n"
+
+/-- Render a single CFG as one Graphviz `digraph`, augmented with analysis information. -/
+def CFG.toDotWithFn (g : CFG) (inF outF : NodeID -> String)
+  (name : String := "cfg") : String :=
+    let nodeLines := g.nodes.mapIdx (fun i k =>
+      let shape :=
+        if i = g.entry && i = g.exit then ", shape=box, style=\"rounded,bold\""
+        else if i = g.entry then ", shape=box, style=bold"
+        else if i = g.exit then ", shape=doublecircle"
+        else ""
+      let label := s!"IN: {inF i}\n{i}: {k.label}\nOUT: {outF i}"
+      s!"  n{i} [label=\"{dotEscape label}\"{shape}];")
+    let edgeLines := g.edges.map (fun e =>
+      let style := match e.kind with
+      | .plain => ""
+      | .summary => " [style=dashed]"
+      s!"  n{e.src} -> n{e.dst}{style};")
+    "digraph \"" ++ dotEscape name ++ "\" {\n  node [shape=box];\n" ++
+      String.intercalate "\n" (nodeLines ++ edgeLines) ++ "\n}\n"
 
 @[reducible]
 def DukeAnalysisCFG (g : CFG) (hg : g.WellFormed) :
