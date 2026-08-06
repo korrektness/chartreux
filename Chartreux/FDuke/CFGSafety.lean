@@ -145,4 +145,55 @@ theorem fduke_cfg_safety (cfg : WFCFG) {n : NodeID} {σ : State}
       obtain ⟨σ', hstep⟩ := hsafe
       exact .inl ⟨n', σ', hedge, hstep⟩
 
+/-- Wellformedness around call nodes. -/
+def CallReady (fam : CFGFamily) (cfg : WFCFG) (self : CFGRef) (n : NodeID) : Prop :=
+  ∀ f ℓ, cfg.val.nodeKind n = some (.Call f ℓ) →
+    ∃ F L nr, fam.cfgAt? (.fn f) = some F ∧ fam.cfgAt? (.lam ℓ) = some L ∧
+      nr ∈ fam.succSummary (self, n)
+
+/-- Safety lifted from the κ abstraction to one actual CEK instruction. -/
+theorem fduke_cek_safety (fam : CFGFamily) (cfg : WFCFG) {self : CFGRef}
+    {n : NodeID} {σ : State} {ρ : Option Clo} {K : Kont}
+    (hcfg : fam.cfgAt? self = some cfg)
+    (hreach : Chartreux.Analysis.Generic.Reachable cfg.analysis n σ State.isInit)
+    (hcn : Nullability.checkCFG cfg)
+    (hci : Initialization.checkCFG cfg)
+    (hcall : CallReady fam cfg self n)
+    (hinvoke : cfg.val.nodeKind n = some .Invoke →
+      ∃ nr enL exL ρd σd L, ρ = some (.mk enL exL ρd σd) ∧
+        fam.cfgAt? enL.1 = some L ∧ nr ∈ fam.succ (self, n)) :
+    n = cfg.val.exit ∨
+      (∃ c, cfg.val.nodeKind n = some (.Assume c) ∧ EvalExpr σ c (.Int 0)) ∨
+      ∃ c', Step fam ⟨(self, n), σ, ρ, K⟩ c' := by
+  rcases fduke_cfg_safety cfg hreach hcn hci with hexit | hprogress
+  · exact .inl hexit
+  rcases hprogress with ⟨n', σ', hedge, hstep⟩ | hfalse
+  · right; right
+    have hsucc : (self, n') ∈ fam.succ (self, n) := by
+      simp only [CFGFamily.succ, hcfg]
+      have hmem : (⟨n, n', .plain⟩ : Edge) ∈
+          cfg.val.edges.filter (fun e => e.src = n) :=
+        List.mem_filter.mpr ⟨hedge, by simp⟩
+      exact List.mem_map_of_mem hmem
+    rcases hstep with hintra | ⟨⟨f, ℓ, hkind⟩, hσ⟩
+    · rcases hintra with ⟨x, e, v, hkind, heval, hσ⟩ |
+        ⟨c, m, hkind, heval, hne, hσ⟩ | ⟨hkind, hσ⟩ | ⟨hkind, hσ⟩
+      · refine ⟨⟨(self, n'), σ.updated x v, ρ, K⟩, .assign ?_ heval ?_⟩
+        · simpa [CFGFamily.kind, hcfg] using hkind
+        · exact hsucc
+      · refine ⟨⟨(self, n'), σ, ρ, K⟩, .assume ?_ heval hne ?_⟩
+        · simpa [CFGFamily.kind, hcfg] using hkind
+        · exact hsucc
+      · refine ⟨⟨(self, n'), σ, ρ, K⟩, .skip ?_ ?_⟩
+        · simpa [CFGFamily.kind, hcfg] using hkind
+        · exact hsucc
+      · obtain ⟨nr, enL, exL, ρd, σd, L, hρ, hL, hnr⟩ := hinvoke hkind
+        exact ⟨⟨enL, σd, ρd, .inv nr ρ σ :: K⟩,
+          .invoke (by simpa [CFGFamily.kind, hcfg] using hkind) hρ hL hnr⟩
+    · obtain ⟨F, L, nr, hF, hL, hnr⟩ := hcall f ℓ hkind
+      refine ⟨⟨(.fn f, F.val.entry), State.empty,
+        some (.mk (.lam ℓ, L.val.entry) (.lam ℓ, L.val.exit) ρ σ), .call nr ρ :: K⟩, ?_⟩
+      exact .call (by simpa [CFGFamily.kind, hcfg] using hkind) hF hL hnr
+  · right; left; exact hfalse
+
 end FDuke.CFGSafety
