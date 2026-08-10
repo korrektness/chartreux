@@ -9,7 +9,9 @@ abbrev NodeID := Nat
 
 inductive NodeKind where
 | Assume (e : Expr)
+| Declare (x : String) (e : Option Expr)
 | Assign (x : String) (e : Expr)
+| BlockEnter | BlockExit
 | Skip
 deriving DecidableEq, Repr
 
@@ -51,7 +53,10 @@ def lowerStmt : Stmt -> Builder (NodeID × NodeID)
 | .Skip => do
     let n <- addNode (.Skip)
     pure (n, n)
-| .Decl x e | .Assign x e => do
+| .Decl x e => do
+    let n <- addNode (.Declare x e)
+    pure (n, n)
+| .Assign x e => do
     let n <- addNode (.Assign x e)
     pure (n, n)
 | .Seq s₁ s₂ => do
@@ -63,21 +68,31 @@ def lowerStmt : Stmt -> Builder (NodeID × NodeID)
     let en <- addNode (.Skip) -- could probably be something in relation to c
     let atru <- addNode (.Assume c)
     let afls <- addNode (.Assume (.Not c))
+    let entru <- addNode (.BlockEnter)
+    let enfls <- addNode (.BlockEnter)
+    let extru <- addNode (.BlockExit)
+    let exfls <- addNode (.BlockExit)
     let (ent, ext) <- lowerStmt t
     let (enf, exf) <- lowerStmt f
     let ex <- addNode (.Skip)
     addEdge en atru; addEdge en afls
-    addEdge atru ent; addEdge afls enf
-    addEdge ext ex; addEdge exf ex
+    addEdge atru entru; addEdge afls enfls
+    addEdge entru ent; addEdge enfls enf
+    addEdge ext extru; addEdge exf exfls
+    addEdge extru ex; addEdge exfls ex
     pure (en, ex)
 | .While c b => do
     let en <- addNode (.Skip) -- could probably be something in relation to c
     let atru <- addNode (.Assume c)
     let afls <- addNode (.Assume (.Not c))
+    let entru <- addNode (.BlockEnter)
+    let extru <- addNode (.BlockExit)
     let (enb, exb) <- lowerStmt b
     addEdge en atru; addEdge en afls
-    addEdge atru enb
-    addEdge exb en
+    addEdge atru entru
+    addEdge entru enb
+    addEdge exb extru
+    addEdge extru en
     pure (en, afls)
 
 def Stmt.cfg (s : Stmt) : CFG :=
@@ -284,8 +299,12 @@ inductive Step (g : CFG) : Config -> Config -> Prop where
     g.nodeKind n = some .Skip ->
     ⟨n, n'⟩ ∈ g.edges ->
     Step g ⟨n, σ⟩ ⟨n', σ⟩
+| declare {n n' x σ} :
+    g.nodeKind n = some (.Declare x none) ->
+    ⟨n, n'⟩ ∈ g.edges ->
+    Step g ⟨n, σ⟩ ⟨n', σ.declare x⟩
 | assign {n n' x e v σ} :
-    g.nodeKind n = some (.Assign x e) ->
+    g.nodeKind n = some (.Declare x (some e)) ∨ g.nodeKind n = some (.Assign x e) ->
     EvalExpr σ e v ->
     ⟨n, n'⟩ ∈ g.edges ->
     Step g ⟨n, σ⟩ ⟨n', σ.updated x v⟩
@@ -295,6 +314,14 @@ inductive Step (g : CFG) : Config -> Config -> Prop where
     m != 0 ->
     ⟨n, n'⟩ ∈ g.edges ->
     Step g ⟨n, σ⟩ ⟨n', σ⟩
+| blockEnter {n n' σ} :
+    g.nodeKind n = some .BlockEnter ->
+    ⟨n, n'⟩ ∈ g.edges ->
+    Step g ⟨n, σ⟩ ⟨n', σ.push⟩
+| blockExit {n n' σ} :
+    g.nodeKind n = some .BlockExit ->
+    ⟨n, n'⟩ ∈ g.edges ->
+    Step g ⟨n, σ⟩ ⟨n', σ.pop⟩
 
 open Chartreux.Analysis.Generic in
 instance dukeLangSem (cfg : WFCFG) : LangSem NodeID Edge State cfg.analysis where

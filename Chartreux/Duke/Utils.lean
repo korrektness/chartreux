@@ -38,9 +38,13 @@ partial def exprStr : Expr -> String
 | .BinOp o e₁ e₂   => s!"({exprStr e₁} {binOpStr o} {exprStr e₂})"
 
 def nodeLabel : NodeKind -> String
-| .Skip       => "skip"
-| .Assign x e => s!"{x} := {exprStr e}"
-| .Assume e   => s!"assume {exprStr e}"
+| .Skip               => "skip"
+| .Declare x none     => s!"let {x}"
+| .Declare x (some e) => s!"let {x} := {exprStr e}"
+| .Assign x e         => s!"{x} := {exprStr e}"
+| .Assume e           => s!"assume {exprStr e}"
+| .BlockEnter         => s!"BlockEnter"
+| .BlockExit          => s!"BlockExit"
 
 -- escape characters that are special inside a Graphviz quoted label.
 def escape (s : String) : String :=
@@ -95,7 +99,7 @@ def CFG.toDotWithFn {A : Type} [ToString A]
 def Stmt.toDot (s : Stmt) := Dot.toDotCore s.cfg (fun _ => none)
 
 -- sanity checks
-#eval IO.println (Stmt.Seq (Stmt.Decl "x" (.Null)) (Stmt.Assign "x" (.Int 0))).toDot
+#eval IO.println (Stmt.Seq (Stmt.Decl "x" (some .Null)) (Stmt.Assign "x" (.Int 0))).toDot
 
 #eval IO.println
   (Stmt.If (.BinOp .lt (.Var "x") (.Int 0))
