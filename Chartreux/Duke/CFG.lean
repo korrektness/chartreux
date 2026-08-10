@@ -299,15 +299,24 @@ inductive Step (g : CFG) : Config -> Config -> Prop where
     g.nodeKind n = some .Skip ->
     ⟨n, n'⟩ ∈ g.edges ->
     Step g ⟨n, σ⟩ ⟨n', σ⟩
-| declare {n n' x σ} :
+| declare {n n' x σ σ'} :
     g.nodeKind n = some (.Declare x none) ->
     ⟨n, n'⟩ ∈ g.edges ->
-    Step g ⟨n, σ⟩ ⟨n', σ.declare x⟩
-| assign {n n' x e v σ} :
-    g.nodeKind n = some (.Declare x (some e)) ∨ g.nodeKind n = some (.Assign x e) ->
+    σ.declared x = some σ' ->
+    Step g ⟨n, σ⟩ ⟨n', σ'⟩
+| declareVal {n n' x e v σ σ' σ''} :
+    g.nodeKind n = some (.Declare x (some e)) ->
     EvalExpr σ e v ->
     ⟨n, n'⟩ ∈ g.edges ->
-    Step g ⟨n, σ⟩ ⟨n', σ.updated x v⟩
+    σ.declared x = some σ' ->
+    σ'.updated x v = some σ'' ->
+    Step g ⟨n, σ⟩ ⟨n', σ''⟩
+| assign {n n' x e v σ σ'} :
+    g.nodeKind n = some (.Assign x e) ->
+    EvalExpr σ e v ->
+    ⟨n, n'⟩ ∈ g.edges ->
+    σ.updated x v = some σ' ->
+    Step g ⟨n, σ⟩ ⟨n', σ'⟩
 | assum {n n' m c σ} :
     g.nodeKind n = some (NodeKind.Assume c) ->
     EvalExpr σ c (.Int m) ->
