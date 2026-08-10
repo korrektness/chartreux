@@ -20,7 +20,7 @@ deriving DecidableEq, Repr
 
 inductive Stmt where
 | Skip
-| Decl (x : String) (e : Expr)
+| Decl (x : String) (e : Option Expr)
 | Assign (x : String) (e : Expr)
 | If (c : Expr) (t e : Stmt)
 | While (c : Expr) (b : Stmt)
@@ -48,7 +48,8 @@ prefix:65 "¿ "    => Expr.IsNull
 def skip := Stmt.Skip
 
 infixr:10 " ;; " => Stmt.Seq
-notation:max "@let " x " := " e:11 => Stmt.Decl x e
+notation:max "@let " x => Stmt.Decl x none
+notation:max "@let " x " := " e:11 => Stmt.Decl x (some e)
 notation:max x " ::= " e:11 => Stmt.Assign x e
 notation:max "@if " c:11 " @then " t:0 " @else " e:0 => Stmt.If c t e
 notation:max "@while " c:11 " @do " b:0 => Stmt.While c b
