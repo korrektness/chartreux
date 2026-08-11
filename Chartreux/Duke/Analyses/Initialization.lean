@@ -43,11 +43,13 @@ def evalExpr (locs : List Loc) (ℓ : Fact locs) : Expr → Bool
 def nodeTransfer (locs : List Loc) (g : CFG) (n : NodeID) :
     Fact locs -> Fact locs := fun ℓ =>
   match g.nodeKind n with
-  | some (.Assign x _) =>
+  | some (.Declare x (some _)) | some (.Assign x _) =>
     match locs.finIdxOf? x with
     | none   => ℓ
     | some i => fun j => if j = i then false else ℓ j
-  | some (.Assume _) | some .Skip | none => ℓ
+  | some (.Assume _) | some .Skip
+  | some (.Declare _ none)
+  | some .BlockEnter | some .BlockExit | none => ℓ
 
 def edgeTransfer (vars : List String) : Edge -> Fact vars -> Fact vars :=
   fun _ a => a
@@ -73,7 +75,17 @@ private lemma nodeTransfer_mono (n : NodeID) :
   cases nk with
   | none => grind [Domain.ord_distr hxy]
   | some k =>
-    cases k with (simp only; try grind [Domain.ord_distr hxy])
+    cases k with (try simp only; try grind [Domain.ord_distr hxy])
+    | Declare x e =>
+      cases e <;> simp only
+      · try grind [Domain.ord_distr hxy]
+      · generalize hx : locs.finIdxOf? x = a
+        cases a <;> simp only <;> try split
+        · apply Domain.ord_distr
+          assumption
+        · simp [max]
+        · apply Domain.ord_distr
+          assumption
     | Assign x e =>
       generalize hx : locs.finIdxOf? x = a
       cases a <;> simp only <;> try split
@@ -92,7 +104,7 @@ private lemma edgeTransfer_mono :
 def coh (ℓ : Fact locs) (σ : State) : Prop :=
   ∀ i,
     ℓ i = false ->
-    (σ (locs.get i)).isSome
+    (σ.get (locs.get i)).isSome
 
 /-- The DFA closure for initialization, parameterised by the underlying CFG.
     The CFG is needed to read `nodeKind`. -/
@@ -104,11 +116,23 @@ def nDFA (locs : List Loc) : DFA NodeID Edge where
   entry        := entryInit locs
 
 
-private lemma preserve_update_none (ℓ : Fact locs)
-    (hnone : locs.finIdxOf? x = none) (hcoh : coh ℓ σ) :
-    coh ℓ (σ.updated x v) := by
-  simp only [coh, State.updated] at *
-  grind [List.finIdxOf?_eq_none_iff]
+private lemma preserve_declare_none {ℓ : Fact locs}
+    (hnone : locs.finIdxOf? x = none) (hcoh : coh ℓ σ) (hdecl : σ.declared x = some σ') :
+    coh ℓ σ' := by
+  intros i hi
+  rw [←hcoh i hi]
+  congr 1
+  refine State.declared_neq ?_ hdecl
+  grind
+
+private lemma preserve_update_none {ℓ : Fact locs}
+    (hnone : locs.finIdxOf? x = none) (hcoh : coh ℓ σ) (hupd : σ.updated x v = some σ') :
+    coh ℓ σ' := by
+  intros i hi
+  rw [←hcoh i hi]
+  congr 1
+  refine State.updated_neq ?_ hupd
+  grind
 
 @[simp] private lemma DFA_transferAlong (cfg : WFCFG)
     (e : EdgeOf cfg.analysis) (ℓ : Fact locs) :
@@ -123,12 +147,47 @@ def semantics (hnd : locs.Nodup) :
     preserve_entry := by
       intro σ hinit
       cases hinit
-      simp [coh, State.empty, entryInit]
+      simp [coh, entryInit]
     preserve_step := by
       intro e σ σ' ℓ hstep hcoh
       simp only [DFA_transferAlong, nodeTransfer]
       cases hstep with simp only [*]
-      | @assign _ _ x expr v _ _ heval =>
+      | declare =>
+        unfold coh State.declared Env.declared Env.set at *
+        intros
+        expose_names
+        specialize hcoh i h_3
+        -- TODO: variables to Fin n needs to use unique indices for shadowed variables
+        have : x ≠ locs.get i := by sorry
+        grind [State.get, Env.get]
+        -- rcases σ with ⟨⟨⟩ | ⟨h, t⟩, top⟩
+        --   <;> simp [*, State.get, Env.get] at *
+        --   <;> grind
+      | blockEnter =>
+        unfold coh at *
+        grind [State.push_get]
+      | blockExit =>
+        unfold coh at *
+        -- TODO: variables to Fin n needs to use unique indices for shadowed variables
+        sorry
+      | @declareVal _ _ x expr v _ σ'' _ _ heval _ hdecl hupd =>
+        split
+        · have : coh ℓ σ'' := preserve_declare_none (by assumption) hcoh hdecl
+          apply preserve_update_none <;> assumption
+        · rename_i i hi
+          intro j habs
+          simp only at habs
+          split_ifs at habs
+          · subst j
+            have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
+            rw [Fin.getElem_fin] at hget
+            rw [List.get_eq_getElem, hget, State.updated_eq hupd]
+            rfl
+          · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
+            rw [State.updated_neq] <;> try trivial
+            rw [State.declared_neq] <;> try trivial
+            apply hcoh; assumption
+      | @assign _ _ x expr v _ _ heval _ _ hupd =>
         split
         · apply preserve_update_none <;> trivial
         · rename_i i hi
@@ -138,7 +197,7 @@ def semantics (hnd : locs.Nodup) :
           · subst j
             have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
             rw [Fin.getElem_fin] at hget
-            rw [List.get_eq_getElem, hget, State.updated_eq σ x v]
+            rw [List.get_eq_getElem, hget, State.updated_eq hupd]
             rfl
           · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
             rw [State.updated_neq] <;> try trivial
@@ -209,8 +268,8 @@ def checkExpr {locs : List Loc} (ℓ : Fact locs) (e : Expr) : Bool :=
   evalExpr locs ℓ e == false
 
 def checkNode {locs : List Loc} (ℓ : Fact locs) : NodeKind → Bool
-  | .Skip => true
-  | .Assign _ e => checkExpr ℓ e
+  | .Skip | .BlockEnter | .BlockExit | .Declare _ none => true
+  | .Declare _ (some e) | .Assign _ e => checkExpr ℓ e
   | .Assume e => checkExpr ℓ e
 
 def checkCFG (cfg : WFCFG) : Bool :=
