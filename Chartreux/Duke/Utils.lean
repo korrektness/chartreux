@@ -1,4 +1,6 @@
 import Chartreux.Duke.CFG
+import Chartreux.Duke.Defs
+import Chartreux.Duke.Resolve
 
 namespace List
 
@@ -18,6 +20,8 @@ theorem finIdxOf?_nodup (hnd : l.Nodup)
 end List
 
 
+variable (mapping : Mapping)
+
 -- # DotPrinter (sanity check)
 namespace Dot
 
@@ -29,18 +33,22 @@ def binOpStr : BinOp -> String
 | .eq  => "=="
 | .and => "&&"
 
-partial def exprStr : Expr -> String
+partial def exprStr : NExpr -> String
 | .Null            => "null"
 | .Int n           => toString n
-| .Var x           => x
+| .Var x           => mapping.get x
 | .IsNull e        => s!"isnull({exprStr e})"
 | .Not e           => s!"!({exprStr e})"
 | .BinOp o e₁ e₂   => s!"({exprStr e₁} {binOpStr o} {exprStr e₂})"
 
 def nodeLabel : NodeKind -> String
-| .Skip       => "skip"
-| .Assign x e => s!"{x} := {exprStr e}"
-| .Assume e   => s!"assume {exprStr e}"
+| .Skip               => "skip"
+| .Declare x none     => s!"let {mapping.get x}"
+| .Declare x (some e) => s!"let {mapping.get x} := {exprStr mapping e}"
+| .Assign x e         => s!"{mapping.get x} := {exprStr mapping e}"
+| .Assume e           => s!"assume {exprStr mapping e}"
+| .BlockEnter         => s!"BlockEnter"
+| .BlockExit          => s!"BlockExit"
 
 -- escape characters that are special inside a Graphviz quoted label.
 def escape (s : String) : String :=
@@ -59,7 +67,7 @@ def shape : NodeKind -> String
 abbrev Annotator := NodeID -> Option (String × String)
 
 def nodeText (annot : Annotator) (i : NodeID) (k : NodeKind) : String :=
-  let body := s!"{i}: {nodeLabel k}"
+  let body := s!"{i}: {nodeLabel mapping k}"
   match annot i with
   | some (inS, outS) => s!"IN: {inS}\n{body}\nOUT: {outS}\n"
   | none             => body
@@ -68,13 +76,13 @@ def nodeText (annot : Annotator) (i : NodeID) (k : NodeKind) : String :=
 def toDotCore (g : CFG) (annot : Annotator) : String :=
   let nodeLines :=
     g.nodes.zipIdx.map (fun (k, i) =>
-      s!"  n{i} [label=\"{escape (nodeText annot i k)}\", shape={shape k}];")
+      s!"  n{i} [label=\"{escape (nodeText mapping annot i k)}\", shape={shape k}];")
   let edgeLines :=
     g.edges.map (fun e => s!"  n{e.src} -> n{e.dst};")
   let body := String.intercalate "\n" (nodeLines ++ edgeLines)
   s!"digraph CFG \{\n{body}\n}"
 
-def toDot (g : CFG) : String := toDotCore g (fun _ => none)
+def toDot (g : CFG) : String := toDotCore mapping g (fun _ => none)
 
 def annotatorOfStates {A : Type} [ToString A]
     (ag : AnalysisCFG NodeID Edge) (inSt outSt : StateN ag A) : Dot.Annotator :=
@@ -89,24 +97,41 @@ end Dot
 /-- annotated printing -/
 def CFG.toDotWithFn {A : Type} [ToString A]
     (g : CFG) (inF outF : NodeID -> A) : String :=
-  Dot.toDotCore g (fun n => some (toString (inF n), toString (outF n)))
+  Dot.toDotCore mapping g (fun n => some (toString (inF n), toString (outF n)))
 
 /-- unannotated printing -/
-def Stmt.toDot (s : Stmt) := Dot.toDotCore s.cfg (fun _ => none)
+def Stmt.toDot (s : Stmt) :=
+  match resolve s with
+  | some (s', mapping) => Dot.toDotCore mapping s'.cfg (fun _ => none)
+  | none => "???"
+
+open Duke.Syntax
 
 -- sanity checks
-#eval IO.println (Stmt.Seq (Stmt.Decl "x" (.Null)) (Stmt.Assign "x" (.Int 0))).toDot
+#eval IO.println (
+    @let "x" := null ;;
+    "x" ::= 0
+  ).toDot
 
-#eval IO.println
-  (Stmt.If (.BinOp .lt (.Var "x") (.Int 0))
-    (Stmt.Assign "x" (.Int 1))
-    (Stmt.Assign "x" (.Int 2))).toDot
+#eval IO.println (
+    @let "x" ;;
+    @if "x" @< 0 @then
+      "x" ::= 1
+    @else
+      "x" ::= 2
+  ).toDot
 
-#eval IO.println
-  (Stmt.If (.BinOp .and (.Var "x") (.Var "y"))
-    (Stmt.Assign "x" (.Null))
-    (Stmt.Assign "x" (.Int 1))).toDot
+#eval IO.println (
+    @let "x" := 2 ;;
+    @let "y" := 2 ;;
+    @if "x" @&& "y" @then
+      "x" ::= null
+    @else
+      "x" ::= 1
+  ).toDot
 
-#eval IO.println
-  (Stmt.While (.BinOp .lt (.Var "i") (.Int 10))
-    (Stmt.Assign "i" (.BinOp .add (.Var "i") (.Int 1)))).toDot
+#eval IO.println (
+    @let "i" := 1 ;;
+    @while "i" @< 10 @do
+      "i" ::= "i" + 1
+  ).toDot
