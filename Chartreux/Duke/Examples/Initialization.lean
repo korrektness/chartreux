@@ -2,13 +2,14 @@ import Chartreux.Duke.Defs
 import Chartreux.Duke.Eval
 import Chartreux.Duke.CFG
 import Chartreux.Duke.Utils
+import Chartreux.Duke.Resolve
 import Chartreux.Duke.Analyses.Initialization
 import Chartreux.Analysis.WorklistProofs
 
 open Chartreux.Analysis Duke.Analysis.Initialization Chartreux.Analysis.Generic
 open Duke.Syntax
 
-def prog : Stmt :=
+def prog : SStmt :=
   @let "x" := 0 ;;
   @let "p" := null ;;
   @let "q" := null ;;
@@ -23,16 +24,22 @@ def prog : Stmt :=
   ) ;;
   skip
 
+def resolved :=
+  match h : resolve prog with
+  | some res => res
+  | none => by contradiction
 
-def cfg := prog.wfcfg
+def nprog := resolved.fst
+def mapping := resolved.snd
+
+def cfg := nprog.wfcfg
+def vars := totalVars cfg
 
 #eval checkCFG cfg
 
-def sv : { l : List String // l.Nodup } := vars cfg
+def result : Chartreux.AnalysisResult (@analysis vars cfg) :=
+  @analyzeCFG vars cfg
 
-def result : Chartreux.AnalysisResult (analysis sv.property cfg) :=
-  analyzeCFG sv.property cfg
-
-#eval IO.println (cfg.val.toDotWithFn (A := String)
-  (fun n => formatFact sv.val (result.inFacts n))
-  (fun n => formatFact sv.val (result.outFacts n)))
+#eval IO.println (cfg.val.toDotWithFn mapping
+  (fun n => formatFact mapping vars (result.inFacts n))
+  (fun n => formatFact mapping vars (result.outFacts n)))

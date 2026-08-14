@@ -8,8 +8,6 @@ import Mathlib.Tactic.Common
 
 namespace Duke.Analysis.Initialization
 
-abbrev Loc := String
-
 open Chartreux.Analysis
 open Chartreux.Analysis.Generic
 
@@ -18,49 +16,50 @@ open Chartreux.Analysis.Generic
 /-- For each location, is it uninitialized?
     (false - initialized, true - uninitialized)
 -/
-abbrev Fact (locs : List Loc) : Type := Domain locs.length Bool
+abbrev Fact (locs : Nat) : Type := Domain locs Bool
 
-def formatFact (locs : List Loc) (ℓ : Fact locs) : String :=
+def formatFact (mapping : Mapping) (locs : Nat) (ℓ : Fact locs) : String :=
   let parts : List String :=
-    (List.finRange locs.length).filterMap fun i =>
+    (List.finRange locs).filterMap fun i =>
       let isUninitialized := ℓ i
-      if isUninitialized then some (locs.get i) else none
+      if isUninitialized then some (mapping.get i) else none
   "uninit[" ++ String.intercalate ", " parts ++ "]"
 
 /-! ## CFG transition functions -/
 
-def evalExpr (locs : List Loc) (ℓ : Fact locs) : Expr → Bool
+def evalExpr (locs : Nat) (ℓ : Fact locs) : NExpr → Bool
   | .Null => false
   | .Int _ => false
   | .Var x =>
-      match locs.finIdxOf? x with
-      | none   => true
-      | some i => ℓ i
+      if h : x < locs then
+        ℓ (Fin.mk x h)
+      else
+        true
   | .IsNull e => evalExpr locs ℓ e
   | .Not e => evalExpr locs ℓ e
   | .BinOp _ e₁ e₂ => evalExpr locs ℓ e₁ ⊔ evalExpr locs ℓ e₂
 
-def nodeTransfer (locs : List Loc) (g : CFG) (n : NodeID) :
+def nodeTransfer (locs : Nat) (g : CFG) (n : NodeID) :
     Fact locs -> Fact locs := fun ℓ =>
   match g.nodeKind n with
-  | some (.Assign x _) =>
-    match locs.finIdxOf? x with
-    | none   => ℓ
-    | some i => fun j => if j = i then false else ℓ j
-  | some (.Assume _) | some .Skip | none => ℓ
+  | some (.Declare x (some _)) | some (.Assign x _) =>
+    fun y => if y = x then false else ℓ y
+  | some (.Declare x none) =>
+    fun y => if y = x then true else ℓ y
+  | some (.Assume _) | some .Skip | some .BlockEnter | some .BlockExit | none => ℓ
 
-def edgeTransfer (vars : List String) : Edge -> Fact vars -> Fact vars :=
+def edgeTransfer (locs : Nat) : Edge -> Fact locs -> Fact locs :=
   fun _ a => a
 
 /-- The default initial fact: every tracked variable is uninitialized. -/
-def entryInit (locs : List Loc) : Fact locs := fun _ => true
+def entryInit (locs : Nat) : Fact locs := fun _ => true
 
 /-! ### Transfer function monotonicity
     Technically not needed. But it being true implies that the result is the least post-fixpoint
 -/
 
 variable (cfg : WFCFG)
-variable {locs : List Loc}
+variable {locs : Nat}
 
 private lemma nodeTransfer_mono (n : NodeID) :
     mono_f (nodeTransfer locs cfg n) := by
@@ -73,12 +72,19 @@ private lemma nodeTransfer_mono (n : NodeID) :
   cases nk with
   | none => grind [Domain.ord_distr hxy]
   | some k =>
-    cases k with (simp only; try grind [Domain.ord_distr hxy])
+    cases k with (try simp only; try grind [Domain.ord_distr hxy])
+    | Declare x e =>
+      cases e <;> simp only
+      · split_ifs
+        · simp [max]
+        · apply Domain.ord_distr
+          assumption
+      · split_ifs
+        · simp [max]
+        · apply Domain.ord_distr
+          assumption
     | Assign x e =>
-      generalize hx : locs.finIdxOf? x = a
-      cases a <;> simp only <;> try split
-      · apply Domain.ord_distr
-        assumption
+      split_ifs
       · simp [max]
       · apply Domain.ord_distr
         assumption
@@ -89,26 +95,20 @@ private lemma edgeTransfer_mono :
 /-! ## Coherence predicate for concrete and abstract states -/
 
 /-- For each variable, if the analysis tells us it is initialized, the concrete value exists -/
-def coh (ℓ : Fact locs) (σ : State) : Prop :=
+def coh (ℓ : Fact locs) (σ : NState) : Prop :=
   ∀ i,
     ℓ i = false ->
-    (σ (locs.get i)).isSome
+    (σ i).isSome
 
 /-- The DFA closure for initialization, parameterised by the underlying CFG.
     The CFG is needed to read `nodeKind`. -/
 @[reducible]
-def nDFA (locs : List Loc) : DFA NodeID Edge where
+def nDFA (locs : Nat) : DFA NodeID Edge where
   L            := Fact locs
   nodeTransfer := nodeTransfer locs cfg
   edgeTransfer := edgeTransfer locs
   entry        := entryInit locs
 
-
-private lemma preserve_update_none (ℓ : Fact locs)
-    (hnone : locs.finIdxOf? x = none) (hcoh : coh ℓ σ) :
-    coh ℓ (σ.updated x v) := by
-  simp only [coh, State.updated] at *
-  grind [List.finIdxOf?_eq_none_iff]
 
 @[simp] private lemma DFA_transferAlong (cfg : WFCFG)
     (e : EdgeOf cfg.analysis) (ℓ : Fact locs) :
@@ -117,7 +117,7 @@ private lemma preserve_update_none (ℓ : Fact locs)
 
 /-- The `DFASemantics` for a fixed CFG. The three preservation
     fields directly consume the abstract `LangSem` transitions. -/
-def semantics (hnd : locs.Nodup) :
+def semantics :
     DFASemantics (ls := dukeLangSem cfg) cfg.analysis (nDFA cfg locs) :=
   { Coh := coh
     preserve_entry := by
@@ -128,21 +128,35 @@ def semantics (hnd : locs.Nodup) :
       intro e σ σ' ℓ hstep hcoh
       simp only [DFA_transferAlong, nodeTransfer]
       cases hstep with simp only [*]
+      | @declare a b c d e _ =>
+        unfold coh State.declared State.set at *
+        intros i hi
+        simp only at hi
+        split at hi <;> try contradiction
+        grind
+      | @declareVal _ _ x expr v _ _ heval =>
+        rename_i i hi
+        intro j habs
+        simp only at habs
+        split_ifs at habs
+        · subst_vars
+          rw [State.updated_eq]
+          rfl
+        · have : x ≠ j := by grind
+          rw [State.updated_neq] <;> try trivial
+          rw [State.declared_neq] <;> try trivial
+          apply hcoh; assumption
       | @assign _ _ x expr v _ _ heval =>
-        split
-        · apply preserve_update_none <;> trivial
-        · rename_i i hi
-          intro j habs
-          simp only at habs
-          split_ifs at habs
-          · subst j
-            have hget := List.finIdxOf?_eq_some_iff.mp hi |>.left
-            rw [Fin.getElem_fin] at hget
-            rw [List.get_eq_getElem, hget, State.updated_eq σ x v]
-            rfl
-          · have h_x_neq : x ≠ locs.get j := by apply List.finIdxOf?_nodup <;> trivial
-            rw [State.updated_neq] <;> try trivial
-            apply hcoh; assumption
+        rename_i i hi
+        intro j habs
+        simp only at habs
+        split_ifs at habs
+        · subst_vars
+          rw [State.updated_eq]
+          rfl
+        · have : x ≠ j := by grind
+          rw [State.updated_neq] <;> try trivial
+          apply hcoh; assumption
     preserve_stutter := by
       intro _n σ σ' ℓ hstut hcoh
       simp only [LangSem.LStutter] at hstut
@@ -165,7 +179,7 @@ theorem mono_absorb_coh
 /-- A bundled `Chartreux.Analysis` for initialization, parameterized by
     the variable list, a `Nodup` proof, and the underlying CFG. -/
 @[reducible]
-def analysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
+def analysis {locs : Nat} (cfg : WFCFG) :
     Chartreux.Analysis (ls := dukeLangSem cfg) NodeID Edge State :=
   { dfa          := nDFA cfg locs
     botL         := (inferInstance : Bot (Fact locs))
@@ -173,29 +187,26 @@ def analysis {locs : List Loc} (hnd : locs.Nodup) (cfg : WFCFG) :
     decEqL       := (inferInstance : DecidableEq (Fact locs))
     fhL          := (inferInstance : FiniteHeight (Fact locs))
     llL          := (inferInstance : SemiLattice (Fact locs))
-    semantics    := semantics cfg hnd
+    semantics    := semantics cfg
     mono_absorb  := mono_absorb_coh
     edge_mono    := edgeTransfer_mono }
 
 /-- Wrapper around `Chartreux.analyze`: run the bundled
     analysis directly on a `CFG`. -/
-def analyzeCFG {locs : List Loc} (hnd : locs.Nodup)
-    (cfg : WFCFG) :
-    Chartreux.AnalysisResult (analysis hnd cfg) :=
-  Chartreux.analyze (analysis hnd cfg)
+def analyzeCFG {locs : Nat} (cfg : WFCFG) :
+    Chartreux.AnalysisResult (@analysis locs cfg) :=
+  Chartreux.analyze (analysis cfg)
 
 /-- Turn-key correctness for the bundled analysis: at every reachable
     program point, the computed in fact correctly approximates the
     concrete state. -/
-theorem reachable_correct
-    {locs : List Loc} (hnd : locs.Nodup)
-    (cfg : WFCFG) :
+theorem reachable_correct {locs : Nat} (cfg : WFCFG) :
     ∀ {n : NodeID} {σ : State},
       Chartreux.Analysis.Generic.Reachable cfg.analysis n σ State.isInit ->
-      coh ((analyzeCFG hnd cfg).inFacts n) σ := by
+      coh ((@analyzeCFG locs cfg).inFacts n) σ := by
   intro n σ hreach
-  let A := analysis hnd cfg
-  let R := analyzeCFG hnd cfg
+  let A := @analysis locs cfg
+  let R := @analyzeCFG locs cfg
   letI := A.maxL
   exact Chartreux.Analysis.Generic.reachable_corr
     cfg.analysis
@@ -205,17 +216,16 @@ theorem reachable_correct
     R.inFacts_entry
     hreach
 
-def checkExpr {locs : List Loc} (ℓ : Fact locs) (e : Expr) : Bool :=
+def checkExpr {locs : Nat} (ℓ : Fact locs) (e : NExpr) : Bool :=
   evalExpr locs ℓ e == false
 
-def checkNode {locs : List Loc} (ℓ : Fact locs) : NodeKind → Bool
-  | .Skip => true
-  | .Assign _ e => checkExpr ℓ e
-  | .Assume e => checkExpr ℓ e
+def checkNode {locs : Nat} (ℓ : Fact locs) : NodeKind → Bool
+  | .Skip | .BlockEnter | .BlockExit | .Declare _ none => true
+  | .Declare _ (some e) | .Assign _ e | .Assume e => checkExpr ℓ e
 
 def checkCFG (cfg : WFCFG) : Bool :=
-  let locs := vars cfg
-  let res := (analyzeCFG locs.property cfg).inFacts
+  let locs := totalVars cfg
+  let res := (@analyzeCFG locs cfg).inFacts
   (List.range cfg.val.nodes.length).all fun n =>
     match cfg.val.nodeKind n with
     | none => false
