@@ -277,7 +277,7 @@ def vars (g : CFG) : { l : List String // l.Nodup } :=
 
 -- # Semantics
 
-abbrev Config := NodeID × State
+abbrev Config := NodeID × NState
 
 inductive Step (g : CFG) : Config -> Config -> Prop where
 | skip {n n' σ} :
