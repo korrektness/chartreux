@@ -8,8 +8,10 @@ import Chartreux.Analysis.Generic
 abbrev NodeID := Nat
 
 inductive NodeKind where
-| Assume (e : Expr)
-| Assign (x : String) (e : Expr)
+| Assume (e : NExpr)
+| Declare (x : Nat) (e : Option NExpr)
+| Assign (x : Nat) (e : NExpr)
+| BlockEnter | BlockExit
 | Skip
 deriving DecidableEq, Repr
 
@@ -47,11 +49,14 @@ def addEdge (src dst : NodeID) : Builder Unit := do
 end Builder
 
 open Builder
-def lowerStmt : Stmt -> Builder (NodeID × NodeID)
+def lowerStmt : NStmt -> Builder (NodeID × NodeID)
 | .Skip => do
     let n <- addNode (.Skip)
     pure (n, n)
-| .Decl x e | .Assign x e => do
+| .Decl x e => do
+    let n <- addNode (.Declare x e)
+    pure (n, n)
+| .Assign x e => do
     let n <- addNode (.Assign x e)
     pure (n, n)
 | .Seq s₁ s₂ => do
@@ -63,24 +68,34 @@ def lowerStmt : Stmt -> Builder (NodeID × NodeID)
     let en <- addNode (.Skip) -- could probably be something in relation to c
     let atru <- addNode (.Assume c)
     let afls <- addNode (.Assume (.Not c))
+    let entru <- addNode (.BlockEnter)
+    let enfls <- addNode (.BlockEnter)
+    let extru <- addNode (.BlockExit)
+    let exfls <- addNode (.BlockExit)
     let (ent, ext) <- lowerStmt t
     let (enf, exf) <- lowerStmt f
     let ex <- addNode (.Skip)
     addEdge en atru; addEdge en afls
-    addEdge atru ent; addEdge afls enf
-    addEdge ext ex; addEdge exf ex
+    addEdge atru entru; addEdge afls enfls
+    addEdge entru ent; addEdge enfls enf
+    addEdge ext extru; addEdge exf exfls
+    addEdge extru ex; addEdge exfls ex
     pure (en, ex)
 | .While c b => do
     let en <- addNode (.Skip) -- could probably be something in relation to c
     let atru <- addNode (.Assume c)
     let afls <- addNode (.Assume (.Not c))
+    let entru <- addNode (.BlockEnter)
+    let extru <- addNode (.BlockExit)
     let (enb, exb) <- lowerStmt b
     addEdge en atru; addEdge en afls
-    addEdge atru enb
-    addEdge exb en
+    addEdge atru entru
+    addEdge entru enb
+    addEdge exb extru
+    addEdge extru en
     pure (en, afls)
 
-def Stmt.cfg (s : Stmt) : CFG :=
+def Stmt.cfg (s : NStmt) : CFG :=
     let (res, st) := (lowerStmt s).run { cfg := ⟨[], [], 0, 0⟩, nextID := 0 }
     { st.cfg with entry := res.1, exit := res.2 }
 
@@ -96,7 +111,7 @@ def Stmt.cfg (s : Stmt) : CFG :=
 
 -- well-formedness invariants
 -- TODO: clean this proof up cause hoooooly cow
-theorem lowerStmt_spec (s : Stmt) (b : BState) (hinv : b.nextID = b.cfg.nodes.length) :
+theorem lowerStmt_spec (s : NStmt) (b : BState) (hinv : b.nextID = b.cfg.nodes.length) :
     let (res, b') := (lowerStmt s).run b
     b'.nextID = b'.cfg.nodes.length ∧
     (∃ ns, b'.cfg.nodes = b.cfg.nodes ++ ns) ∧
@@ -136,19 +151,16 @@ theorem lowerStmt_spec (s : Stmt) (b : BState) (hinv : b.nextID = b.cfg.nodes.le
     · grind
   | If c t f ih_t ih_f =>
     simp only [lowerStmt, StateT.run_bind, StateT.run_pure, addNode_run, addEdge_run]
-    have hbt0 : (b.nextID + 1 + 1 + 1) = (b.cfg.nodes ++ [NodeKind.Skip] ++
-        [NodeKind.Assume c] ++ [NodeKind.Assume c.Not]).length := by
+    have hbt0 : (b.nextID + 1 + 1 + 1 + 1 + 1 + 1 + 1) = (b.cfg.nodes ++ [NodeKind.Skip] ++ [NodeKind.Assume c] ++ [NodeKind.Assume c.Not] ++ [NodeKind.BlockEnter] ++ [NodeKind.BlockEnter] ++ [NodeKind.BlockExit] ++ [NodeKind.BlockExit]).length := by
       simp; grind
     have ht := ih_t
-      { cfg := { nodes := b.cfg.nodes ++ [NodeKind.Skip] ++ [NodeKind.Assume c] ++
-                    [NodeKind.Assume c.Not],
+      { cfg := { nodes := b.cfg.nodes ++ [NodeKind.Skip] ++ [NodeKind.Assume c] ++ [NodeKind.Assume c.Not] ++ [NodeKind.BlockEnter] ++ [NodeKind.BlockEnter] ++ [NodeKind.BlockExit] ++ [NodeKind.BlockExit],
                  edges := b.cfg.edges, entry := b.cfg.entry, exit := b.cfg.exit },
-        nextID := b.nextID + 1 + 1 + 1 } hbt0
+        nextID := b.nextID + 1 + 1 + 1 + 1 + 1 + 1 + 1 } hbt0
     rcases hrt : StateT.run (lowerStmt t)
-      { cfg := { nodes := b.cfg.nodes ++ [NodeKind.Skip] ++ [NodeKind.Assume c] ++
-                  [NodeKind.Assume c.Not],
+      { cfg := { nodes := b.cfg.nodes ++ [NodeKind.Skip] ++ [NodeKind.Assume c] ++ [NodeKind.Assume c.Not] ++ [NodeKind.BlockEnter] ++ [NodeKind.BlockEnter] ++ [NodeKind.BlockExit] ++ [NodeKind.BlockExit],
                  edges := b.cfg.edges, entry := b.cfg.entry, exit := b.cfg.exit },
-        nextID := b.nextID + 1 + 1 + 1 } with ⟨⟨ent, ext⟩, bt⟩
+        nextID := b.nextID + 1 + 1 + 1 + 1 + 1 + 1 + 1 } with ⟨⟨ent, ext⟩, bt⟩
     rw [hrt] at ht
     simp only at ht
     obtain ⟨hinvt, ⟨nst, hnst⟩, ⟨est, hest, hbt, hedt⟩, hent, hext⟩ := ht
@@ -157,15 +169,19 @@ theorem lowerStmt_spec (s : Stmt) (b : BState) (hinv : b.nextID = b.cfg.nodes.le
     rw [hrf] at hf
     simp only at hf
     obtain ⟨hinvf, ⟨nsf, hnsf⟩, ⟨esf, hesf, hbf, hedf⟩, henf, hexf⟩ := hf
-    have hL1 : b.cfg.nodes.length + 3 ≤ bt.cfg.nodes.length := by
+    have hL1 : b.cfg.nodes.length + 7 ≤ bt.cfg.nodes.length := by
       rw [hnst]; grind
     have hL2 : bt.cfg.nodes.length ≤ bf.cfg.nodes.length := by rw [hnsf]; simp
     refine ⟨by simp [hinvf], ?_, ?_, by simp; grind, by simp [hinvf]⟩
     · exact ⟨
-        [NodeKind.Skip, NodeKind.Assume c, NodeKind.Assume c.Not] ++ nst ++ nsf ++ [NodeKind.Skip],
+        [NodeKind.Skip] ++ [NodeKind.Assume c] ++ [NodeKind.Assume c.Not] ++ [NodeKind.BlockEnter] ++ [NodeKind.BlockEnter] ++ [NodeKind.BlockExit] ++ [NodeKind.BlockExit] ++ nst ++ nsf ++ [NodeKind.Skip],
         by rw [hnsf, hnst]; simp [List.append_assoc]⟩
-    · refine ⟨est ++ esf ++ [⟨b.nextID, b.nextID + 1⟩, ⟨b.nextID, b.nextID + 1 + 1⟩,
-        ⟨b.nextID + 1, ent⟩, ⟨b.nextID + 1 + 1, enf⟩, ⟨ext, bf.nextID⟩, ⟨exf, bf.nextID⟩],
+    · refine ⟨est ++ esf ++ [
+        ⟨b.nextID, b.nextID + 1⟩, ⟨b.nextID, b.nextID + 2⟩,
+        ⟨b.nextID + 1, b.nextID + 3⟩, ⟨b.nextID + 2, b.nextID + 4⟩,
+        ⟨b.nextID + 3, ent⟩, ⟨b.nextID + 4, enf⟩,
+        ⟨ext, b.nextID + 5⟩, ⟨exf, b.nextID + 6⟩,
+        ⟨b.nextID + 5, bf.nextID⟩, ⟨b.nextID + 6, bf.nextID⟩],
         by rw [hesf, hest]; simp [List.append_assoc], ?_⟩
       split_ands
       · intro e he
@@ -173,51 +189,76 @@ theorem lowerStmt_spec (s : Stmt) (b : BState) (hinv : b.nextID = b.cfg.nodes.le
         rcases he with (he | he) | he
         · have := hbt e he; simp; grind
         · have := hbf e he; simp; grind
-        · rcases he with h|h|h|h|h|h <;> subst h <;> simp <;> grind
+        · rcases he with h|h|h|h|h|h|h|h|h|h <;> subst h <;> simp <;> grind
       · intro n hn1 hn2 hn3
-        by_cases h0 : n = b.nextID; · grind
-        by_cases h1 : n = b.nextID + 1; · grind
-        by_cases h2 : n = b.nextID + 2; · grind
-        have hn1' : b.nextID + 3 ≤ n := by grind
-        by_cases ht_range : n < bt.nextID <;> grind
+        by_cases h0 : n = b.nextID; · subst h0; exact ⟨b.nextID + 1, by simp⟩
+        by_cases h1 : n = b.nextID + 1; · subst h1; exact ⟨b.nextID + 3, by simp⟩
+        by_cases h2 : n = b.nextID + 2; · subst h2; exact ⟨b.nextID + 4, by simp⟩
+        by_cases h3 : n = b.nextID + 3; · subst h3; exact ⟨ent, by simp⟩
+        by_cases h4 : n = b.nextID + 4; · subst h4; exact ⟨enf, by simp⟩
+        by_cases h5 : n = b.nextID + 5; · subst h5; exact ⟨bf.nextID, by simp⟩
+        by_cases h6 : n = b.nextID + 6; · subst h6; exact ⟨bf.nextID, by simp⟩
+        by_cases hext_eq : n = ext; · subst hext_eq; exact ⟨b.nextID + 5, by simp⟩
+        by_cases hexf_eq : n = exf; · subst hexf_eq; exact ⟨b.nextID + 6, by simp⟩
+        have hn1_1 : b.nextID + 1 ≤ n := Nat.lt_of_le_of_ne hn1 (Ne.symm h0)
+        have hn1_2 : b.nextID + 2 ≤ n := Nat.lt_of_le_of_ne hn1_1 (Ne.symm h1)
+        have hn1_3 : b.nextID + 3 ≤ n := Nat.lt_of_le_of_ne hn1_2 (Ne.symm h2)
+        have hn1_4 : b.nextID + 4 ≤ n := Nat.lt_of_le_of_ne hn1_3 (Ne.symm h3)
+        have hn1_5 : b.nextID + 5 ≤ n := Nat.lt_of_le_of_ne hn1_4 (Ne.symm h4)
+        have hn1_6 : b.nextID + 6 ≤ n := Nat.lt_of_le_of_ne hn1_5 (Ne.symm h5)
+        have hn1' : b.nextID + 7 ≤ n := Nat.lt_of_le_of_ne hn1_6 (Ne.symm h6)
+        by_cases ht_range : n < bt.nextID
+        · obtain ⟨n', hn'⟩ := hedt n hn1' ht_range hext_eq
+          exact ⟨n', by simp; left; exact hn'⟩
+        · have hn2' : bt.nextID ≤ n := Nat.le_of_not_lt ht_range
+          have hn2_strict : n < bf.nextID := Nat.lt_of_le_of_ne (Nat.le_of_lt_succ hn2) hn3
+          obtain ⟨n', hn'⟩ := hedf n hn2' hn2_strict hexf_eq
+          exact ⟨n', by simp; right; left; exact hn'⟩
   | While c body ih_b =>
     simp only [lowerStmt, StateT.run_bind, StateT.run_pure, addNode_run, addEdge_run]
-    have hbb0 : (b.nextID + 1 + 1 + 1) = (b.cfg.nodes ++ [NodeKind.Skip] ++ [NodeKind.Assume c] ++
-        [NodeKind.Assume c.Not]).length := by
+    have hbb0 : (b.nextID + 1 + 1 + 1 + 1 + 1) = (b.cfg.nodes ++ [NodeKind.Skip] ++ [NodeKind.Assume c] ++ [NodeKind.Assume c.Not] ++ [NodeKind.BlockEnter] ++ [NodeKind.BlockExit]).length := by
       simp; grind
     have hb := ih_b
-      { cfg := { nodes := b.cfg.nodes ++ [NodeKind.Skip] ++ [NodeKind.Assume c] ++
-                    [NodeKind.Assume c.Not],
+      { cfg := { nodes := b.cfg.nodes ++ [NodeKind.Skip] ++ [NodeKind.Assume c] ++ [NodeKind.Assume c.Not] ++ [NodeKind.BlockEnter] ++ [NodeKind.BlockExit],
                  edges := b.cfg.edges, entry := b.cfg.entry, exit := b.cfg.exit },
-        nextID := b.nextID + 1 + 1 + 1 } hbb0
+        nextID := b.nextID + 1 + 1 + 1 + 1 + 1 } hbb0
     rcases hrb : StateT.run (lowerStmt body)
-      { cfg := { nodes := b.cfg.nodes ++ [NodeKind.Skip] ++ [NodeKind.Assume c] ++
-                    [NodeKind.Assume c.Not],
+      { cfg := { nodes := b.cfg.nodes ++ [NodeKind.Skip] ++ [NodeKind.Assume c] ++ [NodeKind.Assume c.Not] ++ [NodeKind.BlockEnter] ++ [NodeKind.BlockExit],
                  edges := b.cfg.edges, entry := b.cfg.entry, exit := b.cfg.exit },
-        nextID := b.nextID + 1 + 1 + 1 } with ⟨⟨enb, exb⟩, bb⟩
+        nextID := b.nextID + 1 + 1 + 1 + 1 + 1 } with ⟨⟨enb, exb⟩, bb⟩
     rw [hrb] at hb
     simp only at hb
     obtain ⟨hinvb, ⟨nsb, hnsb⟩, ⟨esb, hesb, hbb, hedb⟩, henb, hexb⟩ := hb
-    have hL1 : b.cfg.nodes.length + 3 ≤ bb.cfg.nodes.length := by
+    have hL1 : b.cfg.nodes.length + 5 ≤ bb.cfg.nodes.length := by
       rw [hnsb]; grind
     refine ⟨by simp [hinvb], ?_, ?_, by simp; grind, by simp; grind⟩
-    · exact ⟨[NodeKind.Skip, NodeKind.Assume c, NodeKind.Assume c.Not] ++ nsb,
+    · exact ⟨[NodeKind.Skip, NodeKind.Assume c, NodeKind.Assume c.Not, NodeKind.BlockEnter, NodeKind.BlockExit] ++ nsb,
         by rw [hnsb]; simp [List.append_assoc]⟩
-    · refine ⟨esb ++ [⟨b.nextID, b.nextID + 1⟩, ⟨b.nextID, b.nextID + 1 + 1⟩,
-        ⟨b.nextID + 1, enb⟩, ⟨exb, b.nextID⟩],
+    · refine ⟨esb ++ [
+        ⟨b.nextID, b.nextID + 1⟩, ⟨b.nextID, b.nextID + 2⟩,
+        ⟨b.nextID + 1, b.nextID + 3⟩, ⟨b.nextID + 3, enb⟩,
+        ⟨exb, b.nextID + 4⟩, ⟨b.nextID + 4, b.nextID⟩],
         by rw [hesb]; simp [List.append_assoc], ?_⟩
       split_ands
       · intro e he
         simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at he
         rcases he with he | he
         · have := hbb e he; simp; grind
-        · rcases he with h|h|h|h <;> subst h <;> simp <;> grind
+        · rcases he with h|h|h|h|h|h <;> subst h <;> simp <;> grind
       · intro n hn1 hn2 hn3
-        by_cases h0 : n = b.nextID; · grind
-        by_cases h1 : n = b.nextID + 1; · grind
-        by_cases h2 : n = b.nextID + 2; · grind
-        have hn1' : b.nextID + 3 ≤ n := by grind
-        by_cases ht_range : n < bb.nextID <;> grind
+        by_cases h0 : n = b.nextID; · subst h0; exact ⟨b.nextID + 1, by simp⟩
+        by_cases h1 : n = b.nextID + 1; · subst h1; exact ⟨b.nextID + 3, by simp⟩
+        by_cases h2 : n = b.nextID + 2; · subst h2; exact False.elim (hn3 rfl)
+        by_cases h3 : n = b.nextID + 3; · subst h3; exact ⟨enb, by simp⟩
+        by_cases h4 : n = b.nextID + 4; · subst h4; exact ⟨b.nextID, by simp⟩
+        by_cases hexb_eq : n = exb; · subst hexb_eq; exact ⟨b.nextID + 4, by simp⟩
+        have hn1_1 : b.nextID + 1 ≤ n := Nat.lt_of_le_of_ne hn1 (Ne.symm h0)
+        have hn1_2 : b.nextID + 2 ≤ n := Nat.lt_of_le_of_ne hn1_1 (Ne.symm h1)
+        have hn1_3 : b.nextID + 3 ≤ n := Nat.lt_of_le_of_ne hn1_2 (Ne.symm h2)
+        have hn1_4 : b.nextID + 4 ≤ n := Nat.lt_of_le_of_ne hn1_3 (Ne.symm h3)
+        have hn1' : b.nextID + 5 ≤ n := Nat.lt_of_le_of_ne hn1_4 (Ne.symm h4)
+        obtain ⟨n', hn'⟩ := hedb n hn1' hn2 hexb_eq
+        exact ⟨n', by simp; left; exact hn'⟩
 
 def CFG.WellFormed (g : CFG) :=
   (g.entry < g.nodes.length) ∧
@@ -242,7 +283,7 @@ theorem cfg_WF (s : Stmt) : s.cfg.WellFormed := by
 
 abbrev WFCFG := { cfg : CFG // cfg.WellFormed }
 
-def Stmt.wfcfg (s : Stmt) : WFCFG :=
+def Stmt.wfcfg (s : NStmt) : WFCFG :=
   ⟨s.cfg, cfg_WF s⟩
 
 @[reducible]
@@ -268,12 +309,12 @@ def WFCFG.analysis (g : WFCFG) : AnalysisCFG NodeID Edge :=
   DukeAnalysisCFG g g.property
 
 /-- All variables appearing in the program , de-duplicated, with a `Nodup` witness. -/
-def vars (g : CFG) : { l : List String // l.Nodup } :=
+def totalVars (g : CFG) : Nat :=
   let base := g.nodes.filterMap (fun k =>
-  match k with
-  | .Assign x _ => some x
-  | _           => none)
-  ⟨base.eraseDups, Utils.List.eraseDups_nodup base⟩
+    match k with
+    | .Declare n _ => some (n + 1)
+    | _           => none)
+  base.max?.getD 0
 
 -- # Semantics
 
@@ -284,6 +325,23 @@ inductive Step (g : CFG) : Config -> Config -> Prop where
     g.nodeKind n = some .Skip ->
     ⟨n, n'⟩ ∈ g.edges ->
     Step g ⟨n, σ⟩ ⟨n', σ⟩
+| blockEnter {n n' σ} :
+    g.nodeKind n = some .BlockEnter ->
+    ⟨n, n'⟩ ∈ g.edges ->
+    Step g ⟨n, σ⟩ ⟨n', σ⟩
+| blockExit {n n' σ} :
+    g.nodeKind n = some .BlockExit ->
+    ⟨n, n'⟩ ∈ g.edges ->
+    Step g ⟨n, σ⟩ ⟨n', σ⟩
+| declare {n n' x σ} :
+    g.nodeKind n = some (.Declare x none) ->
+    ⟨n, n'⟩ ∈ g.edges ->
+    Step g ⟨n, σ⟩ ⟨n', σ.declared x⟩
+| declareVal {n n' x e v σ} :
+    g.nodeKind n = some (.Declare x (some e)) ->
+    EvalExpr σ e v ->
+    ⟨n, n'⟩ ∈ g.edges ->
+    Step g ⟨n, σ⟩ ⟨n', (σ.declared x).updated x v⟩
 | assign {n n' x e v σ} :
     g.nodeKind n = some (.Assign x e) ->
     EvalExpr σ e v ->
@@ -297,7 +355,7 @@ inductive Step (g : CFG) : Config -> Config -> Prop where
     Step g ⟨n, σ⟩ ⟨n', σ⟩
 
 open Chartreux.Analysis.Generic in
-instance dukeLangSem (cfg : WFCFG) : LangSem NodeID Edge State cfg.analysis where
+instance dukeLangSem (cfg : WFCFG) : LangSem NodeID Edge NState cfg.analysis where
   LStep e σ σ' := Step cfg ⟨e.val.src, σ⟩ ⟨e.val.dst, σ'⟩
   LStutter _ σ σ' := σ = σ'
   IsInit := State.isInit
