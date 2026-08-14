@@ -264,15 +264,15 @@ private lemma edgeTransfer_mono :
 def coh_self (ℓ : Fact locs) (σ : NState) : Prop :=
   ∀ i v,
     (ℓ i).fst = .nonnull ->
-    σ i = some v ->
+    σ i = .declared (some v) ->
     v ≠ .Null
 /-- Variable `i` is the witness that variable `j` is not null -/
 def coh_impl (ℓ : Fact locs) (σ : NState) : Prop :=
   ∀ i j n v,
     (ℓ i).snd j = .nonnull ->
-    σ i = some (.Int n) ->
+    σ i = .declared (some (.Int n)) ->
     n ≠ 0 -> -- if variable `i` is truthy
-    σ j = some v ->
+    σ j = .declared (some v) ->
     v ≠ .Null
 
 def coh (ℓ : Fact locs) (σ : NState) : Prop := coh_self ℓ σ ∧ coh_impl ℓ σ
@@ -301,7 +301,7 @@ lemma nonNullAssumption_sound {locs : Nat} {ℓ : Fact locs} {σ : NState} {expr
     (hcoh : coh ℓ σ)
     (heval : EvalExpr σ expr (Val.Int n))
     (htruthy : n ≠ 0)
-    (hget : σ i = some Val.Null) :
+    (hget : σ i = .declared (some Val.Null)) :
     i ∉ nonNullAssumption locs ℓ expr := by
   induction expr generalizing n with (intro hass; try simp! [nonNullAssumption] at hass)
   | Not e =>
@@ -317,8 +317,8 @@ lemma nonNullAssumption_sound {locs : Nat} {ℓ : Fact locs} {σ : NState} {expr
             cases heval_var with
             | var _ _ h_sig =>
               rw [h_sig] at hget
-              injection hget with hget_eq
-              subst hget_eq
+              injection hget with hget
+              injection hget
               contradiction
   | BinOp op e₁ e₂ ih₁ ih₂ =>
     cases op with simp! [nonNullAssumption] at hass
@@ -372,67 +372,71 @@ def semantics :
       intro e σ σ' ℓ hstep hcoh
       simp only [DFA_transferAlong, nodeTransfer]
       cases hstep with simp only [*]
-      | @declare _ _ x _ _ =>
+      | @declare _ _ x _ _ _ _ hdecl =>
         split_ands
-        · intro j v' h hdecl rfl
+        · intro j v' h hget rfl
           simp only at h
           split_ifs at h
-          rw [State.declared_neq (by grind)] at hdecl
+          rw [State.declared_neq (by grind) hdecl] at hget
           apply hcoh.left <;> trivial
         · intro j k n v' habs hdecl1 hn hdecl2 rfl
           contradiction
-      | @declareVal _ _ x expr v _ _ heval _ =>
+      | @declareVal _ _ x expr v _ _ _ _ heval _ hdecl hupd =>
         split_ands
-        · intro j v' h hupd rfl
+        · intro j v' h hget rfl
           simp only at h
           split_ifs at h <;> simp only at h
           · subst x
-            rw [State.updated_eq] at hupd
+            rw [State.updated_eq hupd] at hget
             have h_v_not_null : v ≠ Val.Null := evalExpr_sound hcoh.left heval h
             grind
-          · rw [State.updated_neq (by grind)] at hupd
-            rw [State.declared_neq (by grind)] at hupd
+          · rw [State.updated_neq (by grind) hupd] at hget
+            rw [State.declared_neq (by grind) hdecl] at hget
             apply hcoh.left <;> trivial
         · intro j k n v' hupd1 habs hn hupd2 rfl
           simp only at hupd1
           split_ifs at hupd1 <;> simp only at hupd1
           · subst x
-            rw [State.updated_eq] at habs
+            rw [State.updated_eq hupd] at habs
+            injection habs with habs
             injection habs
             subst v
             by_cases h_ki : k = j
             · subst k
-              rw [State.updated_eq] at hupd2
+              rw [State.updated_eq hupd] at hupd2
+              injection hupd2 with hupd2
               injection hupd2
               contradiction
-            · rw [State.updated_neq (by grind)] at hupd2
-              rw [State.declared_neq (by grind)] at hupd2
+            · rw [State.updated_neq (by grind) hupd] at hupd2
+              rw [State.declared_neq (by grind) hdecl] at hupd2
               apply exprConsequent_sound hcoh heval hn k .Null <;> grind
           · contradiction
-      | @assign _ _ x expr v _ _ heval _ =>
+      | @assign _ _ x expr v _ _ _ heval _ hupd =>
         split_ands
-        · intro j v' h hupd rfl
+        · intro j v' h hget rfl
           simp only at h
           split_ifs at h <;> simp only at h
           · subst x
-            rw [State.updated_eq] at hupd
+            rw [State.updated_eq hupd] at hget
             have h_v_not_null : v ≠ Val.Null := evalExpr_sound hcoh.left heval h
             grind
-          · rw [State.updated_neq (by grind)] at hupd
+          · rw [State.updated_neq (by grind) hupd] at hget
             apply hcoh.left <;> trivial
         · intro j k n v' hupd1 habs hn hupd2 rfl
           simp only at hupd1
           split_ifs at hupd1 <;> simp only at hupd1
           · subst x
-            rw [State.updated_eq] at habs
+            rw [State.updated_eq hupd] at habs
+            injection habs with habs
             injection habs
             subst v
             by_cases h_ki : k = j
             · subst k
-              rw [State.updated_eq] at hupd2
+              rw [State.updated_eq hupd] at hupd2
+              injection hupd2 with hupd2
               injection hupd2
               contradiction
-            · rw [State.updated_neq (by grind)] at hupd2
+            · rw [State.updated_neq (by grind) hupd] at hupd2
               apply exprConsequent_sound hcoh heval hn k .Null <;> grind
           · contradiction
       | @assum _ _ n _ _ _ heval htruthy _ =>

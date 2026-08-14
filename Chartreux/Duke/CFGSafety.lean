@@ -44,7 +44,7 @@ theorem eval_expr_progress {locs : Nat}
   | Var x =>
     have ⟨hx, hci⟩ := hci
     generalize heq : Fin.mk x hx = i at *
-    simp only [Initialization.coh, Option.isSome_iff_exists] at hi
+    simp only [Initialization.coh] at hi
     have ⟨v, hv⟩ := hi i hci
     use v
     constructor
@@ -114,26 +114,26 @@ lemma eval_node_safe (cfg : WFCFG) {locs : Nat}
       constructor; constructor; apply Step.assum <;> try trivial
       grind
   | BlockExit =>
-    constructor; constructor;
+    constructor; constructor
     apply Step.blockExit <;> try trivial
   | BlockEnter =>
-    constructor; constructor;
+    constructor; constructor
     apply Step.blockEnter <;> try trivial
   | Skip =>
-    constructor; constructor;
+    constructor; constructor
     apply Step.skip <;> try trivial
   | Declare x e =>
     cases e with
     | none =>
-      constructor; constructor;
+      constructor; constructor
       apply Step.declare <;> try trivial
     | some e =>
       have ⟨v, hv⟩ := eval_expr_progress e hn hi hcn hci
-      constructor; constructor;
+      constructor; constructor
       apply Step.declareVal <;> try trivial
   | Assign x e =>
     have ⟨v, hv⟩ := eval_expr_progress e hn hi hcn hci
-    constructor; constructor;
+    constructor; constructor
     apply Step.assign <;> try trivial
 
 

@@ -98,7 +98,7 @@ private lemma edgeTransfer_mono :
 def coh (ℓ : Fact locs) (σ : NState) : Prop :=
   ∀ i,
     ℓ i = false ->
-    (σ i).isSome
+    ∃ v, σ i = .declared (some v)
 
 /-- The DFA closure for initialization, parameterised by the underlying CFG.
     The CFG is needed to read `nodeKind`. -/
@@ -128,34 +128,32 @@ def semantics :
       intro e σ σ' ℓ hstep hcoh
       simp only [DFA_transferAlong, nodeTransfer]
       cases hstep with simp only [*]
-      | @declare a b c d e _ =>
+      | @declare =>
         unfold coh State.declared State.set at *
         intros i hi
         simp only at hi
         split at hi <;> try contradiction
         grind
-      | @declareVal _ _ x expr v _ _ heval =>
-        rename_i i hi
+      | @declareVal _ _ x expr v _ _ _ _ _ _ hdecl hupd =>
         intro j habs
         simp only at habs
         split_ifs at habs
         · subst_vars
-          rw [State.updated_eq]
-          rfl
-        · have : x ≠ j := by grind
-          rw [State.updated_neq] <;> try trivial
-          rw [State.declared_neq] <;> try trivial
+          constructor
+          rw [State.updated_eq hupd]
+        · have hxj : x ≠ j := by grind
+          rw [State.updated_neq hxj hupd]
+          rw [State.declared_neq hxj hdecl]
           apply hcoh; assumption
-      | @assign _ _ x expr v _ _ heval =>
-        rename_i i hi
+      | @assign _ _ x expr v _ _ _ _ _ hupd =>
         intro j habs
         simp only at habs
         split_ifs at habs
         · subst_vars
-          rw [State.updated_eq]
-          rfl
-        · have : x ≠ j := by grind
-          rw [State.updated_neq] <;> try trivial
+          constructor
+          rw [State.updated_eq hupd]
+        · have hxj : x ≠ j := by grind
+          rw [State.updated_neq hxj hupd]
           apply hcoh; assumption
     preserve_stutter := by
       intro _n σ σ' ℓ hstut hcoh
