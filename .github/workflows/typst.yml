@@ -1,4 +1,4 @@
-name: build paper
+name: build docs
 on:
   push:
     branches: [main]
@@ -11,17 +11,15 @@ on:
 jobs:
   build_typst_documents:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        # TODO: unify `Makefile` for all docs, check all papers at once
-        working-directory: "./docs/moretti-wojnarowski-2026"
-    permissions:
-      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6
       - uses: typst-community/setup-typst@v5
         with:
           typst-version: 0.15.0
-      - name: Typst
+      - name: "Typst: paper"
+        working-directory: "./docs/moretti-wojnarowski-2026"
+        run: make
+      - name: "Typst: presentation"
+        working-directory: "./docs/internship-presentation"
         run: make
