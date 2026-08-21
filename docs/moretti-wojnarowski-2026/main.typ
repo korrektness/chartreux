@@ -1025,32 +1025,36 @@ always paired with $"assume" !c$, one of them must be necessarily false.
 #let ca = "call"
 #let call(f, s) = $"call" #f thin { #s }$
 #let invoke = "invoke"
+#let Gsum = $G_"sum"$
+#let Gk = $G_kappa$
 
-The second problem we tackled with our framework is the proof of the correctness
-of the rewrites based on function contracts, as described in section
-@sec:bg-kotlin. We were able to properly state function call semantics for CFGs,
-and derive a proof sketch for the correctness, but its formalization is still
-ongoing. Nonetheless, we describe the design of the function extensions, as well
-as the main challenges we facedI.
+The second problem concerns the CFG rewrites induced by calls-in-place
+contracts. At a call site, the compiler analyzes the body of a lambda as though
+it occurred directly in the caller. The edges around this copy encode whether
+the lambda may be skipped or repeated. This makes information produced inside
+the lambda available to the caller's dataflow analysis, but introduces a proof
+obligation: executions that enter another function and invoke a closure must be
+represented by paths through the local rewritten graph.
 
-To model function contracts, we extend _Duke_ into _FDuke_, adding function
-calls with lambda parameters. There are two syntactic additions, with
-corresponding CFG nodes:
+We study this problem in _FDuke_, an extension of Duke with function calls and
+lambda invocation. Its statements have two additional forms:
 
 #block(width: 100%, inset: 1em)[$
   s & ::= ... | #call($f$, $s$) | invoke
 $]
 
-These constructs model the call to a function $f$ with statement $s$ as its
-closure, as well as the invocation of a lambda parameter within a function body.
-The lambda parameter is passed as a statement literal; this means that it cannot
-take any parameters, but since it shares an environment with the scope that
-creates it, information can be passed to it and retrieved from it.
+The statement #call($f$, $s$) passes $s$ as the closure argument of $f$, while
+#invoke executes the current function's closure argument. Lambdas have no
+parameters of their own, but execute in the store captured at the call site. A
+program consists of a main statement and a finite function environment
+$Phi : "Id" harpoon (kappa times "Stmt")$. The invocation kind
+$kappa in {epsilon, 1, +, ?}$ denotes, respectively, an unknown number of
+invocations, exactly one, at least one, or at most one.
 
 #figure(
-  caption: [FDuke constructions for functions: the inlined body ${ s }$ is
-    opaque to execution, and only used for analysis: the dotted arrow serves as
-    summary.],
+  caption: [Contract-dependent CFG fragments in FDuke. The lambda body ${s}$ is
+    copied into the caller for analysis; the dotted edge summarizes the call's
+    concrete execution.],
 )[
   #grid(columns: (1fr, 1fr, 1fr, 1fr), gutter: 1em, align: center + horizon)[
     #image("assets/unknown.svg")
@@ -1060,49 +1064,40 @@ creates it, information can be passed to it and retrieved from it.
     #image("assets/at_most_once.svg")
   ][
     #image("assets/at_least_once.svg")
-  ][ $epsilon$ ][ 1 ][ `+` ][ ? ]
+  ][ $epsilon$ ][ 1 ][ ? ][ `+` ]
 ]<fig:fduke-cfg>
-
-Under this new fragment, a program (and therefore the target of our analysis) is
-no longer just a statement. Our analysis state is extended with a function
-environment $Phi$ mapping a function $f$ to $(b, kappa)$ where $b$ is $f$'s body
-and $kappa$ is the its contract specification where $kappa = epsilon, 1, +, ?$
-denotes #unk, #eo, #alo and #amo behavior. The CFG rewrites follow Kotlin's
-direction, as can be seen in @fig:fduke-cfg.
-
-We first formalize a #emph[counting analysis] on $Phi$, to check that every
-function body respects the contract it advertises, before using that analysis to
-establish the correctness of the CFG rewrites based on those contracts.
-
-=== Function Semantics.
-The addition of functions requires extending the CFG construction to produce a
-family of graphs, one for each function and lambda parameter, and the semantics
-need to follow: @fig:function-semantics presents CEK semantics for handling this
-sort of control flow, distinguishing function calls (which run in empty
-environments with saved lambdas) and invocations (which run in the original
-caller's environment and restore it on return). This presentation is
-straightforward, but it's problematic in its interaction with `LangSem`, as we
-will see. Before that, let us present and discuss the counting analysis.
-
-=== Counting analysis.
-#let Cnt = "Cnt"
-The simplest part of this system is the counting analysis, which we implement
-over the following lattice: let $Cnt$ be the powerset of ${0, 1, omega}$,
-ordered by $subset.eq$, an instance of the Powerset #fhbsl. The join operation
-is the union over sets, and we distinguish the empty set as $bot$.
-
-For a single function body, we keep as abstract state a single $s in Cnt$,
-keeping track of the amount of times the parameter is called. We define a
-successor operation such that $0 + 1 = 1, 1 + 1 = omega, omega + 1 = omega$. Our
-transfer function is then following:
-
-$
-  f("invoke")(s) & := {x + 1 | x in S} \
-         f(n)(s) & := s
-$
 
 #let langle = $chevron.l$
 #let rangle = $chevron.r$
+
+For a call node with lambda entry $"en"_L$, lambda exit $"ex"_L$, and return
+node $r$, the lowering emits the fragments in @fig:fduke-cfg. Every fragment has
+edges from the call to $"en"_L$ and from $"ex"_L$ to $r$. The kind $?$ adds a
+bypass edge from the call to $r$, while $+$ adds a back-edge from $"ex"_L$ to
+$"en"_L$. The unknown kind $epsilon$ contains both edges, and the kind $1$
+contains neither. The resulting paths execute the inlined body any number of
+times admitted by the contract:
+
+$
+  "admits"(epsilon, k) & := top \
+        "admits"(1, k) & := (k = 1) \
+        "admits"(+, k) & := (1 <= k) \
+        "admits"(?, k) & := (k <= 1).
+$
+
+Each fragment also contains a distinguished summary edge from the call node to
+$r$. This edge represents the actual function call; it is not traversed by a
+dataflow analysis.
+
+=== Concrete semantics.
+
+Lowering an FDuke program produces a family of CFGs: one graph for `main`, one
+for each function body, and one for every lambda literal. The concrete semantics
+is a CEK machine over this family. Its configurations have the form
+$langle n, sigma, rho, K rangle$, where $n$ identifies both a graph and a node,
+$sigma$ is the current store, $rho$ is an optional closure, and $K$ is a stack
+of continuations. A closure records a lambda's entry and exit nodes, its
+captured closure, and its captured store.
 
 #figure(caption: [Function and invocation semantics], placement: top)[
   #let trees = (
@@ -1137,54 +1132,107 @@ $
   #forest(..trees)
 ]<fig:function-semantics>
 
-After running the analysis, we obtain a state $overline(rho)$. By checking the
-abstract state at the final node $n'$, we can check for coherence with respect
-to $kappa$:
+The relevant rules are shown in @fig:function-semantics. Calling $f$ saves the
+lambda and the caller's store in a closure, starts the function body with an
+empty store, and pushes the return point. An #invoke starts the saved lambda in
+its captured store and pushes the function's current store. Returning from the
+lambda updates the closure with the lambda's resulting store and resumes the
+function; returning from the function restores this store in the caller. These
+rules give calls their ground-truth behavior independently of the CFG rewrite.
+
+=== Checking contracts.
+
+#let Cnt = math.sans("Cnt")
+
+Before relying on a contract, we verify it with a counting analysis. Its domain
+is $Cnt = cal(P)({0, 1, omega})$, where $omega$ represents two or more
+invocations. It is a finite-height powerset lattice ordered by inclusion, with
+union as join and the empty set as $bot$. The entry value is ${0}$. At an
+#invoke node, every possible count is incremented according to $0 + 1 = 1$,
+$1 + 1 = omega$, and $omega + 1 = omega$; all other transfer functions are the
+identity.
+
+The concrete semantics used for this analysis pairs the store with a ghost
+natural-number counter. Its coherence relation states that the abstraction of
+the concrete counter belongs to the current element of #Cnt. Incrementing the
+counter and applying the transfer function preserve coherence, so @thm:framework
+establishes that every concrete invocation count reaching a node is included in
+the computed result.
+
+Let $overline(rho)_f$ be a post-fixpoint obtained for the body of $f$, and let
+$n_f$ be its exit node. The declared contract is accepted when:
 
 $
-  1 & <-> overline(rho)(n') = {1} \
-  + & <-> overline(rho)(n') subset.eq {1, omega} \
-  ? & <-> overline(rho)(n') subset.eq {0, 1}
+  1 & <-> overline(rho)_f(n_f) = {1} \
+  + & <-> 0 in.not overline(rho)_f(n_f) \
+  ? & <-> omega in.not overline(rho)_f(n_f).
 $
 
-We use the framework on a simplified fragment of the semantics that ignore
-function calls, to obtain the $sans("FamilyChecked")$ predicate on a function
-environment $Phi$, satisfied when every function of $Phi$ passes this check.
+No restriction is imposed for $epsilon$. We write $sans("FamilyChecked")(Phi)$
+when every function CFG has such a post-fixpoint satisfying its declared
+contract. Checkedness is required for the whole family, since a function may
+call another function whose invocation of its own lambda affects the first
+function's count.
 
-=== Final theorem and main difficulties.
-We can now fully state our final theorem, adapting @thm:framework to the context
-of function contracts.
+=== Correctness of the rewrite.
+
+The proof separates concrete execution from dataflow propagation using two
+graphs. The #emph[summary graph] #Gsum is the generated CFG containing both the
+plain edges from @fig:fduke-cfg and the summary edge at each call. The
+#emph[analysis graph] #Gk is obtained by removing all summary edges from #Gsum.
+Dataflow analyses run only on #Gk.
+
+The summary edge has a local denotation over stores. A summary step from a call
+node to its return node holds when the corresponding contract fragment is
+present and the input store is transformed by $k$ consecutive executions of the
+inlined lambda body, for some $k$ admitted by $kappa$. This definition captures
+exactly the information needed by a local dataflow semantics; it does not
+mention the function CFG, closures, or the continuation stack.
+
+The first part of the proof relates the CEK semantics to this denotation.
 
 #theorem[
-  Let $Phi$ be a function environment as described above, and assume that
-  $sans("FamilyChecked") Phi$. Let $g = (N, E)$ be a CFG with semantics relating
-  states in $S$, potentially containing inlined lambdas due to contracts. Then,
-  given;
-  - an analysis $A$ with transfer functions over a bounded semilattice $L$;
-  - a relation #coh-def that's preserved under semantics steps,
+  Let $p$ be an FDuke program such that $sans("FamilyChecked")(p.Phi)$. Every
+  CEK execution that starts and ends in the same component with an empty
+  continuation is represented by a sequence of steps in that component's summary
+  graph #Gsum, with the same initial and final stores.
+] <thm:fduke-projection>
 
-  The post-fixpoint $rho : N -> L$ obtained by running Kildall's algorithm on
-  $g$ with transfer functions from $A$ is such that for all reachable states
-  $sigma : S$ at node $n in N$, $coh(rho(n), sigma)$ holds.
+The proof of @thm:fduke-projection proceeds by induction on the length of a
+balanced CEK execution. Intra-procedural steps project directly. An invocation
+is decomposed into the lambda execution and the remainder of the function
+execution. A complete call is decomposed into the callee execution and the
+caller tail. The counting correctness theorem determines the concrete number of
+invocations made by the callee, and its contract verdict shows that this number
+is admitted by $kappa$. The lambda execution can then be transported from its
+standalone CFG to the copy inlined at the call site. The CFG builder retains the
+provenance needed for this transport, including the correspondence between
+lambda identifiers, nodes, edges, and nested call fragments. This produces the
+chain required by the denotation of the summary edge.
+
+The second part of the proof expands summary steps into paths of #Gk. If the
+admitted count is zero, the contract fragment contains a bypass edge. For a
+positive count, execution enters the inline copy and leaves it through the
+return edge; every additional execution uses the back-edge. These are precisely
+the edges guaranteed by the definition of $"admits"$. Plain #Gsum steps are
+already #Gk steps, so every #Gsum execution is simulated by #Gk.
+
+Combining this simulation with @thm:framework gives the desired guarantee.
+
+#theorem[
+  Let $p$ be an FDuke program with a checked function family, and let $g$ be one
+  of its CFG components. Suppose an analysis $A$ over #Gk has a coherence
+  relation preserved by its transfer functions, and let $rho$ be a post-fixpoint
+  whose entry contains the analysis entry value. For every state $sigma$ reached
+  at node $n$ by a balanced CEK execution of $p$ from the entry of $g$,
+  $coh(rho(n), sigma)$ holds.
 ] <thm:fduke>
 
-Proving this theorem raises a predictable technical issue. CEK semantics are
-inherently non-local, as the control flow is brought to jump between graphs for
-different functions. By contrast, the `LangSem` instance required to apply the
-framework is local by construction: proving this theorem requires a lowering
-between the two semantics.
-
-Although this lowering has not yet been fully mechanized, we outline the
-required construction here. In order to establish the correctness of the
-rewrites, one can use the fact that every function in $Phi$ satisfies its
-contract to build a "summary" of the impact every call can have on the current
-environment. This induces two semantics, one with jumps and one with summaries,
-and proving a simulation between the two provides the reachability and
-correctness relations to derive our theorem.
-
-While such a lowering should always be possible, formally deriving the
-summarization tokens proved too burdensome to complete within the available
-time, and is left as future work.
+The theorem is independent of the particular dataflow domain. In particular, the
+initialization and nullability analyses used for Duke also run on the rewritten
+FDuke graph. Their coherence results therefore apply to stores produced by
+function calls and lambda invocations, rather than only to the local paths
+introduced for analysis.
 
 = Discussion <sec:discuss>
 
@@ -1216,14 +1264,14 @@ provide alternative formalization paths like allowing for non-finite height
 lattices with a widening operator, or letting the user define correctness by
 means of a Galois connection whenever more convenient.
 
-On the other hand, to approach a more complete formalization of Kotlin's
-analyses, the main focus is finishing the function contract specification, to
-validate it in a simple case before moving to more problematic constructs. In a
-real-world compiler, aliasing, exceptions, and other runtime dangers are real
-sources of hidden unsoundness, and our framework can be very useful in the study
-of such pitfalls. Additionally, formalizing part of Kotlin, and showing
-correspondence between regular small-step semantics and the CFG execution will
-increase our confidence that the CFG semantics are fully representative.
+On the other hand, a more complete formalization of Kotlin's analyses requires
+extending the verified function contract model with more realistic language
+constructs. In a real-world compiler, aliasing, exceptions, and other runtime
+dangers are real sources of hidden unsoundness, and our framework can be very
+useful in the study of such pitfalls. Additionally, formalizing part of Kotlin,
+and showing correspondence between regular small-step semantics and the CFG
+execution will increase our confidence that the CFG semantics are fully
+representative.
 
 == Conclusion <sec:conc>
 
