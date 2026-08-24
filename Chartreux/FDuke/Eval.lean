@@ -76,13 +76,14 @@ def succ (fam : CFGFamily) (nr : NodeRef) : List NodeRef :=
   | none => []
   | some cfg => (cfg.val.edges.filter (·.src = nr.2)).map (fun e => (nr.1, e.dst))
 
-/-- Summary-edge successors of a `NodeRef`: the designated return node(s) of a
-    call site. `kappaEdges` emits exactly one such edge per call. -/
+/-- The designated return node retained in the call gadget at a `NodeRef`. -/
 def succSummary (fam : CFGFamily) (nr : NodeRef) : List NodeRef :=
-  match fam.cfgAt? nr.1 with
-  | none => []
-  | some cfg => (cfg.val.edges.filter
-      (fun e => e.src = nr.2 ∧ e.kind = .summary)).map (fun e => (nr.1, e.dst))
+  match fam.gadgetAt? nr.1 nr.2, fam.cfgAt? nr.1 with
+  | some site, some cfg =>
+      if (⟨site.exL, site.ret, .plain⟩ : Edge) ∈ cfg.val.edges then
+        [(nr.1, site.ret)]
+      else []
+  | _, _ => []
 
 end CFGFamily
 
@@ -366,11 +367,9 @@ theorem Step.exit_of_succ_nil {fam : CFGFamily} {n : NodeRef} {σ ρ K c' : _}
     `Skip` behave exactly as in Duke. An `Invoke` node is *store-identity*
     (`σ' = σ`): the lambda runs on the closure's captured store and `ret-inv`
     restores the invoker's own store, so from the invoker's store-only view an
-    invocation changes nothing (this is the callee-side analogue of a `call`,
-    but — unlike a call — it carries no state change, so it is read off the node
-    directly instead of via a summary edge). A `.plain` edge out of a `Call`
-    node still has no `IntraStep` — its runtime meaning lives in the
-    interprocedural machine / summary edge, never in the store-only view. -/
+    invocation changes nothing (this is the callee-side analogue of a `call`).
+    A structural edge out of a `Call` node still has no `IntraStep`; its runtime
+    meaning lives in the interprocedural machine and retained gadget metadata. -/
 def IntraStep (cfg : CFG) (n : NodeID) (σ σ' : State) : Prop :=
   (∃ x e v, cfg.nodeKind n = some (.Assign x e) ∧ EvalExpr σ e v ∧
       σ' = σ.updated x v) ∨
