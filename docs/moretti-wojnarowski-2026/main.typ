@@ -1025,7 +1025,6 @@ always paired with $"assume" !c$, one of them must be necessarily false.
 #let ca = "call"
 #let call(f, s) = $"call" #f thin { #s }$
 #let invoke = "invoke"
-#let Gsum = $G_"sum"$
 #let Gk = $G_kappa$
 
 The second problem concerns the CFG rewrites induced by calls-in-place
@@ -1053,8 +1052,9 @@ invocations, exactly one, at least one, or at most one.
 
 #figure(
   caption: [Contract-dependent CFG fragments in FDuke. The lambda body ${s}$ is
-    copied into the caller for analysis; the dotted edge summarizes the call's
-    concrete execution.],
+    copied into the caller for analysis; the dotted arrow depicts the CEK
+    machine's call/return control transfer and is not an edge of the analysis
+    graph.],
 )[
   #grid(columns: (1fr, 1fr, 1fr, 1fr), gutter: 1em, align: center + horizon)[
     #image("assets/unknown.svg")
@@ -1085,12 +1085,16 @@ $
         "admits"(?, k) & := (k <= 1).
 $
 
-Each fragment also contains a distinguished summary edge from the call node to
-$r$. This edge represents the actual function call; it is not traversed by a
-dataflow analysis.
+Lowering also records construction-time metadata for the call site: its call
+node, callee, lambda identifier, invocation kind, inline entry and exit, return
+node, and source lambda body. The dotted arrow in @fig:fduke-cfg represents how
+the concrete CEK machine uses this metadata to enter the callee and eventually
+return to $r$; it is not an additional CFG edge. The generated family certifies
+that every structural edge of the corresponding contract fragment is present.
+These certificates can be erased after construction while preserving graph and
+call-site lookup exactly.
 
 === Concrete semantics.
-
 Lowering an FDuke program produces a family of CFGs: one graph for `main`, one
 for each function body, and one for every lambda literal. The concrete semantics
 is a CEK machine over this family. Its configurations have the form
@@ -1141,9 +1145,7 @@ function; returning from the function restores this store in the caller. These
 rules give calls their ground-truth behavior independently of the CFG rewrite.
 
 === Checking contracts.
-
 #let Cnt = math.sans("Cnt")
-
 Before relying on a contract, we verify it with a counting analysis. Its domain
 is $Cnt = cal(P)({0, 1, omega})$, where $omega$ represents two or more
 invocations. It is a finite-height powerset lattice ordered by inclusion, with
@@ -1163,61 +1165,91 @@ Let $overline(rho)_f$ be a post-fixpoint obtained for the body of $f$, and let
 $n_f$ be its exit node. The declared contract is accepted when:
 
 $
-  1 & <-> overline(rho)_f(n_f) = {1} \
-  + & <-> 0 in.not overline(rho)_f(n_f) \
-  ? & <-> omega in.not overline(rho)_f(n_f).
+  1 & <-> overline(rho)_f (n_f) = {1} \
+  + & <-> 0 in.not overline(rho)_f (n_f) \
+  ? & <-> omega in.not overline(rho)_f (n_f).
 $
 
-No restriction is imposed for $epsilon$. We write $sans("FamilyChecked")(Phi)$
-when every function CFG has such a post-fixpoint satisfying its declared
-contract. Checkedness is required for the whole family, since a function may
-call another function whose invocation of its own lambda affects the first
-function's count.
+No restriction is imposed for $epsilon$. We write $sans("FamilyChecked")(p)$
+when every function CFG in $p$'s generated family has such a post-fixpoint
+satisfying its declared contract. Checkedness is required for the whole family,
+since a function may call another function whose invocation of its own lambda
+affects the first function's count.
 
 === Correctness of the rewrite.
+The proof relates the interprocedural CEK semantics directly to the structural
+analysis graph #Gk. A step at an ordinary node has its usual store effect, while
+a step leaving a call node is store-preserving. The effect of a complete call is
+therefore represented by traversing the copied lambda body zero or more times,
+as allowed by its contract fragment.
 
-The proof separates concrete execution from dataflow propagation using two
-graphs. The #emph[summary graph] #Gsum is the generated CFG containing both the
-plain edges from @fig:fduke-cfg and the summary edge at each call. The
-#emph[analysis graph] #Gk is obtained by removing all summary edges from #Gsum.
-Dataflow analyses run only on #Gk.
-
-The summary edge has a local denotation over stores. A summary step from a call
-node to its return node holds when the corresponding contract fragment is
-present and the input store is transformed by $k$ consecutive executions of the
-inlined lambda body, for some $k$ admitted by $kappa$. This definition captures
-exactly the information needed by a local dataflow semantics; it does not
-mention the function CFG, closures, or the continuation stack.
-
-The first part of the proof relates the CEK semantics to this denotation.
+This direct account depends on certified lowering. For every call, the builder
+records a #emph[call gadget] containing the call and return nodes, inline-body
+endpoints, lambda identifier, invocation kind, and source body. It proves that
+all edges prescribed by that invocation kind are present. A certificate-bearing
+family additionally connects the inline copy to the separately generated lambda
+component, including the node offset, shifted lambda identifiers, edges, and
+nested call gadgets. Erasing the proofs recovers the execution-facing CFG family
+and preserves both component and gadget lookup. Consequently the projection
+never infers provenance from an arbitrary graph after the fact.
 
 #theorem[
-  Let $p$ be an FDuke program such that $sans("FamilyChecked")(p.Phi)$. Every
-  CEK execution that starts and ends in the same component with an empty
-  continuation is represented by a sequence of steps in that component's summary
-  graph #Gsum, with the same initial and final stores.
+  Let $p$ be an FDuke program such that $sans("FamilyChecked")(p)$. Every CEK
+  execution that starts and ends in the same component with an empty
+  continuation and starts without a closure is represented by a sequence of
+  store steps in that component's structural graph #Gk, with the same initial
+  and final stores.
 ] <thm:fduke-projection>
 
-The proof of @thm:fduke-projection proceeds by induction on the length of a
-balanced CEK execution. Intra-procedural steps project directly. An invocation
-is decomposed into the lambda execution and the remainder of the function
-execution. A complete call is decomposed into the callee execution and the
-caller tail. The counting correctness theorem determines the concrete number of
-invocations made by the callee, and its contract verdict shows that this number
-is admitted by $kappa$. The lambda execution can then be transported from its
-standalone CFG to the copy inlined at the call site. The CFG builder retains the
-provenance needed for this transport, including the correspondence between
-lambda identifiers, nodes, edges, and nested call fragments. This produces the
-chain required by the denotation of the summary edge.
+The Lean theorem `balanced_project` proves a stronger statement by strong
+induction on the length of a #emph[balanced] CEK run: throughout the run, the
+continuation has a fixed stack as suffix, and the endpoints have exactly that
+stack. Its conclusion simultaneously retains:
 
-The second part of the proof expands summary steps into paths of #Gk. If the
-admitted count is zero, the contract fragment contains a bypass edge. For a
-positive count, execution enters the inline copy and leaves it through the
-return edge; every additional execution uses the back-edge. These are precisely
-the edges guaranteed by the definition of $"admits"$. Plain #Gsum steps are
-already #Gk steps, so every #Gsum execution is simulated by #Gk.
++ a bounded chain describing every completed invocation of the ambient, evolving
+  closure, including each lambda-body CEK run;
++ the exact number $q$ of links in that chain;
++ a run of a ghost-counting semantics from $(sigma, 0)$ to $(sigma', q)$ on #Gk;
+  and
++ the required store-only run from $sigma$ to $sigma'$ on #Gk.
 
-Combining this simulation with @thm:framework gives the desired guarantee.
+The bounds make every recursively projected lambda or callee body strictly
+shorter than the enclosing run. Closure and continuation well-formedness keep
+all referenced components resolvable, while a fixed pair of lambda endpoints
+ensures that an evolving closure still denotes the same body. This strengthening
+is what makes nested calls and invocations compositional. Two projected segments
+compose by concatenating their closure chains and store runs; the second
+ghost-counted run is shifted by the first segment's final count.
+
+Assignment, assumption, and skip steps prepend the corresponding graph edge and
+use the induction hypothesis on the tail. A return that would pop below the
+fixed continuation suffix is impossible. The two interprocedural cases require
+explicit CEK-run decomposition:
+
++ For #invoke, the run is split at the matching return from the lambda. The
+  completed lambda body becomes one link in the ambient closure chain, its
+  captured environment and store are updated, and the strictly shorter caller
+  tail is projected recursively. The invoke node increments the ghost counter
+  once but is a store-identity step in the store-only projection.
++ For #call, the run is split at the matching return from the callee into the
+  completed callee body and the caller tail. Projecting the callee records the
+  exact number $k$ of times it invoked its callback. Each recorded standalone
+  lambda run is recursively projected and shifted into the certified inline copy
+  at the caller's call site, including nested gadgets. Counting soundness puts
+  the abstraction of $k$ in the callee's exit result; family checkedness
+  supplies its verdict, from which $"admits"(kappa, k)$ follows. The certified
+  gadget is then replayed: $k = 0$ uses the bypass, $k > 0$ uses the entry and
+  exit edges, and all iterations after the first use the back-edge. Finally this
+  call path is composed with the recursively projected caller tail.
+
+Specializing the strengthened theorem to an empty continuation and no initial
+closure yields @thm:fduke-projection (the Lean theorem `cek_projection`). The
+last correctness layer is deliberately independent of programs and contracts.
+The store-step semantics used by the projection and the semantics expected by an
+arbitrary analysis have the same structural graph and loud steps, so
+reachability transports edge by edge. Applying the generic post-fixpoint
+soundness theorem @thm:framework then gives the public Lean theorem
+`kappa_rewrite_correct`.
 
 #theorem[
   Let $p$ be an FDuke program with a checked function family, and let $g$ be one
@@ -1230,9 +1262,8 @@ Combining this simulation with @thm:framework gives the desired guarantee.
 
 The theorem is independent of the particular dataflow domain. In particular, the
 initialization and nullability analyses used for Duke also run on the rewritten
-FDuke graph. Their coherence results therefore apply to stores produced by
-function calls and lambda invocations, rather than only to the local paths
-introduced for analysis.
+FDuke graph, with the same correctness guarantees as in the environment without
+function calls.
 
 = Discussion <sec:discuss>
 
@@ -1254,15 +1285,15 @@ Verasco @Verasco is a project providing dataflow analysis capabilities to CompCe
 
 == Future work
 
-This tool is under very active development and we have only presented partial
-progress in this paper. `Chartreux` as a framework has multiple paths for
-improvement. The integration of a WTO-based solver @LaSpina25 could provide
-better efficiency and accuracy of computed fixpoints. Additionally, it would be
-beneficial if the framework provided primitives for the handling of function
-calls, given the current burden on the users. Lastly, the framework could
-provide alternative formalization paths like allowing for non-finite height
-lattices with a widening operator, or letting the user define correctness by
-means of a Galois connection whenever more convenient.
+This tool is under very active development. The end-to-end function-contract
+derivation presented here is mechanized, while `Chartreux` as a framework has
+multiple paths for improvement. The integration of a WTO-based solver @LaSpina25
+could provide better efficiency and accuracy of computed fixpoints.
+Additionally, it would be beneficial if the framework provided primitives for
+the handling of function calls, given the current burden on the users. Lastly,
+the framework could provide alternative formalization paths like allowing for
+non-finite height lattices with a widening operator, or letting the user define
+correctness by means of a Galois connection whenever more convenient.
 
 On the other hand, a more complete formalization of Kotlin's analyses requires
 extending the verified function contract model with more realistic language
@@ -1285,11 +1316,9 @@ proof of concept to a versatile, extensible and easy-to-use tool, as a companion
 to aid the tasks of analysis engineers.
 
 ==== Acknowledgements
-
-We deeply thank Komi Golova for her mentoring throughout this work and for
+We deeply thank Kameilya Golova for her mentoring throughout this work and for
 providing invaluable feedback on the paper.
 
 ==== Artifact availability
-
 The framework together with Duke/FDuke and their analyses are available at
 `https://github.com/quartztz/chartreux`.
