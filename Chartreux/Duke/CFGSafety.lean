@@ -7,7 +7,7 @@ open Chartreux.Analysis.Generic
 abbrev Loc := String
 
 /-- Taking steps does not move us out of the CFG -/
-lemma LSteps_bounds (cfg : WFCFG) {n n' : NodeID} {σ σ' : State}
+lemma LSteps_bounds (cfg : WFCFG) {n n' : NodeID} {σ σ' : NState}
     (hsteps : LSteps cfg.analysis n σ n' σ')
     (h : n < cfg.val.nodes.length) :
     n' < cfg.val.nodes.length := by
@@ -21,7 +21,7 @@ lemma LSteps_bounds (cfg : WFCFG) {n n' : NodeID} {σ σ' : State}
     apply ih; trivial
 
 /-- Every reachable node is in the CFG -/
-theorem reachable_in_bounds (cfg : WFCFG) {n : NodeID} {σ : State}
+theorem reachable_in_bounds (cfg : WFCFG) {n : NodeID} {σ : NState}
     (hreach : Reachable cfg.analysis n σ State.isInit) :
     n < cfg.val.nodes.length := by
   have ⟨σ₀, _, hsteps⟩ := hreach
@@ -29,9 +29,9 @@ theorem reachable_in_bounds (cfg : WFCFG) {n : NodeID} {σ : State}
   apply cfg.property.1
 
 /-- An analyzed expression can always step to a value -/
-theorem eval_expr_progress {locs : List Loc}
+theorem eval_expr_progress {locs : Nat}
     {nℓ : Nullability.Fact locs} {iℓ : Initialization.Fact locs}
-    {σ : State} (e : Expr)
+    {σ : NState} (e : Expr)
     (hn : Nullability.coh_self nℓ σ)
     (hi : Initialization.coh iℓ σ)
     (hcn : Nullability.checkExpr nℓ e)
@@ -42,9 +42,8 @@ theorem eval_expr_progress {locs : List Loc}
   | Null => exact ⟨.Null, .null⟩
   | Int n => exact ⟨.Int n, .int n⟩
   | Var x =>
-    split at hci <;> try contradiction
-    rename_i i hget
-    simp only [List.finIdxOf?_eq_some_iff, Fin.getElem_fin] at hget
+    have ⟨hx, hci⟩ := hci
+    generalize heq : Fin.mk x hx = i at *
     simp only [Initialization.coh, Option.isSome_iff_exists] at hi
     have ⟨v, hv⟩ := hi i hci
     use v
@@ -89,10 +88,10 @@ theorem eval_expr_progress {locs : List Loc}
         exact ⟨.Int (applyOp o n₁ n₂), .binop o e₁ e₂ n₁ n₂ heval₁ heval₂⟩
 
 /-- An analyzed node can always step, unless it is an Assume with a false condition -/
-lemma eval_node_safe (cfg : WFCFG) {locs : List Loc}
+lemma eval_node_safe (cfg : WFCFG) {locs : Nat}
     {n : NodeID} {kind : NodeKind}
     {nℓ : Nullability.Fact locs} {iℓ : Initialization.Fact locs}
-    {σ : State}
+    {σ : NState}
     (hreach : Chartreux.Analysis.Generic.Reachable cfg.analysis n σ State.isInit)
     (hexit : n ≠ cfg.val.exit)
     (hkind : cfg.val.nodeKind n = some kind)
@@ -114,9 +113,24 @@ lemma eval_node_safe (cfg : WFCFG) {locs : List Loc}
       by_cases hn : n = 0 <;> subst_vars <;> try contradiction
       constructor; constructor; apply Step.assum <;> try trivial
       grind
+  | BlockExit =>
+    constructor; constructor;
+    apply Step.blockExit <;> try trivial
+  | BlockEnter =>
+    constructor; constructor;
+    apply Step.blockEnter <;> try trivial
   | Skip =>
     constructor; constructor;
     apply Step.skip <;> try trivial
+  | Declare x e =>
+    cases e with
+    | none =>
+      constructor; constructor;
+      apply Step.declare <;> try trivial
+    | some e =>
+      have ⟨v, hv⟩ := eval_expr_progress e hn hi hcn hci
+      constructor; constructor;
+      apply Step.declareVal <;> try trivial
   | Assign x e =>
     have ⟨v, hv⟩ := eval_expr_progress e hn hi hcn hci
     constructor; constructor;
@@ -130,7 +144,7 @@ lemma eval_node_safe (cfg : WFCFG) {locs : List Loc}
   - We can perform a step on the CFG
   - We are at an `Assume` node whose condition evaluates to a falsy value
 -/
-theorem duke_cfg_safety (cfg : WFCFG) {n : NodeID} {σ : State}
+theorem duke_cfg_safety (cfg : WFCFG) {n : NodeID} {σ : NState}
     (hreach : Chartreux.Analysis.Generic.Reachable cfg.analysis n σ State.isInit)
     (hcn : Nullability.checkCFG cfg)
     (hci : Initialization.checkCFG cfg) :
@@ -138,9 +152,9 @@ theorem duke_cfg_safety (cfg : WFCFG) {n : NodeID} {σ : State}
       (∃ n' σ', Step cfg ⟨n, σ⟩ ⟨n', σ'⟩) ∨
       ∃ c, cfg.val.nodeKind n = some (.Assume c) ∧ EvalExpr σ c (.Int 0) := by
   have hnode := reachable_in_bounds cfg hreach
-  let vars := vars cfg
-  have hn := Nullability.reachable_correct vars.property cfg hreach |>.left
-  have hi := Initialization.reachable_correct vars.property cfg hreach
+  let vars := totalVars cfg
+  have hn := Nullability.reachable_correct (locs:=vars) cfg hreach |>.left
+  have hi := Initialization.reachable_correct (locs:=vars) cfg hreach
   simp! [Nullability.checkCFG] at hcn
   simp! [Initialization.checkCFG] at hci
   specialize hcn n hnode

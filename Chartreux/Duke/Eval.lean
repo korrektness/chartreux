@@ -1,21 +1,36 @@
 import Chartreux.Duke.Defs
 
-def State := String -> Option Val
-def State.updated (σ : State) (x : String) (v : Val) : State :=
+variable {ID : Type}
+variable [DecidableEq ID]
+
+def State := ID -> Option Val
+abbrev NState := @State Nat
+abbrev SState := @State String
+@[simp]
+def State.set (σ : @State ID) (x : ID) (v : Option Val) : @State ID :=
   fun y => if x = y then v else σ y
-def State.empty : State := fun _ => none
-def State.isInit (σ : State) : Prop := σ = State.empty
+def State.declared (σ : @State ID) (x : ID) : @State ID := σ.set x none
+def State.updated (σ : @State ID) (x : ID) (v : Val) : @State ID := σ.set x v
+def State.empty : @State ID := fun _ => none
+def State.isInit (σ : @State ID) : Prop := σ = State.empty
 
 namespace State
 
-@[simp]
-theorem updated_eq (σ : State) (x : String) (v : Val) :
-    (σ.updated x v) x = some v := by simp [State.updated]
+theorem updated_eq {σ : @State ID} {x : ID} {v : Val} :
+    σ.updated x v x = some v := by
+  simp [State.updated] at *
 
-theorem updated_neq (σ : State) (x y : String) (v : Val) (hne : x ≠ y) :
-    (σ.updated x v) y = σ y := by
-  unfold State.updated
-  exact if_neg hne
+theorem declared_eq {σ : @State ID} {x : ID} :
+    σ.declared x x = none := by
+  simp [State.declared] at *
+
+theorem declared_neq  {σ : @State ID} {x y : ID} (hne : x ≠ y) :
+    σ.declared x y = σ y := by
+  simp [State.declared, *]
+
+theorem updated_neq  {σ : @State ID} {x y : ID} {v : Val} (hne : x ≠ y) :
+    σ.updated x v y = σ y := by
+  simp [State.updated, *]
 
 end State
 
@@ -27,8 +42,7 @@ def applyOp : BinOp -> Int -> Int -> Int
 | .eq,  n₁, n₂ => (if n₁ = n₂ then 1 else 0)
 | .and, n₁, n₂ => (if n₁ ≠ 0 && n₂ ≠ 0 then 1 else 0)
 
-
-inductive EvalExpr (σ : State) : Expr -> Val -> Prop where
+inductive EvalExpr (σ : State) : @Expr ID -> Val -> Prop where
 | null :
     EvalExpr σ (.Null) (.Null)
 | int : ∀ n,
