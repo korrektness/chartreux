@@ -32,7 +32,7 @@ def evalExpr (locs : Nat) (ℓ : Fact locs) : NExpr → Bool
   | .Int _ => false
   | .Var x =>
       if h : x < locs then
-        ℓ (Fin.mk x h)
+        ℓ ⟨x, h⟩
       else
         true
   | .IsNull e => evalExpr locs ℓ e

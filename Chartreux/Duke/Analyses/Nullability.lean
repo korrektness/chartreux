@@ -90,7 +90,7 @@ def nonNullAssumption (locs : Nat) (ℓ : Fact locs) (e : NExpr) : List Nat :=
   | .Not (.IsNull (.Var x)) => [x]
   | .Var x =>
       if h : x < locs then
-        ℓ (Fin.mk x h) |>.snd |> extractConsequents locs
+        ℓ ⟨x, h⟩ |>.snd |> extractConsequents locs
       else
         []
   | _ => []
@@ -105,7 +105,7 @@ def evalExpr (locs : Nat) (ℓ : Fact locs) : NExpr → NVal
   | .Int _ => .nonnull
   | .Var x =>
       if h : x < locs then
-        ℓ (Fin.mk x h) |>.fst
+        ℓ ⟨x, h⟩ |>.fst
       else
         .top
   | .IsNull _ => .nonnull
