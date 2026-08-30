@@ -90,7 +90,7 @@ def nonNullAssumption (locs : Nat) (ℓ : Fact locs) (e : NExpr) : List Nat :=
   | .Not (.IsNull (.Var x)) => [x]
   | .Var x =>
       if h : x < locs then
-        ℓ (Fin.mk x h) |>.snd |> extractConsequents locs
+        ℓ ⟨x, h⟩ |>.snd |> extractConsequents locs
       else
         []
   | _ => []
@@ -105,7 +105,7 @@ def evalExpr (locs : Nat) (ℓ : Fact locs) : NExpr → NVal
   | .Int _ => .nonnull
   | .Var x =>
       if h : x < locs then
-        ℓ (Fin.mk x h) |>.fst
+        ℓ ⟨x, h⟩ |>.fst
       else
         .top
   | .IsNull _ => .nonnull
@@ -372,7 +372,7 @@ def semantics :
       intro e σ σ' ℓ hstep hcoh
       simp only [DFA_transferAlong, nodeTransfer]
       cases hstep with simp only [*]
-      | @declare _ _ x _ _ =>
+      | @declareNone _ _ x _ _ =>
         split_ands
         · intro j v' h hdecl rfl
           simp only at h
@@ -381,7 +381,7 @@ def semantics :
           apply hcoh.left <;> trivial
         · intro j k n v' habs hdecl1 hn hdecl2 rfl
           contradiction
-      | @declareVal _ _ x expr v _ _ heval _ =>
+      | @declareSome _ _ x expr v _ _ heval _ =>
         split_ands
         · intro j v' h hupd rfl
           simp only at h

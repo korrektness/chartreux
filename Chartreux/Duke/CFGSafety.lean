@@ -126,11 +126,11 @@ lemma eval_node_safe (cfg : WFCFG) {locs : Nat}
     cases e with
     | none =>
       constructor; constructor;
-      apply Step.declare <;> try trivial
+      apply Step.declareNone <;> try trivial
     | some e =>
       have ⟨v, hv⟩ := eval_expr_progress e hn hi hcn hci
       constructor; constructor;
-      apply Step.declareVal <;> try trivial
+      apply Step.declareSome <;> try trivial
   | Assign x e =>
     have ⟨v, hv⟩ := eval_expr_progress e hn hi hcn hci
     constructor; constructor;

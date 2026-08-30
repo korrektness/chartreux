@@ -333,11 +333,11 @@ inductive Step (g : CFG) : Config -> Config -> Prop where
     g.nodeKind n = some .BlockExit ->
     ⟨n, n'⟩ ∈ g.edges ->
     Step g ⟨n, σ⟩ ⟨n', σ⟩
-| declare {n n' x σ} :
+| declareNone {n n' x σ} :
     g.nodeKind n = some (.Declare x none) ->
     ⟨n, n'⟩ ∈ g.edges ->
     Step g ⟨n, σ⟩ ⟨n', σ.declared x⟩
-| declareVal {n n' x e v σ} :
+| declareSome {n n' x e v σ} :
     g.nodeKind n = some (.Declare x (some e)) ->
     EvalExpr σ e v ->
     ⟨n, n'⟩ ∈ g.edges ->
