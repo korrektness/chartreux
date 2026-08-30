@@ -372,7 +372,7 @@ def semantics :
       intro e σ σ' ℓ hstep hcoh
       simp only [DFA_transferAlong, nodeTransfer]
       cases hstep with simp only [*]
-      | @declare _ _ x _ _ =>
+      | @declareNone _ _ x _ _ =>
         split_ands
         · intro j v' h hdecl rfl
           simp only at h
@@ -381,7 +381,7 @@ def semantics :
           apply hcoh.left <;> trivial
         · intro j k n v' habs hdecl1 hn hdecl2 rfl
           contradiction
-      | @declareVal _ _ x expr v _ _ heval _ =>
+      | @declareSome _ _ x expr v _ _ heval _ =>
         split_ands
         · intro j v' h hupd rfl
           simp only at h

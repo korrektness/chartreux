@@ -128,13 +128,13 @@ def semantics :
       intro e σ σ' ℓ hstep hcoh
       simp only [DFA_transferAlong, nodeTransfer]
       cases hstep with simp only [*]
-      | @declare a b c d e _ =>
+      | @declareNone a b c d e _ =>
         unfold coh State.declared State.set at *
         intros i hi
         simp only at hi
         split at hi <;> try contradiction
         grind
-      | @declareVal _ _ x expr v _ _ heval =>
+      | @declareSome _ _ x expr v _ _ heval =>
         rename_i i hi
         intro j habs
         simp only at habs
