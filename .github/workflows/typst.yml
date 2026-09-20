@@ -20,6 +20,9 @@ jobs:
       - name: "Typst: paper"
         working-directory: "./docs/moretti-wojnarowski-2026"
         run: make
-      - name: "Typst: presentation"
+      - name: "Typst: presentation (JetBrains)"
         working-directory: "./docs/internship-presentation"
+        run: make
+      - name: "Typst: presentation (VSTTE)"
+        working-directory: "./docs/vstte-presentation"
         run: make
