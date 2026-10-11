@@ -129,4 +129,40 @@ theorem reachable_corr
   have h_rd0   : D.Coh (rd g.entry) σ₀ := mono_absorb hentry h_entry
   exact steps_preserves_corr g D mono_absorb hpf hsteps h_rd0
 
+variable {g₁ g₂ : AnalysisCFG Node Edge}
+variable [ls₁ : LangSem Node Edge State g₁] [ls₂ : LangSem Node Edge State g₂]
+
+/-- Per-edge simulation lifts to whole runs: if each `g₁`-`LStep` is simulated
+    by a `g₂`-`LSteps` between the same endpoints and each `g₁`-stutter by a
+    `g₂`-stutter, then every `g₁` run is a `g₂` run. -/
+theorem lsteps_of_simulates
+    (hstut : ∀ (n : Node) (σ σ' : State),
+      ls₁.LStutter n σ σ' -> ls₂.LStutter n σ σ')
+    (hsim : ∀ (e : EdgeOf g₁) (σ σ' : State), ls₁.LStep e σ σ' ->
+      LSteps g₂ (g₁.srcOf e) σ (g₁.dstOf e) σ')
+    {n n' : Node} {σ σ' : State}
+    (hsteps : LSteps g₁ n σ n' σ') :
+    LSteps g₂ n σ n' σ' := by
+  induction hsteps with
+  | refl n σ => exact .refl n σ
+  | @step e _ _ _ _ _ hstep _ hsrc ih =>
+    exact LSteps.trans g₂ (hsrc ▸ hsim e _ _ hstep) ih
+  | stut hstut' _ ih => exact .stut (hstut _ _ _ hstut') ih
+
+/-- **Generic refinement lemma.** If `g₁` and `g₂` share their entry node,
+    `g₁`-stutters transport to `g₂`-stutters, and every loud step of `g₁` is
+    simulated by a multi-step `g₂` run between the same nodes, then
+    reachability transports from `g₁` to `g₂`. -/
+theorem reachable_of_simulates
+    (hentry : g₁.entry = g₂.entry)
+    (hstut : ∀ (n : Node) (σ σ' : State),
+      ls₁.LStutter n σ σ' -> ls₂.LStutter n σ σ')
+    (hsim : ∀ (e : EdgeOf g₁) (σ σ' : State), ls₁.LStep e σ σ' ->
+      LSteps g₂ (g₁.srcOf e) σ (g₁.dstOf e) σ')
+    {n : Node} {σ : State} {isInit : State -> Prop}
+    (hreach : Reachable g₁ n σ isInit) :
+    Reachable g₂ n σ isInit := by
+  obtain ⟨σ₀, hinit, hsteps⟩ := hreach
+  exact ⟨σ₀, hinit, hentry ▸ lsteps_of_simulates hstut hsim hsteps⟩
+
 end Chartreux.Analysis.Generic
